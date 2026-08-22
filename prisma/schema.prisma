@@ -1,0 +1,1133 @@
+// =============================================================================
+// FantasyLive - Prisma Schema
+// PostgreSQL + Prisma ORM
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+enum Role {
+  USER
+  MODEL
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
+  PENDING_VERIFICATION
+}
+
+enum Gender {
+  FEMALE
+  MALE
+  TRANS_FEMALE
+  TRANS_MALE
+  NON_BINARY
+  COUPLE
+}
+
+enum Orientation {
+  STRAIGHT
+  GAY
+  LESBIAN
+  BISEXUAL
+  PANSEXUAL
+  QUEER
+  ASEXUAL
+}
+
+enum ModelTier {
+  STANDARD
+  VIP
+  ELITE
+}
+
+enum ContentType {
+  PHOTO
+  VIDEO
+  BUNDLE
+}
+
+enum CallType {
+  RANDOM        // Omegle-style gratuito / bajo costo
+  VIP_RANDOM    // Aleatorio solo con modelos VIP, cobro por minuto
+  PRIVATE       // 1 a 1 reservado con una modelo concreta
+}
+
+enum CallStatus {
+  PENDING
+  ACTIVE
+  ENDED
+  CANCELLED
+  FAILED
+}
+
+enum CallEndReason {
+  USER_HANGUP
+  PARTNER_HANGUP
+  NEXT_SKIP
+  INSUFFICIENT_TOKENS
+  TIMEOUT
+  DISCONNECTED
+  MODERATION
+  BOOKING_COMPLETED
+}
+
+enum QueueMode {
+  RANDOM
+  VIP
+}
+
+enum QueueStatus {
+  WAITING
+  MATCHED
+  CANCELLED
+  EXPIRED
+}
+
+enum TransactionType {
+  TOKEN_PURCHASE     // usuario compra tokens (+)
+  SIGNUP_BONUS       // regalo de bienvenida (+)
+  ADMIN_CREDIT       // ajuste manual admin (+)
+  ADMIN_DEBIT        // ajuste manual admin (-)
+  CALL_CHARGE        // consumo por minuto (-)
+  CALL_EARNING       // ingreso de la modelo (+)
+  CONTENT_UNLOCK     // desbloqueo de pack (-)
+  CONTENT_EARNING    // ingreso de la modelo por pack (+)
+  TIP                // propina enviada (-)
+  TIP_EARNING        // propina recibida (+)
+  BOOKING_HOLD       // retencion al reservar (-)
+  BOOKING_REFUND     // devolucion por cancelacion (+)
+  PAYOUT             // retiro de la modelo (-)
+  REFUND             // devolucion al usuario (+)
+  PLATFORM_FEE       // comision de la plataforma
+  SUBSCRIPTION_PURCHASE // usuario paga suscripcion mensual (-)
+  SUBSCRIPTION_EARNING  // ingreso de la modelo por suscripcion (+)
+  CONTENT_REQUEST_PAYMENT // usuario paga un pedido de contenido a medida (-)
+  CONTENT_REQUEST_EARNING // ingreso de la modelo por un pedido (+)
+  MESSAGE_UNLOCK          // usuario paga para abrir una conversacion (-)
+  MESSAGE_UNLOCK_EARNING  // ingreso de la modelo por abrir conversacion (+)
+  MESSAGE_ATTACHMENT_UNLOCK         // usuario paga por un archivo adjunto (-)
+  MESSAGE_ATTACHMENT_EARNING        // ingreso de la modelo por un archivo adjunto (+)
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+}
+
+enum ContentRequestStatus {
+  PENDING   // esperando cotizacion de la modelo
+  QUOTED    // modelo coloco un precio, esperando pago
+  PAID      // usuario pago, la modelo debe entregar
+  DELIVERED // contenido entregado y desbloqueado
+  DECLINED  // la modelo rechazo el pedido
+  CANCELLED // el usuario cancelo antes de pagar
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+enum PaymentProvider {
+  STRIPE
+  CCBILL
+  CRYPTO
+  MOCK
+  INTERNAL
+}
+
+enum KycStatus {
+  NOT_SUBMITTED
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+enum DocumentType {
+  PASSPORT
+  NATIONAL_ID
+  DRIVERS_LICENSE
+}
+
+enum BookingStatus {
+  PENDING_CONFIRMATION
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED_BY_USER
+  CANCELLED_BY_MODEL
+  NO_SHOW
+  REFUNDED
+}
+
+enum PayoutStatus {
+  REQUESTED
+  APPROVED
+  PROCESSING
+  PAID
+  REJECTED
+}
+
+enum PayoutMethod {
+  BANK_TRANSFER
+  PAYPAL
+  CRYPTO
+  PAXUM
+}
+
+enum ReportReason {
+  UNDERAGE
+  NON_CONSENSUAL
+  HARASSMENT
+  SPAM
+  IMPERSONATION
+  PAYMENT_DISPUTE
+  TECHNICAL_ISSUE
+  OTHER
+}
+
+enum ReportStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  DISMISSED
+  ESCALATED
+}
+
+enum NotificationType {
+  NEW_FOLLOWER
+  NEW_SUBSCRIBER
+  NEW_REVIEW
+  CONTENT_REQUEST_RECEIVED
+  CONTENT_REQUEST_QUOTED
+  CONTENT_REQUEST_DELIVERED
+  NEW_MESSAGE
+  MESSAGE_ATTACHMENT_UNLOCKED
+}
+
+// =============================================================================
+// AUTENTICACION (NextAuth / Auth.js)
+// =============================================================================
+
+model User {
+  id            String     @id @default(cuid())
+  email         String     @unique
+  emailVerified DateTime?
+  passwordHash  String?
+  name          String?
+  username      String?    @unique
+  image         String?
+  role          Role       @default(USER)
+  status        UserStatus @default(ACTIVE)
+
+  // Perfil / compliance
+  birthDate     DateTime?
+  ageVerified   Boolean     @default(false)
+  gender        Gender?
+  orientation   Orientation?
+  country       String?
+  city          String?
+  languages     String[]    @default([])
+  bio           String?
+
+  // Estado de plataforma
+  isVip         Boolean   @default(false)
+  vipUntil      DateTime?
+  lastSeenAt    DateTime?
+  suspendedUntil DateTime?
+  banReason     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relaciones NextAuth
+  accounts Account[]
+  sessions Session[]
+
+  // Relaciones de dominio
+  wallet            Wallet?
+  modelProfile      ModelProfile?
+  transactions      Transaction[]      @relation("UserTransactions")
+  callsInitiated    CallSession[]      @relation("CallCaller")
+  callsReceived     CallSession[]      @relation("CallCallee")
+  queueEntries      MatchQueueEntry[]
+  unlocks           ContentUnlock[]
+  bookings          Booking[]          @relation("BookingUser")
+  giftsSent         Gift[]             @relation("GiftSender")
+  giftsReceived     Gift[]             @relation("GiftReceiver")
+  reportsFiled      Report[]           @relation("Reporter")
+  reportsAgainst    Report[]           @relation("ReportedUser")
+  reportsReviewed   Report[]           @relation("ReportReviewer")
+  kycReviewed       KycVerification[]  @relation("KycReviewer")
+  payoutsProcessed  PayoutRequest[]    @relation("PayoutProcessor")
+  auditLogs         AuditLog[]
+  blocksMade        BlockedPair[]      @relation("Blocker")
+  blocksReceived    BlockedPair[]      @relation("Blocked")
+  follows           Follow[]
+  subscriptions     Subscription[]
+  contentRequests   ContentRequest[]
+  conversations     Conversation[]
+  messagesSent      Message[]
+  messageAttachmentUnlocks MessageAttachmentUnlock[]
+  notifications     Notification[]
+
+  @@index([role, status])
+  @@index([createdAt])
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// =============================================================================
+// MONEDERO Y ECONOMIA DE TOKENS
+// =============================================================================
+
+model Wallet {
+  id      String @id @default(cuid())
+  userId  String @unique
+
+  /// Saldo disponible para gastar
+  balance           Int @default(0)
+  /// Tokens retenidos por reservas pendientes (no gastables)
+  heldBalance       Int @default(0)
+  /// Tokens ganados pendientes de retiro (solo modelos)
+  pendingEarnings   Int @default(0)
+
+  // Contadores historicos (para dashboards, evita agregaciones costosas)
+  lifetimePurchased Int @default(0)
+  lifetimeSpent     Int @default(0)
+  lifetimeEarned    Int @default(0)
+  lifetimeWithdrawn Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("wallets")
+}
+
+model TokenPackage {
+  id          String  @id @default(cuid())
+  sku         String  @unique
+  name        String
+  description String?
+  tokens      Int
+  bonusTokens Int     @default(0)
+  priceCents  Int
+  currency    String  @default("USD")
+  isActive    Boolean @default(true)
+  isPopular   Boolean @default(false)
+  sortOrder   Int     @default(0)
+
+  // IDs externos de la pasarela
+  stripePriceId String?
+  ccbillFormId  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactions Transaction[]
+
+  @@index([isActive, sortOrder])
+  @@map("token_packages")
+}
+
+model Transaction {
+  id     String            @id @default(cuid())
+  userId String
+  type   TransactionType
+  status TransactionStatus @default(COMPLETED)
+
+  /// Delta de tokens con signo: positivo acredita, negativo debita
+  tokens Int
+  /// Saldo del monedero despues del movimiento (snapshot de auditoria)
+  balanceAfter Int?
+
+  /// Importe en fiat (centavos) cuando aplica compra/retiro
+  amountCents Int?
+  currency    String?
+
+  provider    PaymentProvider @default(INTERNAL)
+  providerRef String?         @unique
+
+  description String?
+  metadata    Json?
+
+  // Vinculos opcionales al origen del movimiento
+  tokenPackageId String?
+  callSessionId  String?
+  contentPackageId String?
+  bookingId      String?
+  giftId         String?   @unique
+  payoutRequestId String?
+  subscriptionId String?
+  contentRequestId String?
+  conversationId String?
+  messageAttachmentId String?
+
+  /// Comision retenida por la plataforma en este movimiento (tokens)
+  platformFeeTokens Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user              User               @relation("UserTransactions", fields: [userId], references: [id], onDelete: Cascade)
+  tokenPackage      TokenPackage?      @relation(fields: [tokenPackageId], references: [id], onDelete: SetNull)
+  callSession       CallSession?       @relation(fields: [callSessionId], references: [id], onDelete: SetNull)
+  contentPackage    ContentPackage?    @relation(fields: [contentPackageId], references: [id], onDelete: SetNull)
+  booking           Booking?           @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  gift              Gift?              @relation(fields: [giftId], references: [id], onDelete: SetNull)
+  payoutRequest     PayoutRequest?     @relation(fields: [payoutRequestId], references: [id], onDelete: SetNull)
+  subscription      Subscription?      @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  contentRequest     ContentRequest?    @relation(fields: [contentRequestId], references: [id], onDelete: SetNull)
+  conversation       Conversation?      @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  messageAttachment   MessageAttachment? @relation(fields: [messageAttachmentId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([type, status])
+  @@index([createdAt])
+  @@map("transactions")
+}
+
+// =============================================================================
+// PERFIL DE MODELO
+// =============================================================================
+
+model ModelProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  stageName String
+  slug      String  @unique
+  headline  String?
+  bio       String?
+
+  gender      Gender
+  orientation Orientation
+  tier        ModelTier @default(STANDARD)
+
+  birthYear  Int?
+  country    String?
+  languages  String[] @default([])
+  tags       String[] @default([])
+
+  avatarUrl String?
+  coverUrl  String?
+
+  // Tarifas en tokens por minuto
+  vipRatePerMinute     Int @default(20)
+  privateRatePerMinute Int @default(40)
+  minPrivateMinutes    Int @default(10)
+
+  // Suscripcion mensual (fan club): contenido exclusivo + descuento en llamadas
+  subscriptionEnabled         Boolean @default(false)
+  subscriptionPriceTokens     Int     @default(0)
+  /// % de descuento en tarifas por minuto para suscriptores activos
+  subscriptionDiscountPercent Int     @default(15)
+  subscribersCount            Int     @default(0)
+
+  // Mensajeria privada: el primer mensaje se paga; para seguir escribiendo
+  // el usuario debe mantener saldo positivo en su monedero
+  messagingEnabled    Boolean @default(false)
+  messagePriceTokens  Int     @default(0)
+
+  // Disponibilidad y estado
+  isVipEnabled     Boolean @default(false)
+  acceptsBookings  Boolean @default(true)
+  isOnline         Boolean @default(false)
+  isAvailableForVip Boolean @default(false)
+  lastOnlineAt     DateTime?
+
+  // Metricas (denormalizadas para el catalogo)
+  ratingAvg        Float @default(0)
+  ratingCount      Int   @default(0)
+  totalCalls       Int   @default(0)
+  totalMinutes     Int   @default(0)
+  totalTokensEarned Int  @default(0)
+  followersCount   Int   @default(0)
+
+  kycStatus KycStatus @default(NOT_SUBMITTED)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contentPackages ContentPackage[]
+  bookings        Booking[]
+  availability    AvailabilitySlot[]
+  kycVerifications KycVerification[]
+  payoutRequests  PayoutRequest[]
+  reviews         Review[]
+  followers       Follow[]
+  subscribers     Subscription[]
+  contentRequests ContentRequest[]
+  conversations   Conversation[]
+
+  @@index([isOnline, isVipEnabled])
+  @@index([gender, tier])
+  @@index([slug])
+  @@map("model_profiles")
+}
+
+model AvailabilitySlot {
+  id      String @id @default(cuid())
+  modelId String
+
+  /// 0 = domingo ... 6 = sabado
+  weekday     Int
+  /// Minutos desde medianoche (UTC del modelo), ej. 20:00 => 1200
+  startMinute Int
+  endMinute   Int
+  timezone    String  @default("UTC")
+  isActive    Boolean @default(true)
+
+  model ModelProfile @relation(fields: [modelId], references: [id], onDelete: Cascade)
+
+  @@unique([modelId, weekday, startMinute])
+  @@index([modelId, weekday])
+  @@map("availability_slots")
+}
+
+model Review {
+  id      String @id @default(cuid())
+  modelId String
+  userId  String
+  rating  Int
+  comment String?
+
+  createdAt DateTime @default(now())
+
+  model ModelProfile @relation(fields: [modelId], references: [id], onDelete: Cascade)
+
+  @@unique([modelId, userId])
+  @@index([modelId])
+  @@map("reviews")
+}
+
+model Follow {
+  id      String @id @default(cuid())
+  userId  String
+  modelId String
+
+  createdAt DateTime @default(now())
+
+  user  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  model ModelProfile @relation(fields: [modelId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, modelId])
+  @@index([modelId])
+  @@index([userId])
+  @@map("follows")
+}
+
+model Subscription {
+  id      String @id @default(cuid())
+  userId  String
+  modelId String
+
+  status SubscriptionStatus @default(ACTIVE)
+
+  /// Snapshot del precio y descuento vigentes al momento de suscribirse
+  priceTokens     Int
+  discountPercent Int
+
+  startedAt        DateTime  @default(now())
+  /// Hasta cuando cubre el pago actual (sin renovacion automatica: al
+  /// vencer, deja de estar activa hasta que el usuario vuelva a suscribirse)
+  currentPeriodEnd DateTime
+  cancelledAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  model        ModelProfile  @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@unique([userId, modelId])
+  @@index([modelId, status])
+  @@index([userId, status])
+  @@map("subscriptions")
+}
+
+/// Pedido de contenido a medida: el usuario describe lo que quiere, la
+/// modelo cotiza, el usuario paga y la modelo entrega un ContentPackage
+/// privado (isPublished: false) desbloqueado solo para quien lo pidio.
+model ContentRequest {
+  id      String @id @default(cuid())
+  userId  String
+  modelId String
+
+  status      ContentRequestStatus @default(PENDING)
+  description String
+
+  quotedTokens Int?
+  modelNote    String?
+
+  deliveredPackageId String? @unique
+
+  createdAt   DateTime  @default(now())
+  quotedAt    DateTime?
+  paidAt      DateTime?
+  deliveredAt DateTime?
+
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  model            ModelProfile    @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  deliveredPackage ContentPackage? @relation(fields: [deliveredPackageId], references: [id], onDelete: SetNull)
+  transactions     Transaction[]
+
+  @@index([modelId, status])
+  @@index([userId, status])
+  @@map("content_requests")
+}
+
+/// Conversacion privada usuario <-> modelo. Abrirla cuesta tokens (pago
+/// unico); para seguir escribiendo el usuario debe mantener saldo positivo.
+model Conversation {
+  id      String @id @default(cuid())
+  userId  String
+  modelId String
+
+  /// Precio pagado para desbloquearla, guardado como referencia
+  unlockPriceTokens Int
+  lastMessageAt     DateTime @default(now())
+
+  createdAt DateTime @default(now())
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  model        ModelProfile  @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  messages     Message[]
+  transactions Transaction[]
+
+  @@unique([userId, modelId])
+  @@index([modelId, lastMessageAt])
+  @@map("conversations")
+}
+
+model Message {
+  id             String @id @default(cuid())
+  conversationId String
+  senderId       String
+
+  // Puede ir vacio si el mensaje es solo un archivo adjunto.
+  body String?
+
+  createdAt DateTime @default(now())
+
+  conversation Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User              @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  attachment   MessageAttachment?
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+/// Archivo adjunto a un mensaje. Si priceTokens es 0 es de acceso libre para
+/// quien reciba el mensaje; si no, hay que desbloquearlo (ver
+/// MessageAttachmentUnlock), igual que un ContentPackage pero a nivel mensaje.
+model MessageAttachment {
+  id        String @id @default(cuid())
+  messageId String @unique
+
+  storageKey  String
+  mimeType    String
+  sizeBytes   Int?
+  priceTokens Int    @default(0)
+
+  createdAt DateTime @default(now())
+
+  message      Message                    @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  unlocks      MessageAttachmentUnlock[]
+  transactions Transaction[]
+
+  @@map("message_attachments")
+}
+
+model MessageAttachmentUnlock {
+  id           String @id @default(cuid())
+  userId       String
+  attachmentId String
+  tokensSpent  Int
+
+  createdAt DateTime @default(now())
+
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attachment MessageAttachment @relation(fields: [attachmentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, attachmentId])
+  @@index([userId, createdAt])
+  @@map("message_attachment_unlocks")
+}
+
+model Notification {
+  id     String           @id @default(cuid())
+  userId String
+  type   NotificationType
+
+  title String
+  body  String?
+  // Ruta relativa a donde lleva la notificacion (ej. /models/valentinavip).
+  link  String?
+
+  isRead Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+// =============================================================================
+// CONTENIDO DE PAGO
+// =============================================================================
+
+model ContentPackage {
+  id      String @id @default(cuid())
+  modelId String
+
+  title       String
+  description String?
+  type        ContentType @default(PHOTO)
+
+  /// 0 = gratis/publico
+  priceTokens Int     @default(0)
+  isPublic    Boolean @default(false)
+  isPublished Boolean @default(true)
+  /// Incluido gratis para suscriptores activos; no se compra suelto
+  subscriberOnly Boolean @default(false)
+
+  /// Miniatura visible sin desbloquear (borrosa/censurada en el cliente)
+  previewUrl String?
+  assetCount Int @default(0)
+
+  purchaseCount Int @default(0)
+  tokensEarned  Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  model         ModelProfile    @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  assets        ContentAsset[]
+  unlocks       ContentUnlock[]
+  transactions  Transaction[]
+  deliveredFor  ContentRequest?
+
+  @@index([modelId, isPublished])
+  @@map("content_packages")
+}
+
+model ContentAsset {
+  id        String @id @default(cuid())
+  packageId String
+
+  /// Clave privada en S3/R2. Nunca se expone; se sirve por URL firmada.
+  storageKey  String
+  mimeType    String
+  sizeBytes   Int?
+  width       Int?
+  height      Int?
+  durationSec Int?
+  /// Visible sin pagar (teaser)
+  isPreview   Boolean @default(false)
+  sortOrder   Int     @default(0)
+
+  createdAt DateTime @default(now())
+
+  package ContentPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+
+  @@index([packageId, sortOrder])
+  @@map("content_assets")
+}
+
+model ContentUnlock {
+  id          String @id @default(cuid())
+  userId      String
+  packageId   String
+  tokensSpent Int
+
+  createdAt DateTime @default(now())
+
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  package ContentPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, packageId])
+  @@index([userId, createdAt])
+  @@map("content_unlocks")
+}
+
+// =============================================================================
+// LLAMADAS Y MATCHMAKING
+// =============================================================================
+
+model CallSession {
+  id     String     @id @default(cuid())
+  type   CallType
+  status CallStatus @default(PENDING)
+
+  callerId String
+  calleeId String?
+
+  /// Nombre unico de la sala (LiveKit) o del canal de senalizacion P2P
+  roomName String @unique
+
+  /// Tarifa aplicada en tokens/minuto (0 en RANDOM gratuito)
+  ratePerMinute Int @default(0)
+
+  startedAt DateTime?
+  endedAt   DateTime?
+  /// Ultima marca de cobro procesada, base del calculo incremental
+  lastBilledAt DateTime?
+
+  billedSeconds Int @default(0)
+  tokensSpent   Int @default(0)
+  tokensEarned  Int @default(0)
+  platformFeeTokens Int @default(0)
+
+  endReason CallEndReason?
+  bookingId String?        @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  caller       User          @relation("CallCaller", fields: [callerId], references: [id], onDelete: Cascade)
+  callee       User?         @relation("CallCallee", fields: [calleeId], references: [id], onDelete: SetNull)
+  booking      Booking?      @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  billingTicks CallBillingTick[]
+  gifts        Gift[]
+  transactions Transaction[]
+  reports      Report[]
+  queueEntries MatchQueueEntry[]
+
+  @@index([callerId, createdAt])
+  @@index([calleeId, createdAt])
+  @@index([status, type])
+  @@map("call_sessions")
+}
+
+model CallBillingTick {
+  id        String @id @default(cuid())
+  sessionId String
+
+  seconds       Int
+  tokensCharged Int
+  tokensCredited Int
+  feeTokens     Int @default(0)
+
+  createdAt DateTime @default(now())
+
+  session CallSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@map("call_billing_ticks")
+}
+
+model MatchQueueEntry {
+  id     String      @id @default(cuid())
+  userId String
+  mode   QueueMode
+  status QueueStatus @default(WAITING)
+
+  // Filtros de emparejamiento
+  genderPreference   Gender[]      @default([])
+  orientationPreference Orientation[] @default([])
+  countryPreference  String?
+  minAge             Int?
+
+  /// Genero/rol declarado del usuario en cola (para el matching reciproco)
+  selfGender Gender?
+
+  /// Sala asignada al emparejar
+  matchedSessionId String?
+  matchedWithId    String?
+
+  /// Heartbeat: entradas sin refrescar se consideran muertas
+  heartbeatAt DateTime @default(now())
+  expiresAt   DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session CallSession? @relation(fields: [matchedSessionId], references: [id], onDelete: SetNull)
+
+  @@index([mode, status, heartbeatAt])
+  @@index([userId, status])
+  @@map("match_queue_entries")
+}
+
+/// Evita reemparejar a dos usuarios que se saltaron o bloquearon
+model BlockedPair {
+  id        String @id @default(cuid())
+  blockerId String
+  blockedId String
+  isSkip    Boolean @default(false)
+  expiresAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  blocker User @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@index([blockerId])
+  @@map("blocked_pairs")
+}
+
+model Gift {
+  id        String  @id @default(cuid())
+  sessionId String?
+
+  senderId   String
+  receiverId String
+
+  tokens  Int
+  emoji   String?
+  message String?
+
+  createdAt DateTime @default(now())
+
+  session  CallSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  sender   User         @relation("GiftSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User         @relation("GiftReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  transaction Transaction?
+
+  @@index([sessionId])
+  @@index([receiverId, createdAt])
+  @@map("gifts")
+}
+
+// =============================================================================
+// RESERVAS (AGENDA)
+// =============================================================================
+
+model Booking {
+  id      String        @id @default(cuid())
+  userId  String
+  modelId String
+  status  BookingStatus @default(PENDING_CONFIRMATION)
+
+  startsAt        DateTime
+  durationMinutes Int
+  ratePerMinute   Int
+  /// Tokens retenidos al crear la reserva
+  totalTokens     Int
+
+  userNote  String?
+  modelNote String?
+
+  confirmedAt DateTime?
+  cancelledAt DateTime?
+  completedAt DateTime?
+  refundedTokens Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user         User         @relation("BookingUser", fields: [userId], references: [id], onDelete: Cascade)
+  model        ModelProfile @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  callSession  CallSession?
+  transactions Transaction[]
+
+  @@index([userId, startsAt])
+  @@index([modelId, startsAt])
+  @@index([status, startsAt])
+  @@map("bookings")
+}
+
+// =============================================================================
+// KYC / VERIFICACION DE IDENTIDAD
+// =============================================================================
+
+model KycVerification {
+  id      String    @id @default(cuid())
+  modelId String
+  status  KycStatus @default(PENDING)
+
+  fullLegalName String
+  birthDate     DateTime
+  country       String
+  documentType  DocumentType
+  documentNumber String?
+
+  // Claves privadas en S3/R2 (acceso solo con URL firmada de admin)
+  documentFrontKey String
+  documentBackKey  String?
+  selfieKey        String
+  /// Selfie sujetando el documento + nota manuscrita (2257 compliance)
+  handwrittenNoteKey String?
+
+  reviewerId  String?
+  reviewNotes String?
+  rejectionReason String?
+
+  submittedAt DateTime  @default(now())
+  reviewedAt  DateTime?
+  expiresAt   DateTime?
+
+  model    ModelProfile @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  reviewer User?        @relation("KycReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+
+  @@index([status, submittedAt])
+  @@index([modelId])
+  @@map("kyc_verifications")
+}
+
+// =============================================================================
+// PAYOUTS
+// =============================================================================
+
+model PayoutRequest {
+  id      String       @id @default(cuid())
+  modelId String
+  status  PayoutStatus @default(REQUESTED)
+
+  tokens      Int
+  amountCents Int
+  currency    String @default("USD")
+
+  method      PayoutMethod
+  /// IBAN, email de PayPal, wallet crypto... (cifrar en produccion)
+  destination String
+
+  processorId String?
+  notes       String?
+  rejectionReason String?
+  externalRef String?
+
+  requestedAt DateTime  @default(now())
+  processedAt DateTime?
+  paidAt      DateTime?
+
+  model        ModelProfile @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  processor    User?        @relation("PayoutProcessor", fields: [processorId], references: [id], onDelete: SetNull)
+  transactions Transaction[]
+
+  @@index([status, requestedAt])
+  @@index([modelId])
+  @@map("payout_requests")
+}
+
+// =============================================================================
+// MODERACION
+// =============================================================================
+
+model Report {
+  id String @id @default(cuid())
+
+  reporterId String
+  reportedId String
+  sessionId  String?
+
+  reason  ReportReason
+  details String?
+  /// Capturas/evidencia (claves S3)
+  evidenceKeys String[] @default([])
+
+  status     ReportStatus @default(OPEN)
+  reviewerId String?
+  resolution String?
+  actionTaken String?
+
+  createdAt  DateTime  @default(now())
+  reviewedAt DateTime?
+
+  reporter User         @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  reported User         @relation("ReportedUser", fields: [reportedId], references: [id], onDelete: Cascade)
+  reviewer User?        @relation("ReportReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  session  CallSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([reportedId])
+  @@map("reports")
+}
+
+model AuditLog {
+  id     String @id @default(cuid())
+  actorId String?
+
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  ipAddress  String?
+
+  createdAt DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model PlatformSetting {
+  key         String   @id
+  value       Json
+  description String?
+  updatedAt   DateTime @updatedAt
+
+  @@map("platform_settings")
+}

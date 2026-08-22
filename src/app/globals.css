@@ -1,0 +1,130 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Onix Black */
+    --background: 270 7% 5%;
+    /* Warm White */
+    --foreground: 33 31% 94%;
+
+    /* Surface 2 */
+    --card: 300 5% 8%;
+    --card-foreground: 33 31% 94%;
+
+    --popover: 300 5% 8%;
+    --popover-foreground: 33 31% 94%;
+
+    /* Fantazy Red */
+    --primary: 352 66% 45%;
+    --primary-foreground: 33 31% 94%;
+
+    /* Neutral calido, sin tono de marca propio */
+    --secondary: 0 2% 35%;
+    --secondary-foreground: 33 31% 94%;
+
+    /* Surface 2 */
+    --muted: 300 5% 8%;
+    --muted-foreground: 24 2% 57%;
+
+    /* Champagne Gold */
+    --accent: 36 43% 63%;
+    --accent-foreground: 270 7% 5%;
+
+    /* Fantazy Red (el manual usa el mismo rojo para errores) */
+    --destructive: 352 66% 45%;
+    --destructive-foreground: 33 31% 94%;
+
+    /* Surface 3 */
+    --border: 320 5% 12%;
+    --input: 320 5% 12%;
+    --ring: 352 66% 45%;
+
+    /* Champagne Gold: color del token/moneda */
+    --token: 36 43% 63%;
+    --token-foreground: 270 7% 5%;
+
+    /* 4-10px segun el manual de marca */
+    --radius: 0.5rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings:
+      'rlig' 1,
+      'calt' 1;
+  }
+
+  h1,
+  h2,
+  h3,
+  .section-title {
+    @apply font-heading tracking-wide;
+  }
+
+  /* Scrollbar oscura coherente con el tema */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--background));
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted));
+    border-radius: 8px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.5);
+  }
+}
+
+@layer components {
+  /* Sin gradientes decorativos (manual de marca: "lujo directo, sin filtros"). */
+  .gradient-brand {
+    @apply bg-primary;
+  }
+
+  .text-gradient {
+    @apply text-accent;
+  }
+
+  /* Wordmark "Fantazy Live" — nunca usar en botones, headers de seccion ni body copy */
+  .brand-wordmark {
+    @apply font-brand;
+    font-weight: 800;
+  }
+
+  .glass {
+    @apply border border-white/10 bg-white/5 backdrop-blur-xl;
+  }
+
+  /* Miniatura de contenido bloqueado */
+  .locked-blur {
+    filter: blur(18px) saturate(0.7);
+    transform: scale(1.06);
+  }
+
+  .live-dot {
+    @apply relative inline-flex h-2.5 w-2.5 rounded-full bg-primary;
+  }
+  .live-dot::after {
+    content: '';
+    @apply absolute inset-0 rounded-full bg-primary animate-pulse-ring;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}

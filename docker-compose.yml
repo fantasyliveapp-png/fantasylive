@@ -1,0 +1,75 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: fantasylive-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: fantasy
+      POSTGRES_PASSWORD: fantasy
+      POSTGRES_DB: fantasylive
+      # UTF8 explicito: los emojis de regalos/propinas fallan con encodings
+      # heredados del locale del host (p.ej. WIN1252 en Windows).
+      POSTGRES_INITDB_ARGS: '--auth-host=scram-sha-256 --encoding=UTF8 --locale=C.UTF-8'
+      LANG: C.UTF-8
+    ports:
+      - '5432:5432'
+    volumes:
+      - fantasylive_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U fantasy -d fantasylive']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  # UI web opcional para inspeccionar la BD: http://localhost:8080
+  adminer:
+    image: adminer:latest
+    container_name: fantasylive-adminer
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - '8080:8080'
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+      ADMINER_DESIGN: dracula
+
+  # Almacenamiento S3-compatible local (opcional, sustituye a AWS S3 / Cloudflare R2)
+  # Consola: http://localhost:9001  (user: fantasy / pass: fantasy123)
+  minio:
+    image: minio/minio:latest
+    container_name: fantasylive-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: fantasy
+      MINIO_ROOT_PASSWORD: fantasy123
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    volumes:
+      - fantasylive_minio:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Crea el bucket automaticamente al levantar
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5;
+      mc alias set local http://minio:9000 fantasy fantasy123;
+      mc mb --ignore-existing local/fantasylive-content;
+      mc anonymous set download local/fantasylive-content/previews;
+      echo 'Bucket fantasylive-content listo';
+      "
+
+volumes:
+  fantasylive_pgdata:
+  fantasylive_minio:
