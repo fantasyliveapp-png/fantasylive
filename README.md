@@ -18,8 +18,9 @@ Plataforma web para adultos (18+) de interacción en vivo: videollamadas aleator
 8. [Servicios externos (opcionales)](#servicios-externos-opcionales)
 9. [Subir a GitHub](#subir-a-github)
 10. [Desplegar en Vercel](#desplegar-en-vercel)
-11. [Scripts disponibles](#scripts-disponibles)
-12. [Estado de verificación](#estado-de-verificación)
+11. [Desplegar en un VPS](#desplegar-en-un-vps)
+12. [Scripts disponibles](#scripts-disponibles)
+13. [Estado de verificación](#estado-de-verificación)
 
 ---
 
@@ -259,6 +260,53 @@ Todo movimiento pasa por `applyLedgerEntry()` (`src/lib/tokens.ts`), que se ejec
 
 El reparto usuario → modelo (`transferWithCommission`) descuenta, aplica `PLATFORM_COMMISSION_PERCENT` y acredita el neto al creador en la misma transacción.
 
+### Reparto de ingresos (50 / 50)
+
+La comisión se aplica **una sola vez**, en el momento en que el usuario gasta tokens (`splitEarnings` en `src/lib/tokens.ts`): la plataforma retiene `PLATFORM_COMMISSION_PERCENT` (50 %) y el resto se acredita a la creadora. Por eso el retiro paga el token a su valor íntegro (`MODEL_PAYOUT_CENTS_PER_TOKEN` = `TOKEN_VALUE_CENTS`): si además se recortase ahí, la comisión se cobraría dos veces.
+
+Con los valores por defecto:
+
+```
+usuario paga 10 USD  ->  100 tokens
+   gasta los 100 en una creadora
+   -> plataforma 50 tokens (5,00 USD)
+   -> creadora   50 tokens (5,00 USD)  ->  retira 5,00 USD
+```
+
+`config.economy.modelRevenueSharePercent` es un valor derivado (`100 - comisión`), nunca se configura aparte, así que los dos porcentajes no pueden descuadrarse.
+
+### Bloqueo por país
+
+Cada creadora elige en `/dashboard/model/privacy` desde qué países **no** se la ve. Se guarda en `ModelProfile.blockedCountries` como códigos ISO 3166-1 alpha-2 validados contra `src/lib/countries.ts`; cualquier valor desconocido se rechaza antes de llegar a la base de datos.
+
+El país del visitante se resuelve en `src/lib/geo.ts` con esta prioridad:
+
+1. `GEO_OVERRIDE_COUNTRY` — solo para QA.
+2. Cabeceras de CDN/proxy (`cf-ipcountry`, `x-vercel-ip-country`, …), únicamente si `GEO_TRUST_PROXY_HEADERS=true`.
+3. GeoIP local sobre la IP del cliente (`geoip-lite`, base MaxMind embebida, sin llamadas de red).
+
+> **Importante:** esas cabeceras las puede falsificar cualquiera si llegan directas a la aplicación. `deploy/nginx.conf` las vacía antes de reenviar la petición y fija `X-Real-IP` a `$remote_addr`, de modo que el valor que ve la app es siempre el que calculó el proxy. Si expones la app sin ese nginx delante, pon `GEO_TRUST_PROXY_HEADERS=false`.
+
+El bloqueo se aplica en todas las vías de acceso, no solo en el catálogo: portada, `/models`, sala VIP, ficha de la creadora (responde **404**, no 403, para no confirmar que existe), llamada privada, reserva, suscripción, mensaje, pedido a medida, desbloqueo de contenido, URLs firmadas de los assets y emparejamiento aleatorio —este último en ambos sentidos—. La propia creadora y los administradores nunca se ven afectados.
+
+Un usuario con VPN puede aparentar otro país: es una capa de privacidad, no una garantía. La interfaz lo dice explícitamente.
+
+### Retiros
+
+Tres métodos: **transferencia bancaria (wire)**, **USDT por red TRC20** y **PayPal**. Cada uno pide sus propios campos y se valida de verdad, no solo por formato (`src/lib/payouts.ts`):
+
+- **TRC20** — alfabeto base58, longitud, prefijo `0x41` y **checksum doble-SHA256**. Un solo carácter mal escrito se detecta antes de enviar fondos irrecuperables.
+- **Wire** — SWIFT/BIC de 8 u 11 caracteres; si el número de cuenta tiene forma de IBAN se comprueba el **dígito de control mod-97**.
+- **PayPal** — correo normalizado a minúsculas.
+
+Los datos de cobro son PII sensible, así que se guardan **cifrados con AES-256-GCM** (`src/lib/crypto.ts`, clave en `PAYOUT_ENCRYPTION_KEY`). En la base de datos queda además `destinationMasked` (`ES91****************1332`) para poder listarlos sin descifrar. El panel de administración muestra solo la máscara; descifrar es una acción explícita que queda registrada en `AuditLog`.
+
+Controles sobre el saldo:
+
+- Los tokens se debitan **al solicitar**, con el `UPDATE` condicional del libro mayor: dos solicitudes simultáneas no pueden retirar el mismo saldo.
+- **Un solo retiro abierto** por creadora.
+- Rechazar devuelve tokens, `pendingEarnings` y `lifetimeWithdrawn`, y usa un `UPDATE` condicional por estado para que dos administradores no puedan reembolsar dos veces.
+
 ### Cobro por minuto
 
 El cliente envía un tick a `POST /api/calls/:id/billing` cada `CALL_BILLING_INTERVAL_SECONDS`, **pero el importe lo calcula el servidor** a partir de sus propios `startedAt` / `lastBilledAt`. Acelerar o falsear las peticiones desde el navegador no cambia lo que se cobra. Cuando el saldo no cubre el siguiente intervalo, el servidor cierra la sesión con `INSUFFICIENT_TOKENS` y expulsa de la sala.
@@ -384,6 +432,106 @@ Si usas Stripe, añade el endpoint `https://tu-dominio.vercel.app/api/webhooks/s
 
 ---
 
+## Desplegar en un VPS
+
+Alternativa a Vercel para tener control total (y porque el streaming y los procesos largos encajan mal con las funciones serverless). Probado sobre **Ubuntu 22.04**.
+
+### Arquitectura
+
+```
+Internet ──▶ nginx :80/:443 ──▶ next start :3000 (solo 127.0.0.1)
+                                      │
+                                      └──▶ PostgreSQL :5432 (solo localhost)
+```
+
+La aplicación corre como el usuario de sistema `fantasylive`, nunca como root, bajo una unidad de systemd endurecida (`ProtectSystem=strict`, `NoNewPrivileges`, `PrivateTmp`…).
+
+### Piezas incluidas
+
+| Fichero | Para qué |
+|---|---|
+| `deploy/nginx.conf` | Proxy inverso, SSE sin buffering, caché de estáticos y **limpieza de las cabeceras de geolocalización que envíe el cliente** |
+| `deploy/fantasylive.service` | Unidad systemd endurecida |
+| `scripts/bootstrap-production.mts` | Alta idempotente de ajustes, packs de tokens y administrador |
+
+### Pasos
+
+```bash
+# 1. Paquetes
+apt-get update
+apt-get install -y curl gnupg ca-certificates nginx postgresql certbot python3-certbot-nginx ufw
+curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
+echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" > /etc/apt/sources.list.d/nodesource.list
+apt-get update && apt-get install -y nodejs
+
+# 2. Usuario sin shell de login y código
+useradd --system --create-home --shell /usr/sbin/nologin fantasylive
+git clone https://github.com/fantasyliveapp-png/fantasylive.git /var/www/fantasylive
+
+# 3. Base de datos
+sudo -u postgres psql -c "CREATE ROLE fantasylive LOGIN PASSWORD 'una-password-larga';"
+sudo -u postgres createdb -O fantasylive fantasylive
+
+# 4. Entorno (ver .env.example). Genera los secretos, no los inventes:
+openssl rand -base64 32   # AUTH_SECRET
+openssl rand -base64 32   # PAYOUT_ENCRYPTION_KEY
+chmod 600 /var/www/fantasylive/.env
+chown -R fantasylive:fantasylive /var/www/fantasylive
+
+# 5. Build y datos mínimos
+sudo -u fantasylive bash -c 'cd /var/www/fantasylive && npm ci && npx prisma migrate deploy && npm run build'
+sudo -u fantasylive ADMIN_EMAIL=tu@correo.com ADMIN_PASSWORD='...' \
+  bash -c 'cd /var/www/fantasylive && npx tsx scripts/bootstrap-production.mts'
+
+# 6. Servicios
+install -m 644 /var/www/fantasylive/deploy/fantasylive.service /etc/systemd/system/
+systemctl daemon-reload && systemctl enable --now fantasylive
+
+sed 's/__SERVER_NAME__/tudominio.com/' /var/www/fantasylive/deploy/nginx.conf \
+  > /etc/nginx/sites-available/fantasylive
+ln -sf /etc/nginx/sites-available/fantasylive /etc/nginx/sites-enabled/
+rm -f /etc/nginx/sites-enabled/default
+nginx -t && systemctl reload nginx
+
+# 7. Firewall: abre el 22 ANTES de activarlo o pierdes el acceso
+ufw allow 22/tcp && ufw allow 80/tcp && ufw allow 443/tcp && ufw --force enable
+```
+
+> **`prisma/seed.ts` no se usa en producción**: empieza borrando todas las tablas y crea usuarios de prueba con una contraseña conocida. Para producción está `scripts/bootstrap-production.mts`, que es idempotente, no borra nada y exige una `ADMIN_PASSWORD` fuerte.
+
+### HTTPS
+
+Una autoridad pública no emite certificados para direcciones IP, así que el TLS necesita un dominio:
+
+```bash
+certbot --nginx -d tudominio.com -d www.tudominio.com
+```
+
+Después hay que cambiar `NEXT_PUBLIC_APP_URL`, `NEXTAUTH_URL` y `AUTH_URL` a `https://…` y reiniciar (`systemctl restart fantasylive`). **Mientras la app se sirva por HTTP la cookie de sesión no puede marcarse `Secure`**, así que es el primer paso a dar en cuanto haya dominio.
+
+### Actualizar
+
+```bash
+cd /var/www/fantasylive
+git pull
+sudo -u fantasylive npm ci
+sudo -u fantasylive npx prisma migrate deploy
+sudo -u fantasylive npm run build
+systemctl restart fantasylive
+```
+
+### Diagnóstico
+
+```bash
+systemctl status fantasylive
+journalctl -u fantasylive -f
+curl -H "x-health-token: $HEALTH_CHECK_TOKEN" http://127.0.0.1/api/health
+```
+
+`/api/health` sin token devuelve solo `{"status":"ok"}`: los conteos, los errores de base de datos y qué integraciones están configuradas son información de reconocimiento y solo se entregan a un administrador o con `HEALTH_CHECK_TOKEN`.
+
+---
+
 ## Scripts disponibles
 
 | Comando | Qué hace |
@@ -396,8 +544,9 @@ Si usas Stripe, añade el endpoint `https://tu-dominio.vercel.app/api/webhooks/s
 | `npm run db:up` / `db:down` | Levanta / apaga los contenedores |
 | `npm run db:migrate` | Crea y aplica una migración |
 | `npm run db:deploy` | Aplica migraciones (producción) |
-| `npm run db:seed` | Puebla con datos ficticios |
+| `npm run db:seed` | Puebla con datos ficticios. **Borra todas las tablas primero: nunca en produccion** |
 | `npm run db:reset` | Borra, migra y siembra de nuevo |
+| `npm run db:bootstrap` | Alta idempotente para **produccion**: ajustes, packs de tokens y admin, sin datos ficticios. Requiere `ADMIN_EMAIL` y `ADMIN_PASSWORD` |
 | `npm run db:studio` | GUI de Prisma en el navegador |
 | `npm run setup:local` | Todo lo anterior encadenado |
 
@@ -435,7 +584,3 @@ El cuarto es el más instructivo: solo se manifiesta con sesión iniciada, así 
 ## Licencia
 
 Sin licencia definida. Añade la que corresponda antes de publicar el repositorio.
-"# fantasylive" 
-"# fantasylive" 
-"# fantasylive" 
-"# fantasylive" 

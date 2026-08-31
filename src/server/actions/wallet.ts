@@ -168,9 +168,16 @@ export async function sendGiftAction(input: {
 
     const receiver = await prisma.user.findUnique({
       where: { id: receiverId },
-      select: { id: true, name: true },
+      select: {
+        id: true,
+        name: true,
+        modelProfile: { select: { blockedCountries: true } },
+      },
     });
     if (!receiver) return { ok: false, error: 'Destinatario no encontrado.' };
+    if (await isBlockedForViewer(receiver.modelProfile?.blockedCountries)) {
+      return { ok: false, error: GEO_BLOCKED_MESSAGE };
+    }
 
     const balance = await prisma.$transaction(async (tx) => {
       const gift = await tx.gift.create({

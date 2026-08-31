@@ -136,7 +136,9 @@ export async function sendMessageAction(input: {
 
     const conversation = await prisma.conversation.findUnique({
       where: { id: input.conversationId },
-      include: { model: { select: { userId: true, slug: true } } },
+      include: {
+        model: { select: { userId: true, slug: true, blockedCountries: true } },
+      },
     });
     if (!conversation) return { ok: false, error: 'Conversacion no encontrada.' };
 
@@ -144,6 +146,13 @@ export async function sendMessageAction(input: {
     const isModel = conversation.model.userId === user.id;
     if (!isCustomer && !isModel) {
       return { ok: false, error: 'No tenes acceso a esta conversacion.' };
+    }
+
+    // El bloqueo por pais tambien corta las conversaciones ya abiertas: si la
+    // modelo bloquea el pais despues, el cliente deja de poder escribirle.
+    // Solo aplica al cliente; ella siempre puede responder.
+    if (isCustomer && (await isBlockedForViewer(conversation.model.blockedCountries))) {
+      return { ok: false, error: GEO_BLOCKED_MESSAGE };
     }
 
     if (isCustomer) {
@@ -312,7 +321,13 @@ export async function unlockMessageAttachmentAction(
       include: {
         message: {
           include: {
-            conversation: { include: { model: { select: { userId: true, slug: true } } } },
+            conversation: {
+              include: {
+                model: {
+                  select: { userId: true, slug: true, blockedCountries: true },
+                },
+              },
+            },
           },
         },
       },
@@ -322,6 +337,9 @@ export async function unlockMessageAttachmentAction(
     const conversation = attachment.message.conversation;
     if (conversation.userId !== user.id) {
       return { ok: false, error: 'No tenes acceso a este archivo.' };
+    }
+    if (await isBlockedForViewer(conversation.model.blockedCountries)) {
+      return { ok: false, error: GEO_BLOCKED_MESSAGE };
     }
     if (attachment.priceTokens <= 0) {
       return { ok: true, message: 'Este archivo ya es de acceso libre.' };
