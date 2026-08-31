@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { prisma } from '@/lib/prisma';
+import { GEO_BLOCKED_MESSAGE, isBlockedForViewer } from '@/lib/geo';
 import { startTokenPurchase } from '@/lib/payments';
 import {
   InsufficientTokensError,
@@ -58,7 +59,17 @@ export async function unlockContentAction(
 
     const pkg = await prisma.contentPackage.findUnique({
       where: { id: packageId },
-      include: { model: { select: { id: true, userId: true, stageName: true, slug: true } } },
+      include: {
+        model: {
+          select: {
+            id: true,
+            userId: true,
+            stageName: true,
+            slug: true,
+            blockedCountries: true,
+          },
+        },
+      },
     });
 
     if (!pkg || !pkg.isPublished) {
@@ -66,6 +77,9 @@ export async function unlockContentAction(
     }
     if (pkg.model.userId === user.id) {
       return { ok: false, error: 'Este contenido ya es tuyo.' };
+    }
+    if (await isBlockedForViewer(pkg.model.blockedCountries)) {
+      return { ok: false, error: GEO_BLOCKED_MESSAGE };
     }
 
     const already = await prisma.contentUnlock.findUnique({

@@ -4,6 +4,7 @@ import type { Gender, ModelTier, Orientation, Prisma } from '@prisma/client';
 import { ModelCard } from '@/components/models/model-card';
 import { ModelFilters } from '@/components/models/model-filters';
 import { prisma } from '@/lib/prisma';
+import { getVisibilityContext } from '@/lib/geo';
 
 export const metadata: Metadata = { title: 'Descubrir creadores' };
 export const dynamic = 'force-dynamic';
@@ -29,9 +30,14 @@ export default async function ModelsPage({
   const params = await searchParams;
   const page = Math.max(1, Number(params.page) || 1);
 
+  // Bloqueo geografico: oculta del catalogo los perfiles que bloquean el
+  // pais desde el que se navega.
+  const { filter: geoFilter } = await getVisibilityContext();
+
   const where: Prisma.ModelProfileWhereInput = {
     kycStatus: 'APPROVED',
     user: { status: 'ACTIVE' },
+    ...geoFilter,
   };
 
   if (params.gender) {

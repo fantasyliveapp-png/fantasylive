@@ -1,0 +1,57 @@
+##############################################################################
+# FantasyLive - unidad systemd
+# Instalar en /etc/systemd/system/fantasylive.service
+##############################################################################
+
+[Unit]
+Description=FantasyLive (Next.js)
+Documentation=https://github.com/fantasyliveapp-png/fantasylive
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+Type=simple
+
+# La app NO corre como root: usuario propio sin shell de login.
+User=fantasylive
+Group=fantasylive
+WorkingDirectory=/var/www/fantasylive
+
+# El .env lo lee systemd, no la app: asi las credenciales no dependen de que
+# el proceso cargue dotenv y quedan fuera del arbol de ficheros del build.
+EnvironmentFile=/var/www/fantasylive/.env
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=HOSTNAME=127.0.0.1
+
+ExecStart=/usr/bin/npm run start
+
+Restart=always
+RestartSec=5
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=fantasylive
+
+# --- Endurecimiento ---
+# Sin escalada de privilegios ni acceso a nada fuera de lo imprescindible.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+# Unico directorio con escritura: el .next/cache que Next necesita en runtime.
+ReadWritePaths=/var/www/fantasylive/.next
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { BadgeCheck, Check, ExternalLink, Loader2, X } from 'lucide-react';
+import { BadgeCheck, Check, Eye, ExternalLink, Loader2, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/components/ui/badge';
@@ -21,7 +21,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { PAYOUT_STATUS_LABELS } from '@/lib/constants';
-import { processPayoutAction } from '@/server/actions/admin';
+import { PAYOUT_METHOD_LABELS } from '@/lib/payout-methods';
+import {
+  processPayoutAction,
+  revealPayoutDestinationAction,
+} from '@/server/actions/admin';
 import { formatDateTime, formatMoney, formatTokens } from '@/lib/utils';
 
 interface PayoutRow {
@@ -31,7 +35,7 @@ interface PayoutRow {
   amountCents: number;
   currency: string;
   method: string;
-  destination: string;
+  destinationMasked: string | null;
   requestedAt: string;
   model: {
     stageName: string;
@@ -42,13 +46,6 @@ interface PayoutRow {
     currentBalance: number;
   };
 }
-
-const METHOD_LABELS: Record<string, string> = {
-  BANK_TRANSFER: 'Transferencia bancaria',
-  PAYPAL: 'PayPal',
-  CRYPTO: 'Cripto',
-  PAXUM: 'Paxum',
-};
 
 const STATUS_VARIANT: Record<string, any> = {
   REQUESTED: 'warning',
@@ -67,6 +64,25 @@ export function PayoutReviewList({ payouts }: { payouts: PayoutRow[] }) {
 
   const [rejecting, setRejecting] = useState<PayoutRow | null>(null);
   const [rejectNotes, setRejectNotes] = useState('');
+
+  // Datos de cobro descifrados, solo para los retiros que el admin abre.
+  const [revealed, setRevealed] = useState<
+    Record<string, Array<{ label: string; value: string }>>
+  >({});
+  const [revealing, setRevealing] = useState<string | null>(null);
+
+  function reveal(payoutId: string) {
+    setRevealing(payoutId);
+    startTransition(async () => {
+      const result = await revealPayoutDestinationAction(payoutId);
+      setRevealing(null);
+      if (result.ok && result.data) {
+        setRevealed((prev) => ({ ...prev, [payoutId]: result.data!.fields }));
+      } else {
+        toast.error(result.error ?? 'No se pudieron obtener los datos');
+      }
+    });
+  }
 
   function process(
     payoutId: string,
@@ -126,11 +142,45 @@ export function PayoutReviewList({ payouts }: { payouts: PayoutRow[] }) {
                 </p>
               </div>
 
-              <div className="min-w-[180px]">
+              <div className="min-w-[220px]">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                  {METHOD_LABELS[payout.method] ?? payout.method}
+                  {PAYOUT_METHOD_LABELS[
+                    payout.method as keyof typeof PAYOUT_METHOD_LABELS
+                  ] ?? payout.method}
                 </p>
-                <p className="mt-0.5 font-mono text-sm">{payout.destination}</p>
+
+                {revealed[payout.id] ? (
+                  <dl className="mt-1 space-y-0.5">
+                    {revealed[payout.id]!.map((field) => (
+                      <div key={field.label} className="flex gap-2 text-xs">
+                        <dt className="shrink-0 text-muted-foreground">
+                          {field.label}:
+                        </dt>
+                        <dd className="break-all font-mono">{field.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                ) : (
+                  <>
+                    <p className="mt-0.5 font-mono text-sm text-muted-foreground">
+                      {payout.destinationMasked ?? 'Cifrado'}
+                    </p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="mt-1 h-7 px-2 text-xs"
+                      disabled={isPending}
+                      onClick={() => reveal(payout.id)}
+                    >
+                      {revealing === payout.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Eye className="h-3.5 w-3.5" />
+                      )}
+                      Ver datos de cobro
+                    </Button>
+                  </>
+                )}
               </div>
 
               <div className="text-right">
@@ -201,9 +251,13 @@ export function PayoutReviewList({ payouts }: { payouts: PayoutRow[] }) {
               <p className="text-sm font-medium">{paying?.model.stageName}</p>
               <p className="text-xs text-muted-foreground">
                 {formatMoney(paying?.amountCents ?? 0)} via{' '}
-                {METHOD_LABELS[paying?.method ?? ''] ?? paying?.method}
+                {PAYOUT_METHOD_LABELS[
+                  paying?.method as keyof typeof PAYOUT_METHOD_LABELS
+                ] ?? paying?.method}
               </p>
-              <p className="mt-1 font-mono text-xs">{paying?.destination}</p>
+              <p className="mt-1 font-mono text-xs">
+                {paying?.destinationMasked ?? 'Cifrado'}
+              </p>
             </div>
 
             <div className="space-y-2">

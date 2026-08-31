@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { Coins, DollarSign, PieChart } from 'lucide-react';
 
 import { PayoutRequestForm } from '@/components/model/payout-request-form';
 import { Badge } from '@/components/ui/badge';
@@ -14,8 +15,9 @@ import {
 import { requireModel } from '@/lib/auth/guards';
 import { config } from '@/lib/config';
 import { PAYOUT_STATUS_LABELS } from '@/lib/constants';
+import { PAYOUT_METHOD_LABELS } from '@/lib/payout-methods';
 import { prisma } from '@/lib/prisma';
-import { getWalletSummary } from '@/lib/tokens';
+import { getWalletSummary, tokensToPayoutCents } from '@/lib/tokens';
 import { formatDateTime, formatMoney, formatTokens } from '@/lib/utils';
 
 export const metadata: Metadata = { title: 'Retiros' };
@@ -29,12 +31,7 @@ const STATUS_VARIANT: Record<string, any> = {
   REJECTED: 'destructive',
 };
 
-const METHOD_LABELS: Record<string, string> = {
-  BANK_TRANSFER: 'Transferencia bancaria',
-  PAYPAL: 'PayPal',
-  CRYPTO: 'Cripto',
-  PAXUM: 'Paxum',
-};
+const OPEN_STATUSES = ['REQUESTED', 'APPROVED', 'PROCESSING'] as const;
 
 export default async function PayoutsPage() {
   const { user, profile } = await requireModel();
@@ -44,24 +41,56 @@ export default async function PayoutsPage() {
     prisma.payoutRequest.findMany({
       where: { modelId: profile.id },
       orderBy: { requestedAt: 'desc' },
+      take: 50,
     }),
   ]);
+
+  const hasOpenRequest = payouts.some((p) =>
+    (OPEN_STATUSES as readonly string[]).includes(p.status),
+  );
+
+  const centsPerToken = config.economy.modelPayoutCentsPerToken;
+  const availableCents = tokensToPayoutCents(wallet.balance);
+  const withdrawnCents = tokensToPayoutCents(wallet.lifetimeWithdrawn);
 
   return (
     <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Retiros</h1>
         <p className="mt-2 text-muted-foreground">
-          Convierte tus tokens en dinero. Minimo{' '}
+          Convierte tus tokens en dolares. Minimo{' '}
           {formatTokens(config.economy.minPayoutTokens)} tokens por solicitud.
         </p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <SummaryCard
+          icon={<Coins className="h-4 w-4 text-token" />}
+          label="Tokens disponibles"
+          value={formatTokens(wallet.balance)}
+          hint={`${formatMoney(centsPerToken)} por token`}
+        />
+        <SummaryCard
+          icon={<DollarSign className="h-4 w-4 text-emerald-400" />}
+          label="Equivale a"
+          value={formatMoney(availableCents)}
+          hint={`Retirado hasta hoy: ${formatMoney(withdrawnCents)}`}
+          highlight
+        />
+        <SummaryCard
+          icon={<PieChart className="h-4 w-4 text-primary" />}
+          label="Tu reparto"
+          value={`${config.economy.modelRevenueSharePercent}%`}
+          hint={`La plataforma retiene el ${config.economy.platformCommissionPercent}% de cada gasto`}
+        />
       </div>
 
       <PayoutRequestForm
         balance={wallet.balance}
         minTokens={config.economy.minPayoutTokens}
-        centsPerToken={config.economy.modelPayoutCentsPerToken}
+        centsPerToken={centsPerToken}
         kycApproved={profile.kycStatus === 'APPROVED'}
+        hasOpenRequest={hasOpenRequest}
       />
 
       <Card>
@@ -74,52 +103,87 @@ export default async function PayoutsPage() {
               Todavia no has solicitado ningun retiro.
             </p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Metodo</TableHead>
-                  <TableHead>Destino</TableHead>
-                  <TableHead className="text-right">Tokens</TableHead>
-                  <TableHead className="text-right">Importe</TableHead>
-                  <TableHead>Estado</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {payouts.map((payout) => (
-                  <TableRow key={payout.id}>
-                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                      {formatDateTime(payout.requestedAt)}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {METHOD_LABELS[payout.method] ?? payout.method}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">
-                      {payout.destination}
-                    </TableCell>
-                    <TableCell className="text-right font-semibold">
-                      {formatTokens(payout.tokens)}
-                    </TableCell>
-                    <TableCell className="text-right font-semibold text-emerald-400">
-                      {formatMoney(payout.amountCents, payout.currency)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={STATUS_VARIANT[payout.status] ?? 'muted'}>
-                        {PAYOUT_STATUS_LABELS[payout.status]}
-                      </Badge>
-                      {payout.rejectionReason && (
-                        <p className="mt-1 max-w-[200px] text-xs text-destructive">
-                          {payout.rejectionReason}
-                        </p>
-                      )}
-                    </TableCell>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Metodo</TableHead>
+                    <TableHead>Destino</TableHead>
+                    <TableHead className="text-right">Tokens</TableHead>
+                    <TableHead className="text-right">Importe</TableHead>
+                    <TableHead>Estado</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {payouts.map((payout) => (
+                    <TableRow key={payout.id}>
+                      <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                        {formatDateTime(payout.requestedAt)}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {PAYOUT_METHOD_LABELS[payout.method] ?? payout.method}
+                      </TableCell>
+                      {/* Solo la mascara: los datos completos estan cifrados y
+                          no se descifran para mostrar el historial. */}
+                      <TableCell className="font-mono text-xs text-muted-foreground">
+                        {payout.destinationMasked ?? 'Guardado cifrado'}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold">
+                        {formatTokens(payout.tokens)}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold text-emerald-400">
+                        {formatMoney(payout.amountCents, payout.currency)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={STATUS_VARIANT[payout.status] ?? 'muted'}>
+                          {PAYOUT_STATUS_LABELS[payout.status]}
+                        </Badge>
+                        {payout.rejectionReason && (
+                          <p className="mt-1 max-w-[200px] text-xs text-destructive">
+                            {payout.rejectionReason}
+                          </p>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function SummaryCard({
+  icon,
+  label,
+  value,
+  hint,
+  highlight = false,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  hint: string;
+  highlight?: boolean;
+}) {
+  return (
+    <Card className={highlight ? 'border-emerald-500/40 bg-emerald-500/5' : undefined}>
+      <CardContent className="pt-6">
+        <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          {icon}
+          {label}
+        </p>
+        <p
+          className={`mt-2 text-3xl font-bold ${highlight ? 'text-emerald-400' : ''}`}
+        >
+          {value}
+        </p>
+        <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
+      </CardContent>
+    </Card>
   );
 }

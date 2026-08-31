@@ -188,8 +188,13 @@ enum PayoutStatus {
 }
 
 enum PayoutMethod {
-  BANK_TRANSFER
+  /// Transferencia bancaria internacional (wire/SWIFT o SEPA)
+  WIRE_TRANSFER
+  /// USDT sobre la red TRON (TRC20)
+  USDT_TRC20
   PAYPAL
+  // Heredados: no se ofrecen en el formulario, se conservan por historico
+  BANK_TRANSFER
   CRYPTO
   PAXUM
 }
@@ -470,6 +475,10 @@ model ModelProfile {
   country    String?
   languages  String[] @default([])
   tags       String[] @default([])
+
+  /// Codigos ISO 3166-1 alpha-2 desde los que este perfil NO es visible.
+  /// Lo gestiona la propia modelo desde /dashboard/model/privacy.
+  blockedCountries String[] @default([])
 
   avatarUrl String?
   coverUrl  String?
@@ -899,6 +908,10 @@ model MatchQueueEntry {
   /// Genero/rol declarado del usuario en cola (para el matching reciproco)
   selfGender Gender?
 
+  /// Pais ISO-3166 alpha-2 resuelto al entrar en cola. Se usa para no
+  /// emparejar a un usuario con una modelo que bloquea su pais.
+  selfCountry String?
+
   /// Sala asignada al emparejar
   matchedSessionId String?
   matchedWithId    String?
@@ -1049,8 +1062,12 @@ model PayoutRequest {
   currency    String @default("USD")
 
   method      PayoutMethod
-  /// IBAN, email de PayPal, wallet crypto... (cifrar en produccion)
+
+  /// Datos de cobro CIFRADOS (AES-256-GCM, ver src/lib/crypto.ts).
+  /// Nunca se exponen en claro: solo un admin puede descifrarlos.
   destination String
+  /// Version enmascarada para mostrar en listados sin descifrar (ej. "****4321")
+  destinationMasked String?
 
   processorId String?
   notes       String?

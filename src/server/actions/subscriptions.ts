@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { createNotification } from '@/lib/notifications';
 import { prisma } from '@/lib/prisma';
+import { GEO_BLOCKED_MESSAGE, isBlockedForViewer } from '@/lib/geo';
 import { InsufficientTokensError, transferWithCommission } from '@/lib/tokens';
 import { getActiveSubscription, subscriptionPeriodEnd } from '@/lib/subscriptions';
 
@@ -30,11 +31,15 @@ export async function subscribeAction(
         subscriptionEnabled: true,
         subscriptionPriceTokens: true,
         subscriptionDiscountPercent: true,
+        blockedCountries: true,
       },
     });
     if (!model) return { ok: false, error: 'Modelo no encontrada.' };
     if (model.userId === user.id) {
       return { ok: false, error: 'No podes suscribirte a vos misma.' };
+    }
+    if (await isBlockedForViewer(model.blockedCountries)) {
+      return { ok: false, error: GEO_BLOCKED_MESSAGE };
     }
     if (!model.subscriptionEnabled || model.subscriptionPriceTokens <= 0) {
       return { ok: false, error: 'Esta modelo no tiene suscripcion activada.' };

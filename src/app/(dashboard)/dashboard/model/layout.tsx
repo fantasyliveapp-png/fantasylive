@@ -71,6 +71,11 @@ export default async function ModelDashboardLayout({
       links: [
         { href: '/dashboard/model/rates', label: 'Tarifas y perfil', icon: 'settings' },
         { href: '/dashboard/model/kyc', label: 'Verificacion KYC', icon: 'badgeCheck' },
+        {
+          href: '/dashboard/model/privacy',
+          label: 'Privacidad y bloqueos',
+          icon: 'shield',
+        },
       ],
     },
   ];

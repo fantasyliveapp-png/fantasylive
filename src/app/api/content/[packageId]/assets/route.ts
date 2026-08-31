@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getCurrentUser } from '@/lib/auth/guards';
+import { isBlockedForViewer } from '@/lib/geo';
 import { prisma } from '@/lib/prisma';
 import { resolveAssetUrl } from '@/lib/storage';
 import { getActiveSubscription } from '@/lib/subscriptions';
@@ -28,7 +29,7 @@ export async function GET(
   const pkg = await prisma.contentPackage.findUnique({
     where: { id: packageId },
     include: {
-      model: { select: { id: true, userId: true } },
+      model: { select: { id: true, userId: true, blockedCountries: true } },
       assets: { orderBy: { sortOrder: 'asc' } },
     },
   });
@@ -39,6 +40,12 @@ export async function GET(
 
   const isOwner = pkg.model.userId === user.id;
   const isAdmin = user.role === 'ADMIN';
+
+  // Bloqueo geografico: ni siquiera con un desbloqueo previo se sirven las
+  // URLs firmadas a un pais que la modelo ha bloqueado.
+  if (!isOwner && !isAdmin && (await isBlockedForViewer(pkg.model.blockedCountries))) {
+    return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });
+  }
 
   const unlock = isOwner
     ? true

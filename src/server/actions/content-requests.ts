@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { createNotification } from '@/lib/notifications';
 import { prisma } from '@/lib/prisma';
+import { GEO_BLOCKED_MESSAGE, isBlockedForViewer } from '@/lib/geo';
 import { InsufficientTokensError, transferWithCommission } from '@/lib/tokens';
 
 export interface ContentRequestActionResult {
@@ -43,11 +44,19 @@ export async function createContentRequestAction(input: {
 
     const model = await prisma.modelProfile.findUnique({
       where: { id: parsed.data.modelId },
-      select: { userId: true, slug: true, acceptsBookings: true },
+      select: {
+        userId: true,
+        slug: true,
+        acceptsBookings: true,
+        blockedCountries: true,
+      },
     });
     if (!model) return { ok: false, error: 'Modelo no encontrada.' };
     if (model.userId === user.id) {
       return { ok: false, error: 'No podes pedirte contenido a vos misma.' };
+    }
+    if (await isBlockedForViewer(model.blockedCountries)) {
+      return { ok: false, error: GEO_BLOCKED_MESSAGE };
     }
 
     const request = await prisma.contentRequest.create({

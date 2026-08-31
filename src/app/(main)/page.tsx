@@ -14,6 +14,7 @@ import { ModelCard } from '@/components/models/model-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { getVisibilityContext } from '@/lib/geo';
 import { getQueueStats } from '@/lib/matchmaking';
 import { prisma } from '@/lib/prisma';
 import { formatTokens } from '@/lib/utils';
@@ -56,10 +57,13 @@ const FEATURES = [
 ];
 
 export default async function HomePage() {
+  // Los perfiles que bloquean el pais del visitante no salen ni en destacados.
+  const { filter: geoFilter } = await getVisibilityContext();
+
   const [stats, featured, packages] = await Promise.all([
     getQueueStats(),
     prisma.modelProfile.findMany({
-      where: { kycStatus: 'APPROVED' },
+      where: { kycStatus: 'APPROVED', ...geoFilter },
       orderBy: [{ isOnline: 'desc' }, { ratingAvg: 'desc' }],
       take: 8,
       select: {

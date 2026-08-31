@@ -75,10 +75,63 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   );
 }
 
+/**
+ * Cada cuanto se releen rol y estado desde la base de datos.
+ *
+ * El token JWT dura 30 dias, asi que sin este refresco un baneo o una
+ * degradacion de rol no surtirian efecto hasta el siguiente login. Con 5
+ * minutos se acota la ventana sin consultar la BD en cada peticion.
+ */
+const TOKEN_REFRESH_MS = 5 * 60 * 1000;
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
   adapter: PrismaAdapter(prisma) as any,
   providers,
+  callbacks: {
+    ...authConfig.callbacks,
+    /**
+     * Fuente de verdad del rol y el estado de la cuenta.
+     *
+     * El callback de auth.config.ts solo copia los datos del login. Aqui, ya
+     * en runtime Node (con Prisma disponible), se refrescan desde la BD:
+     *  - cuando el cliente llama a update(), SIN leer lo que envia;
+     *  - de forma periodica, para que baneos y cambios de rol se apliquen.
+     */
+    async jwt(params) {
+      const token = await authConfig.callbacks.jwt(params);
+      if (!token?.id) return token;
+
+      const lastRefresh = Number(token.refreshedAt ?? 0);
+      const isStale = Date.now() - lastRefresh > TOKEN_REFRESH_MS;
+      if (!params.user && !isStale && params.trigger !== 'update') {
+        return token;
+      }
+
+      const fresh = await prisma.user.findUnique({
+        where: { id: token.id as string },
+        select: {
+          role: true,
+          status: true,
+          isVip: true,
+          ageVerified: true,
+          modelProfile: { select: { id: true } },
+        },
+      });
+
+      // Cuenta borrada: se invalida la sesion.
+      if (!fresh) return null;
+
+      token.role = fresh.role;
+      token.status = fresh.status;
+      token.isVip = fresh.isVip;
+      token.ageVerified = fresh.ageVerified;
+      token.modelProfileId = fresh.modelProfile?.id ?? null;
+      token.refreshedAt = Date.now();
+
+      return token;
+    },
+  },
   events: {
     /** Crea monedero + bono de bienvenida para altas via OAuth */
     async createUser({ user }) {

@@ -7,6 +7,14 @@ import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { prisma } from '@/lib/prisma';
 import { config } from '@/lib/config';
 import { applyLedgerEntry, tokensToPayoutCents } from '@/lib/tokens';
+import { encryptSecret, maskDestination } from '@/lib/crypto';
+import { normalizeCountryCode } from '@/lib/countries';
+import {
+  destinationIdentifier,
+  payoutDestinationSchema,
+  PAYOUT_METHOD_LABELS,
+  type PayoutDestination,
+} from '@/lib/payouts';
 import {
   buildContentKey,
   buildKycKey,
@@ -557,71 +565,120 @@ export async function submitKycAction(input: {
 // ---------------------------------------------------------------------------
 
 const payoutSchema = z.object({
-  tokens: z.number().int().min(1),
-  method: z.enum(['BANK_TRANSFER', 'PAYPAL', 'CRYPTO', 'PAXUM']),
-  destination: z.string().min(4).max(200),
+  tokens: z.number().int().min(1).max(10_000_000),
+  destination: payoutDestinationSchema,
 });
 
+/**
+ * Solicita un retiro.
+ *
+ * Los tokens se debitan AL SOLICITAR (asiento PAYOUT) y se devuelven si un
+ * admin rechaza la solicitud. El debito usa un UPDATE condicional sobre el
+ * saldo, asi que dos solicitudes simultaneas no pueden dejar el monedero en
+ * negativo ni retirar el mismo saldo dos veces.
+ *
+ * Los datos de cobro se guardan CIFRADOS (AES-256-GCM); en la base de datos
+ * solo queda ademas una version enmascarada para poder listarlos.
+ */
 export async function requestPayoutAction(input: {
   tokens: number;
-  method: 'BANK_TRANSFER' | 'PAYPAL' | 'CRYPTO' | 'PAXUM';
-  destination: string;
+  destination: PayoutDestination;
 }): Promise<ModelActionResult> {
   try {
     const { user, profile } = await requireModelProfile();
+
     const parsed = payoutSchema.safeParse(input);
-    if (!parsed.success) return { ok: false, error: 'Datos de retiro invalidos.' };
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      return {
+        ok: false,
+        error: issue?.message ?? 'Datos de retiro invalidos.',
+      };
+    }
+
+    const { tokens, destination } = parsed.data;
 
     if (profile.kycStatus !== 'APPROVED') {
       return { ok: false, error: 'Necesitas el KYC aprobado para retirar.' };
     }
-    if (parsed.data.tokens < config.economy.minPayoutTokens) {
+    if (tokens < config.economy.minPayoutTokens) {
       return {
         ok: false,
         error: `El minimo de retiro es de ${config.economy.minPayoutTokens} tokens.`,
       };
     }
 
-    const wallet = await prisma.wallet.findUnique({
-      where: { userId: user.id },
-      select: { balance: true },
+    // Una solicitud abierta a la vez: evita que se encadenen retiros mientras
+    // finanzas todavia no ha procesado el anterior.
+    const openRequest = await prisma.payoutRequest.findFirst({
+      where: {
+        modelId: profile.id,
+        status: { in: ['REQUESTED', 'APPROVED', 'PROCESSING'] },
+      },
+      select: { id: true },
     });
-    if ((wallet?.balance ?? 0) < parsed.data.tokens) {
-      return { ok: false, error: 'Saldo insuficiente para ese retiro.' };
+    if (openRequest) {
+      return {
+        ok: false,
+        error: 'Ya tienes un retiro en curso. Espera a que se procese.',
+      };
     }
 
-    const amountCents = tokensToPayoutCents(parsed.data.tokens);
+    const amountCents = tokensToPayoutCents(tokens);
+
+    // El cifrado se hace ANTES de abrir la transaccion: si la clave no esta
+    // configurada preferimos fallar sin haber tocado el monedero.
+    const encryptedDestination = encryptSecret(JSON.stringify(destination));
+    const masked = maskDestination(destinationIdentifier(destination));
 
     await prisma.$transaction(async (tx) => {
       const payout = await tx.payoutRequest.create({
         data: {
           modelId: profile.id,
-          tokens: parsed.data.tokens,
+          tokens,
           amountCents,
-          method: parsed.data.method,
-          destination: parsed.data.destination,
+          currency: 'USD',
+          method: destination.method,
+          destination: encryptedDestination,
+          destinationMasked: masked,
           status: 'REQUESTED',
         },
         select: { id: true },
       });
 
-      // Se descuenta al solicitar; si se rechaza, se devuelve
+      // Debito atomico: lanza InsufficientTokensError y revierte la
+      // transaccion completa si el saldo no alcanza.
       await applyLedgerEntry(tx, {
         userId: user.id,
         type: 'PAYOUT',
-        tokens: parsed.data.tokens,
+        tokens,
         amountCents,
         currency: 'USD',
-        description: `Solicitud de retiro (${parsed.data.method})`,
+        description: `Solicitud de retiro (${PAYOUT_METHOD_LABELS[destination.method]})`,
         payoutRequestId: payout.id,
       });
 
-      await tx.wallet.update({
+      // pendingEarnings nunca debe quedar negativo: se relee dentro de la
+      // transaccion y se descuenta solo lo que realmente hay acumulado.
+      const wallet = await tx.wallet.findUniqueOrThrow({
         where: { userId: user.id },
+        select: { pendingEarnings: true },
+      });
+      const consumed = Math.min(tokens, Math.max(0, wallet.pendingEarnings));
+      if (consumed > 0) {
+        await tx.wallet.update({
+          where: { userId: user.id },
+          data: { pendingEarnings: { decrement: consumed } },
+        });
+      }
+
+      await tx.auditLog.create({
         data: {
-          pendingEarnings: {
-            decrement: Math.min(parsed.data.tokens, wallet?.balance ?? 0),
-          },
+          actorId: user.id,
+          action: 'PAYOUT_REQUESTED',
+          entityType: 'PayoutRequest',
+          entityId: payout.id,
+          metadata: { tokens, amountCents, method: destination.method },
         },
       });
     });
@@ -630,7 +687,85 @@ export async function requestPayoutAction(input: {
     revalidatePath('/admin/payouts');
     return {
       ok: true,
-      message: `Retiro solicitado: ${parsed.data.tokens} tokens (~$${(amountCents / 100).toFixed(2)}).`,
+      message: `Retiro solicitado: ${tokens} tokens (${(amountCents / 100).toFixed(2)} USD).`,
+    };
+  } catch (error) {
+    return { ok: false, error: toMessage(error) };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// PRIVACIDAD: BLOQUEO POR PAIS
+// ---------------------------------------------------------------------------
+
+const MAX_BLOCKED_COUNTRIES = 100;
+
+/**
+ * Define desde que paises NO se ve este perfil.
+ *
+ * Se guardan solo codigos ISO 3166-1 alpha-2 conocidos: cualquier valor
+ * inventado se descarta en vez de persistirse, de forma que el filtro de
+ * catalogo siempre compara contra datos limpios.
+ */
+export async function updateBlockedCountriesAction(input: {
+  countries: string[];
+}): Promise<ModelActionResult<{ countries: string[] }>> {
+  try {
+    const { user, profile } = await requireModelProfile();
+
+    if (!Array.isArray(input?.countries)) {
+      return { ok: false, error: 'Lista de paises invalida.' };
+    }
+    if (input.countries.length > MAX_BLOCKED_COUNTRIES) {
+      return {
+        ok: false,
+        error: `No puedes bloquear mas de ${MAX_BLOCKED_COUNTRIES} paises.`,
+      };
+    }
+
+    const invalid: string[] = [];
+    const valid = new Set<string>();
+    for (const raw of input.countries) {
+      const code = normalizeCountryCode(raw);
+      if (code) valid.add(code);
+      else if (typeof raw === 'string' && raw.trim()) invalid.push(raw.trim());
+    }
+
+    if (invalid.length > 0) {
+      return {
+        ok: false,
+        error: `Codigo de pais no reconocido: ${invalid.slice(0, 3).join(', ')}.`,
+      };
+    }
+
+    const countries = [...valid].sort();
+
+    await prisma.$transaction([
+      prisma.modelProfile.update({
+        where: { id: profile.id },
+        data: { blockedCountries: countries },
+      }),
+      prisma.auditLog.create({
+        data: {
+          actorId: user.id,
+          action: 'BLOCKED_COUNTRIES_UPDATED',
+          entityType: 'ModelProfile',
+          entityId: profile.id,
+          metadata: { count: countries.length, countries },
+        },
+      }),
+    ]);
+
+    revalidatePath('/dashboard/model/privacy');
+    revalidatePath('/models');
+    revalidatePath(`/models/${profile.slug}`);
+    return {
+      ok: true,
+      message:
+        countries.length === 0
+          ? 'Tu perfil vuelve a verse desde todos los paises.'
+          : `Bloqueo actualizado: ${countries.length} ${countries.length === 1 ? 'pais' : 'paises'}.`,
+      data: { countries },
     };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
