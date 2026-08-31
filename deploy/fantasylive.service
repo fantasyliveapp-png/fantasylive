@@ -25,7 +25,9 @@ Environment=NODE_ENV=production
 Environment=PORT=3000
 Environment=HOSTNAME=127.0.0.1
 
-ExecStart=/usr/bin/npm run start
+# Se llama a next directamente, sin npm: con ProtectHome=true npm no podria
+# escribir su cache ni sus logs en el home del usuario de servicio.
+ExecStart=/usr/bin/node /var/www/fantasylive/node_modules/next/dist/bin/next start
 
 Restart=always
 RestartSec=5
@@ -51,7 +53,9 @@ RestrictRealtime=true
 LockPersonality=true
 # Unico directorio con escritura: el .next/cache que Next necesita en runtime.
 ReadWritePaths=/var/www/fantasylive/.next
-RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# AF_NETLINK es imprescindible: Next llama a os.networkInterfaces() al
+# arrancar y sin netlink libuv devuelve EAFNOSUPPORT y el proceso muere.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
 
 [Install]
 WantedBy=multi-user.target
