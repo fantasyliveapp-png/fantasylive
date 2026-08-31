@@ -14,6 +14,30 @@ function bool(value: string | undefined, fallback: boolean): boolean {
   return value === 'true' || value === '1';
 }
 
+function clampPercent(value: number): number {
+  return Math.min(100, Math.max(0, Math.round(value)));
+}
+
+/**
+ * REPARTO DE INGRESOS - punto unico de verdad.
+ *
+ * La comision se aplica UNA SOLA VEZ, en el momento en que el usuario gasta
+ * tokens (ver splitEarnings en src/lib/tokens.ts): la plataforma retiene
+ * `platformCommissionPercent` y el resto se acredita a la modelo.
+ *
+ * Por eso el retiro paga el token a su valor integro (tokenValueCents): si
+ * ademas se recortara aqui, la comision se cobraria dos veces. Mantener
+ * MODEL_PAYOUT_CENTS_PER_TOKEN == TOKEN_VALUE_CENTS salvo que se quiera
+ * justamente eso.
+ *
+ * Con los valores por defecto (comision 50%, token a $0.10):
+ *   usuario paga $10 -> 100 tokens -> modelo recibe 50 tokens -> retira $5.00
+ */
+const tokenValueCents = num(process.env.TOKEN_VALUE_CENTS, 10);
+const platformCommissionPercent = clampPercent(
+  num(process.env.PLATFORM_COMMISSION_PERCENT, 50),
+);
+
 export const config = {
   app: {
     name: process.env.NEXT_PUBLIC_APP_NAME || 'FantasyLive',
@@ -22,15 +46,35 @@ export const config = {
   },
   economy: {
     /** Precio de venta de 1 token al usuario (centavos) */
-    tokenValueCents: num(process.env.TOKEN_VALUE_CENTS, 10),
+    tokenValueCents,
     /** Lo que cobra la modelo por token ganado (centavos) */
-    modelPayoutCentsPerToken: num(process.env.MODEL_PAYOUT_CENTS_PER_TOKEN, 5),
+    modelPayoutCentsPerToken: num(
+      process.env.MODEL_PAYOUT_CENTS_PER_TOKEN,
+      tokenValueCents,
+    ),
     /** Comision de la plataforma sobre tokens gastados (%) */
-    platformCommissionPercent: num(process.env.PLATFORM_COMMISSION_PERCENT, 30),
+    platformCommissionPercent,
+    /** Porcentaje que se lleva la modelo. Derivado, nunca se configura aparte. */
+    modelRevenueSharePercent: 100 - platformCommissionPercent,
     signupBonusTokens: num(process.env.SIGNUP_BONUS_TOKENS, 25),
     minPayoutTokens: num(process.env.MIN_PAYOUT_TOKENS, 500),
     /** Cada cuantos segundos el cliente envia un tick de cobro */
     callBillingIntervalSeconds: num(process.env.CALL_BILLING_INTERVAL_SECONDS, 15),
+  },
+  geo: {
+    /**
+     * Leer el pais de las cabeceras del proxy (cf-ipcountry, x-real-ip...).
+     * Solo debe estar activo si hay un proxy delante que las sobrescribe.
+     * El nginx de deploy/nginx.conf lo hace; activarlo sin proxy permitiria a
+     * cualquiera saltarse el bloqueo geografico mandando la cabecera a mano.
+     */
+    trustProxyHeaders: bool(process.env.GEO_TRUST_PROXY_HEADERS, true),
+    /** Proxies de confianza delante de la app (para leer X-Forwarded-For). */
+    trustedProxyHops: Math.max(1, num(process.env.GEO_TRUSTED_PROXY_HOPS, 1)),
+    /** Fuerza un pais concreto. Solo para desarrollo y pruebas de QA. */
+    overrideCountry: (process.env.GEO_OVERRIDE_COUNTRY || '')
+      .trim()
+      .toUpperCase() || null,
   },
   media: {
     provider: (process.env.NEXT_PUBLIC_MEDIA_PROVIDER || 'livekit') as
@@ -85,6 +129,18 @@ export const config = {
       subacc: process.env.CCBILL_CLIENT_SUBACC || '',
       flexFormId: process.env.CCBILL_FLEXFORM_ID || '',
       salt: process.env.CCBILL_SALT || '',
+    },
+    paypal: {
+      clientId: process.env.PAYPAL_CLIENT_ID || '',
+      clientSecret: process.env.PAYPAL_CLIENT_SECRET || '',
+      webhookId: process.env.PAYPAL_WEBHOOK_ID || '',
+      /** "live" en produccion, "sandbox" para pruebas */
+      mode: (process.env.PAYPAL_MODE || 'sandbox') as 'sandbox' | 'live',
+      get configured() {
+        return Boolean(
+          process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET,
+        );
+      },
     },
   },
   moderation: {

@@ -63,7 +63,8 @@ export default async function AdminPayoutsPage({
             amountCents: p.amountCents,
             currency: p.currency,
             method: p.method,
-            destination: p.destination,
+            // Nunca se manda el blob cifrado al cliente: solo la mascara.
+            destinationMasked: p.destinationMasked,
             requestedAt: p.requestedAt.toISOString(),
             model: {
               stageName: p.model.stageName,

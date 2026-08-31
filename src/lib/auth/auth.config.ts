@@ -17,7 +17,7 @@ export const authConfig = {
   trustHost: true,
   providers: [], // se completan en auth.ts (runtime Node)
   callbacks: {
-    async jwt({ token, user, trigger, session }) {
+    async jwt({ token, user }) {
       if (user) {
         token.id = user.id as string;
         token.role = (user as any).role;
@@ -26,13 +26,14 @@ export const authConfig = {
         token.modelProfileId = (user as any).modelProfileId ?? null;
         token.ageVerified = (user as any).ageVerified ?? false;
       }
-      // Permite refrescar el token tras cambios de rol/VIP sin re-login
-      if (trigger === 'update' && session?.user) {
-        token.role = session.user.role ?? token.role;
-        token.isVip = session.user.isVip ?? token.isVip;
-        token.modelProfileId =
-          session.user.modelProfileId ?? token.modelProfileId;
-      }
+
+      // IMPORTANTE: aqui NO se copian los datos que el cliente manda en
+      // update(). En el trigger "update" el parametro session es entrada
+      // arbitraria del navegador; volcarla al token dejaria que cualquier
+      // usuario se asignase role ADMIN llamando a update() desde la consola.
+      //
+      // El refresco autoritativo de rol y estado vive en el callback jwt de
+      // src/lib/auth/index.ts, que los relee de la base de datos.
       return token;
     },
     async session({ session, token }) {

@@ -4,6 +4,7 @@ import type { Gender, QueueMode } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
 import { config } from '@/lib/config';
+import { isCountryBlocked } from '@/lib/geo';
 import { randomRoomName } from '@/lib/utils';
 
 export interface JoinQueueInput {
@@ -12,6 +13,8 @@ export interface JoinQueueInput {
   selfGender?: Gender | null;
   genderPreference?: Gender[];
   countryPreference?: string | null;
+  /** Pais ISO del usuario, resuelto por geolocalizacion al entrar en cola. */
+  selfCountry?: string | null;
 }
 
 export interface MatchResult {
@@ -83,6 +86,7 @@ export async function joinQueue(input: JoinQueueInput): Promise<MatchResult> {
       selfGender: input.selfGender ?? undefined,
       genderPreference: input.genderPreference ?? [],
       countryPreference: input.countryPreference ?? undefined,
+      selfCountry: input.selfCountry ?? undefined,
       heartbeatAt: now,
       expiresAt: new Date(now.getTime() + QUEUE_TTL_MS),
     },
@@ -99,7 +103,16 @@ export async function joinQueue(input: JoinQueueInput): Promise<MatchResult> {
 export async function tryMatch(entryId: string): Promise<MatchResult | null> {
   const entry = await prisma.matchQueueEntry.findUnique({
     where: { id: entryId },
-    include: { user: { select: { id: true, gender: true, isVip: true } } },
+    include: {
+      user: {
+        select: {
+          id: true,
+          gender: true,
+          isVip: true,
+          modelProfile: { select: { blockedCountries: true } },
+        },
+      },
+    },
   });
 
   if (!entry) return null;
@@ -155,6 +168,7 @@ export async function tryMatch(entryId: string): Promise<MatchResult | null> {
             modelProfile: {
               select: {
                 id: true,
+                blockedCountries: true,
                 isVipEnabled: true,
                 isAvailableForVip: true,
                 vipRatePerMinute: true,
@@ -174,6 +188,15 @@ export async function tryMatch(entryId: string): Promise<MatchResult | null> {
         const mine = entry.selfGender ?? entry.user.gender;
         if (!mine || !c.genderPreference.includes(mine)) return false;
       }
+      // Bloqueo geografico, en los dos sentidos: ni la modelo atiende a un
+      // pais que bloquea, ni se le manda a alguien que ella bloquea.
+      if (isCountryBlocked(c.user.modelProfile?.blockedCountries, entry.selfCountry)) {
+        return false;
+      }
+      if (isCountryBlocked(entry.user.modelProfile?.blockedCountries, c.selfCountry)) {
+        return false;
+      }
+
       if (entry.mode === 'VIP') {
         // En modo VIP uno de los dos debe ser una modelo VIP disponible
         const iAmModel = Boolean(entry.user.isVip);

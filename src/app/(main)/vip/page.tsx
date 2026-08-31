@@ -6,6 +6,7 @@ import { MatchmakingLobby } from '@/components/calls/matchmaking-lobby';
 import { ModelCard } from '@/components/models/model-card';
 import { Badge } from '@/components/ui/badge';
 import { requireUser } from '@/lib/auth/guards';
+import { getVisibilityContext } from '@/lib/geo';
 import { getQueueStats } from '@/lib/matchmaking';
 import { prisma } from '@/lib/prisma';
 import { getWalletSummary } from '@/lib/tokens';
@@ -16,11 +17,20 @@ export const dynamic = 'force-dynamic';
 export default async function VipPage() {
   const user = await requireUser('/vip');
 
+  // Bloqueo geografico: la sala VIP tampoco lista perfiles que bloquean
+  // el pais desde el que se navega.
+  const { filter: geoFilter } = await getVisibilityContext();
+
   const [stats, wallet, cheapest, availableModels] = await Promise.all([
     getQueueStats(),
     getWalletSummary(user.id),
     prisma.modelProfile.findFirst({
-      where: { isVipEnabled: true, isAvailableForVip: true, isOnline: true },
+      where: {
+        isVipEnabled: true,
+        isAvailableForVip: true,
+        isOnline: true,
+        ...geoFilter,
+      },
       orderBy: { vipRatePerMinute: 'asc' },
       select: { vipRatePerMinute: true },
     }),
@@ -30,6 +40,7 @@ export default async function VipPage() {
         isAvailableForVip: true,
         isOnline: true,
         kycStatus: 'APPROVED',
+        ...geoFilter,
       },
       orderBy: { ratingAvg: 'desc' },
       take: 8,

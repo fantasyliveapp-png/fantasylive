@@ -27,6 +27,7 @@ import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SubscribeButton } from '@/components/models/subscribe-button';
 import { getCurrentUser } from '@/lib/auth/guards';
+import { getViewerCountry, isCountryBlocked } from '@/lib/geo';
 import { GENDER_LABELS, ORIENTATION_LABELS } from '@/lib/constants';
 import { prisma } from '@/lib/prisma';
 import { applySubscriberDiscount, getActiveSubscription } from '@/lib/subscriptions';
@@ -83,6 +84,15 @@ export default async function ModelProfilePage({
   });
 
   if (!model || model.user.status === 'BANNED') notFound();
+
+  // Bloqueo geografico definido por la propia modelo. Ella misma y los admins
+  // siguen viendo el perfil; para el resto se comporta como inexistente (404
+  // en vez de 403, para no confirmar que la modelo existe).
+  const isOwner = viewer?.id === model.userId;
+  if (!isOwner && viewer?.role !== 'ADMIN') {
+    const viewerCountry = await getViewerCountry();
+    if (isCountryBlocked(model.blockedCountries, viewerCountry)) notFound();
+  }
 
   // En vivo = tiene una llamada activa ahora mismo (distinto de "conectado",
   // que solo indica que la sesion esta abierta).

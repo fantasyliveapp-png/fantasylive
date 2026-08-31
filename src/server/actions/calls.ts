@@ -5,6 +5,11 @@ import type { CallEndReason, Gender } from '@prisma/client';
 
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { prisma } from '@/lib/prisma';
+import {
+  GEO_BLOCKED_MESSAGE,
+  getViewerCountry,
+  isBlockedForViewer,
+} from '@/lib/geo';
 import { config } from '@/lib/config';
 import { createLiveKitToken, isLiveKitConfigured } from '@/lib/livekit';
 import {
@@ -67,6 +72,9 @@ export async function joinQueueAction(input: {
       selfGender: profile?.gender ?? null,
       genderPreference: input.genderPreference ?? [],
       countryPreference: input.countryPreference ?? null,
+      // Se resuelve aqui (hay contexto de peticion) y viaja con la entrada de
+      // cola para que el emparejamiento respete los bloqueos por pais.
+      selfCountry: await getViewerCountry(),
     });
 
     return { ok: true, data: result };
@@ -231,12 +239,16 @@ export async function startPrivateCallAction(
         privateRatePerMinute: true,
         minPrivateMinutes: true,
         kycStatus: true,
+        blockedCountries: true,
       },
     });
 
     if (!model) return { ok: false, error: 'Modelo no encontrada.' };
     if (model.userId === user.id) {
       return { ok: false, error: 'No puedes llamarte a ti misma/o.' };
+    }
+    if (await isBlockedForViewer(model.blockedCountries)) {
+      return { ok: false, error: GEO_BLOCKED_MESSAGE };
     }
     if (config.moderation.requireKycToStream && model.kycStatus !== 'APPROVED') {
       return { ok: false, error: 'Esta modelo aun no esta verificada.' };

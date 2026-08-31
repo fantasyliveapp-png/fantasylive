@@ -13,6 +13,7 @@ import {
   MessageCircle,
   Receipt,
   Settings2,
+  ShieldBan,
   Users,
   Wallet,
   type LucideIcon,
@@ -37,6 +38,7 @@ const ICONS = {
   messageCircle: MessageCircle,
   receipt: Receipt,
   settings: Settings2,
+  shield: ShieldBan,
   users: Users,
   wallet: Wallet,
 } satisfies Record<string, LucideIcon>;

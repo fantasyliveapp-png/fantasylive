@@ -7,6 +7,8 @@ import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { prisma } from '@/lib/prisma';
 import { applyLedgerEntry } from '@/lib/tokens';
 import { createDownloadUrl } from '@/lib/storage';
+import { decryptSecret } from '@/lib/crypto';
+import { describeDestination, parseDestination } from '@/lib/payouts';
 
 export interface AdminActionResult<T = unknown> {
   ok: boolean;
@@ -276,24 +278,39 @@ export async function processPayoutAction(input: {
     if (payout.status === 'PAID' || payout.status === 'REJECTED') {
       return { ok: false, error: 'Este retiro ya esta cerrado.' };
     }
+    if (input.decision === 'REJECTED' && !input.notes?.trim()) {
+      return { ok: false, error: 'Indica el motivo del rechazo.' };
+    }
 
     const status: PayoutStatus = input.decision;
 
     await prisma.$transaction(async (tx) => {
-      await tx.payoutRequest.update({
-        where: { id: payout.id },
+      // updateMany con filtro de estado: si otro admin cerro la solicitud
+      // entre la lectura y este punto, el update no afecta a nada y no se
+      // llega a devolver el dinero dos veces.
+      const moved = await tx.payoutRequest.updateMany({
+        where: {
+          id: payout.id,
+          status: { in: ['REQUESTED', 'APPROVED', 'PROCESSING'] },
+        },
         data: {
           status,
           processorId: admin.id,
-          notes: input.notes ?? null,
-          externalRef: input.externalRef ?? null,
-          rejectionReason: input.decision === 'REJECTED' ? (input.notes ?? null) : null,
+          // Solo se sobreescribe lo que el admin envia en esta decision.
+          notes: input.notes ?? payout.notes,
+          externalRef: input.externalRef ?? payout.externalRef,
+          rejectionReason:
+            input.decision === 'REJECTED' ? (input.notes ?? null) : null,
           processedAt: new Date(),
           paidAt: input.decision === 'PAID' ? new Date() : null,
         },
       });
 
-      // Rechazo => se devuelven los tokens retenidos al solicitar
+      if (moved.count === 0) {
+        throw new Error('PAYOUT_ALREADY_CLOSED');
+      }
+
+      // Rechazo => se devuelven los tokens debitados al solicitar
       if (input.decision === 'REJECTED') {
         await applyLedgerEntry(tx, {
           userId: payout.model.userId,
@@ -302,17 +319,80 @@ export async function processPayoutAction(input: {
           description: `Retiro rechazado: ${input.notes ?? 'sin motivo'}`,
           payoutRequestId: payout.id,
         });
+
+        // REFUND no cuenta como ganancia, asi que applyLedgerEntry no toca
+        // pendingEarnings: hay que reponerlo a mano para que el saldo
+        // "pendiente de retirar" vuelva a cuadrar con el real.
+        await tx.wallet.update({
+          where: { userId: payout.model.userId },
+          data: { pendingEarnings: { increment: payout.tokens } },
+        });
+
+        // lifetimeWithdrawn se incremento al debitar: el retiro no llego a
+        // ocurrir, asi que se revierte.
+        await tx.wallet.updateMany({
+          where: {
+            userId: payout.model.userId,
+            lifetimeWithdrawn: { gte: payout.tokens },
+          },
+          data: { lifetimeWithdrawn: { decrement: payout.tokens } },
+        });
       }
     });
 
     await audit(admin.id, `PAYOUT_${input.decision}`, 'PayoutRequest', payout.id, {
       tokens: payout.tokens,
+      amountCents: payout.amountCents,
+      method: payout.method,
       model: payout.model.stageName,
     });
 
     revalidatePath('/admin/payouts');
     revalidatePath('/dashboard/model/payouts');
     return { ok: true, message: `Retiro marcado como ${status}.` };
+  } catch (error) {
+    return { ok: false, error: toMessage(error) };
+  }
+}
+
+/**
+ * Descifra los datos de cobro de una solicitud para que finanzas pueda
+ * ejecutar el pago.
+ *
+ * Es una accion explicita y auditada: los datos bancarios NO viajan en el
+ * listado, solo se entregan cuando un admin los pide para un retiro concreto.
+ */
+export async function revealPayoutDestinationAction(
+  payoutId: string,
+): Promise<AdminActionResult<{ fields: Array<{ label: string; value: string }> }>> {
+  try {
+    const admin = await requireAdminUser();
+
+    const payout = await prisma.payoutRequest.findUnique({
+      where: { id: payoutId },
+      select: { id: true, destination: true, method: true },
+    });
+    if (!payout) return { ok: false, error: 'Retiro no encontrado.' };
+
+    const plain = decryptSecret(payout.destination);
+    if (!plain) {
+      return {
+        ok: false,
+        error:
+          'No se pudo descifrar el destino. Revisa que PAYOUT_ENCRYPTION_KEY sea la misma con la que se guardo.',
+      };
+    }
+
+    const destination = parseDestination(plain);
+    if (!destination) {
+      return { ok: false, error: 'Los datos de cobro guardados no son validos.' };
+    }
+
+    await audit(admin.id, 'PAYOUT_DESTINATION_REVEALED', 'PayoutRequest', payout.id, {
+      method: payout.method,
+    });
+
+    return { ok: true, data: { fields: describeDestination(destination) } };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
   }
@@ -454,6 +534,8 @@ function toMessage(error: unknown): string {
   if (error instanceof Error) {
     if (error.message === 'UNAUTHORIZED') return 'Debes iniciar sesion.';
     if (error.message === 'FORBIDDEN') return 'Se requiere rol de administrador.';
+    if (error.message === 'PAYOUT_ALREADY_CLOSED')
+      return 'Otro administrador ya cerro este retiro.';
     return error.message;
   }
   return 'Error inesperado.';

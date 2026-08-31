@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { createNotification } from '@/lib/notifications';
 import { prisma } from '@/lib/prisma';
+import { GEO_BLOCKED_MESSAGE, isBlockedForViewer } from '@/lib/geo';
 import {
   buildMessageAttachmentKey,
   createUploadUrl,
@@ -46,11 +47,15 @@ export async function startConversationAction(input: {
         slug: true,
         messagingEnabled: true,
         messagePriceTokens: true,
+        blockedCountries: true,
       },
     });
     if (!model) return { ok: false, error: 'Modelo no encontrada.' };
     if (model.userId === user.id) {
       return { ok: false, error: 'No podes enviarte mensajes a vos misma.' };
+    }
+    if (await isBlockedForViewer(model.blockedCountries)) {
+      return { ok: false, error: GEO_BLOCKED_MESSAGE };
     }
 
     const existing = await prisma.conversation.findUnique({

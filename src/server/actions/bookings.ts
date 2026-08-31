@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { prisma } from '@/lib/prisma';
+import { GEO_BLOCKED_MESSAGE, isBlockedForViewer } from '@/lib/geo';
 import { applyLedgerEntry, InsufficientTokensError } from '@/lib/tokens';
 import { applySubscriberDiscount, getActiveSubscription } from '@/lib/subscriptions';
 import { randomRoomName } from '@/lib/utils';
@@ -54,12 +55,16 @@ export async function createBookingAction(input: {
         minPrivateMinutes: true,
         acceptsBookings: true,
         kycStatus: true,
+        blockedCountries: true,
       },
     });
 
     if (!model) return { ok: false, error: 'Modelo no encontrada.' };
     if (model.userId === user.id) {
       return { ok: false, error: 'No puedes reservar contigo misma/o.' };
+    }
+    if (await isBlockedForViewer(model.blockedCountries)) {
+      return { ok: false, error: GEO_BLOCKED_MESSAGE };
     }
     if (!model.acceptsBookings || model.kycStatus !== 'APPROVED') {
       return { ok: false, error: 'Esta modelo no acepta reservas ahora mismo.' };
