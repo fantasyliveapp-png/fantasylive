@@ -200,9 +200,14 @@ export async function payContentRequestAction(
 
     const request = await prisma.contentRequest.findFirst({
       where: { id: requestId, userId: user.id },
-      include: { model: { select: { userId: true } } },
+      include: {
+        model: { select: { userId: true, blockedCountries: true } },
+      },
     });
     if (!request) return { ok: false, error: 'Pedido no encontrado.' };
+    if (await isBlockedForViewer(request.model.blockedCountries)) {
+      return { ok: false, error: GEO_BLOCKED_MESSAGE };
+    }
     if (request.status !== 'QUOTED' || !request.quotedTokens) {
       return { ok: false, error: 'Este pedido no tiene una cotizacion pendiente de pago.' };
     }

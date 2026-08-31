@@ -24,7 +24,8 @@
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
     "setup:local": "npm install && docker compose up -d && node scripts/wait-for-db.mjs && prisma migrate dev --name init && npm run db:seed",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "db:bootstrap": "tsx scripts/bootstrap-production.mts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.7.4",
