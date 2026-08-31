@@ -27,7 +27,11 @@ Environment=HOSTNAME=127.0.0.1
 
 # Se llama a next directamente, sin npm: con ProtectHome=true npm no podria
 # escribir su cache ni sus logs en el home del usuario de servicio.
-ExecStart=/usr/bin/node /var/www/fantasylive/node_modules/next/dist/bin/next start
+#
+# -H 127.0.0.1 es deliberado: la app solo debe ser alcanzable a traves de
+# nginx. "next start" ignora la variable HOSTNAME y sin este flag se pondria
+# a escuchar en 0.0.0.0, quedando expuesta si el firewall fallara.
+ExecStart=/usr/bin/node /var/www/fantasylive/node_modules/next/dist/bin/next start -H 127.0.0.1 -p 3000
 
 Restart=always
 RestartSec=5
