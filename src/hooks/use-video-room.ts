@@ -89,6 +89,9 @@ export function useVideoRoom({
   }, []);
 
   const connect = useCallback(async () => {
+    // Limpia cualquier intento anterior. Sin esto, "Reintentar" dejaba la
+    // camara y la sala previas abiertas y la reconexion no llegaba a ocurrir.
+    cleanup();
     setError(null);
     setStatus('requesting-media');
 
@@ -195,10 +198,25 @@ export function useVideoRoom({
             );
           }
           if (state === ConnectionState.Reconnecting) setStatus('connecting');
+          if (state === ConnectionState.Disconnected) setStatus('disconnected');
+        })
+        .on(RoomEvent.Reconnected, () => {
+          setStatus(
+            roomRef.current && roomRef.current.remoteParticipants.size > 0
+              ? 'partner-joined'
+              : 'connected',
+          );
         });
 
       setStatus('connecting');
-      await room.connect(url, token);
+      // Timeouts explicitos: sin ellos, si el WebSocket o el ICE no responden
+      // la promesa no resuelve nunca y la pantalla se queda en "Conectando".
+      await room.connect(url, token, {
+        autoSubscribe: true,
+        websocketTimeout: 15_000,
+        peerConnectionTimeout: 20_000,
+        maxRetries: 2,
+      });
 
       for (const track of tracks) {
         await room.localParticipant.publishTrack(track);
@@ -224,6 +242,29 @@ export function useVideoRoom({
       cleanup();
     }
   }, [cleanup, demoMode, token, url]);
+
+  /**
+   * Vigilante de conexion.
+   *
+   * Si la camara no responde (otra pestana la tiene ocupada) o LiveKit no
+   * contesta, la pantalla se quedaba en "Conectando..." sin salida. A los 30 s
+   * se pasa a error, que ya ofrece el boton de reintentar.
+   */
+  useEffect(() => {
+    if (status !== 'connecting' && status !== 'requesting-media') return;
+
+    const timer = setTimeout(() => {
+      setStatus((prev) =>
+        prev === 'connecting' || prev === 'requesting-media' ? 'error' : prev,
+      );
+      setError(
+        'La conexion esta tardando demasiado. Comprueba que ninguna otra ' +
+          'pestana este usando la camara y vuelve a intentarlo.',
+      );
+    }, 30_000);
+
+    return () => clearTimeout(timer);
+  }, [status]);
 
   const toggleMic = useCallback(async () => {
     const next = !isMicEnabled;

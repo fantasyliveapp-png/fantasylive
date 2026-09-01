@@ -77,6 +77,8 @@ export function VideoCallRoom({
   const [isEnding, setIsEnding] = useState(false);
   /** Motivo por el que termino la llamada; abre el panel final. */
   const [endedReason, setEndedReason] = useState<string | null>(null);
+  /** Llevamos mucho rato solos en la sala. */
+  const [waitedTooLong, setWaitedTooLong] = useState(false);
   const [showGifts, setShowGifts] = useState(false);
   const [showReport, setShowReport] = useState(false);
 
@@ -133,6 +135,17 @@ export function VideoCallRoom({
     onTerminate: handleTerminate,
     onLowBalance: handleLowBalance,
   });
+
+  // Nadie se une: a los 45 s se avisa en vez de dejar el spinner girando para
+  // siempre. No se corta la llamada, por si la otra persona esta llegando.
+  useEffect(() => {
+    if (room.status !== 'connected') {
+      setWaitedTooLong(false);
+      return;
+    }
+    const timer = setTimeout(() => setWaitedTooLong(true), 45_000);
+    return () => clearTimeout(timer);
+  }, [room.status]);
 
   // Libera camara y micro en cuanto la llamada termina, sin esperar a que la
   // persona pulse nada en el panel final.
@@ -226,6 +239,40 @@ export function VideoCallRoom({
                         ? 'La otra persona ha salido'
                         : 'Esperando a que se una...'}
                 </p>
+
+                {/* La espera no consume saldo ni prueba gratuita: el reloj
+                    solo corre cuando hay dos personas en la sala. */}
+                {room.status === 'connected' && !waitedTooLong && (
+                  <p className="max-w-xs px-6 text-center text-xs text-white/40">
+                    Mientras esperas no se te cobra nada.
+                  </p>
+                )}
+
+                {waitedTooLong && (
+                  <div className="mt-2 flex flex-col items-center gap-3">
+                    <p className="max-w-xs px-6 text-center text-sm text-amber-300">
+                      Parece que no esta disponible en este momento.
+                    </p>
+                    <div className="flex gap-2">
+                      {partner?.slug && (
+                        <Link href={`/dashboard/messages/${partner.slug}`}>
+                          <Button variant="outline" size="sm">
+                            <MessageCircle className="h-4 w-4" />
+                            Dejarle un mensaje
+                          </Button>
+                        </Link>
+                      )}
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        disabled={isEnding}
+                        onClick={hangUp}
+                      >
+                        Cancelar llamada
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
                 {tokenData && !tokenData.configured && (
                   <Badge variant="warning" className="mt-2">

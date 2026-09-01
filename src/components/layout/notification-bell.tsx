@@ -2,7 +2,17 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bell, Check, UserPlus, Crown, Star, Gift, MessageCircle, Paperclip } from 'lucide-react';
+import {
+  Bell,
+  Check,
+  Crown,
+  Gift,
+  MessageCircle,
+  Paperclip,
+  PhoneCall,
+  Star,
+  UserPlus,
+} from 'lucide-react';
 import type { NotificationType } from '@prisma/client';
 
 import { Button } from '@/components/ui/button';
@@ -36,6 +46,7 @@ const TYPE_ICON: Record<NotificationType, typeof Bell> = {
   CONTENT_REQUEST_DELIVERED: Gift,
   NEW_MESSAGE: MessageCircle,
   MESSAGE_ATTACHMENT_UNLOCKED: Paperclip,
+  INCOMING_CALL: PhoneCall,
 };
 
 export function NotificationBell() {
@@ -59,7 +70,9 @@ export function NotificationBell() {
 
   useEffect(() => {
     load();
-    const interval = setInterval(load, 30_000);
+    // 12 s: la campana hace de timbre de las llamadas entrantes, y con 30 s
+    // quien llama se pasaba media eternidad esperando a que apareciera.
+    const interval = setInterval(load, 12_000);
     return () => clearInterval(interval);
   }, []);
 
