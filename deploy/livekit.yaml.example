@@ -1,0 +1,39 @@
+##############################################################################
+# LiveKit SFU - configuracion de produccion
+#
+# Instalar en /etc/livekit/livekit.yaml (chmod 640, root:livekit).
+# Sustituye las claves por las tuyas:
+#   API_KEY="API$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 12)"
+#   API_SECRET="$(openssl rand -base64 48 | tr -dc 'A-Za-z0-9' | head -c 48)"
+#
+# PUERTOS
+#   7880 HTTP/WebSocket -> NO se abre en el firewall; se llega por nginx
+#                          (/rtc y /twirp) desde 127.0.0.1.
+#   7881 TCP            -> ABRIR. Respaldo de WebRTC cuando el UDP esta
+#                          filtrado en la red del visitante.
+#   7882 UDP            -> ABRIR. Camino normal del video.
+#
+# El media NUNCA pasa por Cloudflare: CF no proxia UDP, asi que el navegador
+# habla directamente con la IP de esta maquina. Es inherente a WebRTC
+# autoalojado y expone la IP de origen; si no lo quieres, usa LiveKit Cloud o
+# un TURN en otra maquina.
+##############################################################################
+
+port: 7880
+log_level: info
+
+rtc:
+  tcp_port: 7881
+  udp_port: 7882
+  # Descubre la IP publica por STUN y la anuncia como candidato ICE.
+  # Sin esto anunciaria la IP privada y el video no conectaria.
+  use_external_ip: true
+
+keys:
+  REEMPLAZA_API_KEY: REEMPLAZA_API_SECRET
+
+room:
+  auto_create: true
+  # Segundos que la sala sigue viva sin nadie dentro.
+  empty_timeout: 300
+  departure_timeout: 20

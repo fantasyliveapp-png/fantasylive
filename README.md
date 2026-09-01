@@ -307,6 +307,56 @@ Controles sobre el saldo:
 - **Un solo retiro abierto** por creadora.
 - Rechazar devuelve tokens, `pendingEarnings` y `lifetimeWithdrawn`, y usa un `UPDATE` condicional por estado para que dos administradores no puedan reembolsar dos veces.
 
+### Videollamadas (LiveKit autoalojado)
+
+Sin un SFU configurado la app entra en **modo demo**: `createLiveKitToken()` devuelve `null`, el hook `useVideoRoom` solo pide la cámara local y nunca aparece un participante remoto, así que la llamada se queda en «esperando a que se una» para siempre. Por eso LiveKit no es opcional si quieres vídeo real.
+
+Se sirve un LiveKit propio en la misma máquina, bajo el mismo dominio, para no depender de otro registro DNS:
+
+| Ruta / puerto | Qué es | Expuesto |
+|---|---|---|
+| `/rtc` (nginx → `127.0.0.1:7880`) | Señalización WebSocket del navegador | Sí, vía Cloudflare |
+| `/twirp/` (nginx → `127.0.0.1:7880`) | API que usa `livekit-server-sdk` | Sí, vía Cloudflare |
+| `7881/tcp` | WebRTC de respaldo si el UDP está filtrado | Sí, directo |
+| `7882/udp` | WebRTC, camino normal del vídeo | Sí, directo |
+| `7880/tcp` | HTTP interno de LiveKit | **No**, solo loopback |
+
+**El media no pasa por Cloudflare.** Cloudflare no proxia UDP, así que el navegador habla directamente con la IP del servidor. Es inherente a WebRTC autoalojado y expone la IP de origen; si eso te preocupa, la alternativa es LiveKit Cloud o un TURN en otra máquina.
+
+Instalación:
+
+```bash
+curl -sSL https://get.livekit.io | bash          # binario en /usr/local/bin
+useradd --system --no-create-home --shell /usr/sbin/nologin livekit
+install -d -m 755 /etc/livekit
+cp deploy/livekit.yaml.example /etc/livekit/livekit.yaml   # y pon tus claves
+chown root:livekit /etc/livekit/livekit.yaml && chmod 640 /etc/livekit/livekit.yaml
+install -m 644 deploy/livekit.service /etc/systemd/system/
+systemctl daemon-reload && systemctl enable --now livekit
+
+ufw allow 7881/tcp && ufw allow 7882/udp        # 7880 NO se abre
+```
+
+Y en el `.env` de la app:
+
+```
+LIVEKIT_API_KEY=...
+LIVEKIT_API_SECRET=...
+LIVEKIT_URL=wss://tudominio.com
+NEXT_PUBLIC_LIVEKIT_URL=wss://tudominio.com
+```
+
+`NEXT_PUBLIC_LIVEKIT_URL` se incrusta en el bundle de cliente, así que **hay que reconstruir** (`npm run build`), no basta con reiniciar.
+
+Comprobar que funciona de verdad, con dos participantes:
+
+```bash
+lk room join --url wss://tudominio.com --api-key ... --api-secret ... \
+  --identity alice --publish-demo sala-de-prueba
+```
+
+En el log debe aparecer `published simulcast track` y, al lanzar un segundo participante, `participant connected`.
+
 ### Cobro por minuto
 
 El cliente envía un tick a `POST /api/calls/:id/billing` cada `CALL_BILLING_INTERVAL_SECONDS`, **pero el importe lo calcula el servidor** a partir de sus propios `startedAt` / `lastBilledAt`. Acelerar o falsear las peticiones desde el navegador no cambia lo que se cobra. Cuando el saldo no cubre el siguiente intervalo, el servidor cierra la sesión con `INSUFFICIENT_TOKENS` y expulsa de la sala.

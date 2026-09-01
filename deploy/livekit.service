@@ -1,0 +1,33 @@
+##############################################################################
+# LiveKit SFU - unidad systemd
+# Instalar en /etc/systemd/system/livekit.service
+#
+# Requiere el usuario de servicio:
+#   useradd --system --no-create-home --shell /usr/sbin/nologin livekit
+##############################################################################
+
+[Unit]
+Description=LiveKit SFU
+Documentation=https://docs.livekit.io
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=livekit
+Group=livekit
+ExecStart=/usr/local/bin/livekit-server --config /etc/livekit/livekit.yaml
+
+Restart=always
+RestartSec=5
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictSUIDSGID=true
+# AF_NETLINK es necesario para enumerar interfaces y calcular candidatos ICE.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+
+[Install]
+WantedBy=multi-user.target
