@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { createNotification } from '@/lib/notifications';
 import { prisma } from '@/lib/prisma';
+import { checkNoContactInfo } from '@/lib/content-filter';
 import { GEO_BLOCKED_MESSAGE, isBlockedForViewer } from '@/lib/geo';
 import {
   buildMessageAttachmentKey,
@@ -39,6 +40,10 @@ export async function startConversationAction(input: {
     const user = await getAuthedUserOrThrow();
     const body = bodySchema.safeParse(input.body);
     if (!body.success) return { ok: false, error: 'Escribi un mensaje.' };
+
+    // Todo el contacto tiene que quedarse dentro de la plataforma.
+    const contactError = checkNoContactInfo(body.data);
+    if (contactError) return { ok: false, error: contactError };
 
     const model = await prisma.modelProfile.findUnique({
       where: { id: input.modelId },
@@ -133,6 +138,9 @@ export async function sendMessageAction(input: {
     const user = await getAuthedUserOrThrow();
     const body = bodySchema.safeParse(input.body);
     if (!body.success) return { ok: false, error: 'Escribi un mensaje.' };
+
+    const contactError = checkNoContactInfo(body.data);
+    if (contactError) return { ok: false, error: contactError };
 
     const conversation = await prisma.conversation.findUnique({
       where: { id: input.conversationId },

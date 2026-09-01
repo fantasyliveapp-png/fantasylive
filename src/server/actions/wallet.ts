@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { prisma } from '@/lib/prisma';
+import { checkNoContactInfo } from '@/lib/content-filter';
 import { GEO_BLOCKED_MESSAGE, isBlockedForViewer } from '@/lib/geo';
 import { startTokenPurchase } from '@/lib/payments';
 import {
@@ -162,6 +163,11 @@ export async function sendGiftAction(input: {
     if (!parsed.success) return { ok: false, error: 'Datos de regalo invalidos.' };
 
     const { receiverId, tokens, sessionId, emoji, message } = parsed.data;
+
+    if (message) {
+      const contactError = checkNoContactInfo(message);
+      if (contactError) return { ok: false, error: contactError };
+    }
     if (receiverId === user.id) {
       return { ok: false, error: 'No puedes enviarte regalos a ti mismo.' };
     }

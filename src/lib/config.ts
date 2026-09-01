@@ -57,6 +57,12 @@ export const config = {
     /** Porcentaje que se lleva la modelo. Derivado, nunca se configura aparte. */
     modelRevenueSharePercent: 100 - platformCommissionPercent,
     signupBonusTokens: num(process.env.SIGNUP_BONUS_TOKENS, 25),
+    /**
+     * Duracion maxima de una llamada SIN tarifa (la prueba gratuita del modo
+     * aleatorio). Al agotarse, el servidor corta la llamada y ofrece seguir
+     * por chat. 0 desactiva el limite.
+     */
+    freeCallSeconds: num(process.env.FREE_CALL_SECONDS, 300),
     minPayoutTokens: num(process.env.MIN_PAYOUT_TOKENS, 500),
     /** Cada cuantos segundos el cliente envia un tick de cobro */
     callBillingIntervalSeconds: num(process.env.CALL_BILLING_INTERVAL_SECONDS, 15),

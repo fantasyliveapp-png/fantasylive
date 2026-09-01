@@ -1,0 +1,17 @@
+##############################################################################
+# Ejecuta el cierre de llamadas colgadas cada minuto
+# Instalar en /etc/systemd/system/fantasylive-sweep.timer y habilitar con:
+#   systemctl enable --now fantasylive-sweep.timer
+##############################################################################
+
+[Unit]
+Description=FantasyLive - barrido de llamadas cada minuto
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=10s
+Unit=fantasylive-sweep.service
+
+[Install]
+WantedBy=timers.target

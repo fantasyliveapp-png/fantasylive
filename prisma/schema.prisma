@@ -83,7 +83,8 @@ enum CallEndReason {
   TIMEOUT
   DISCONNECTED
   MODERATION
-  BOOKING_COMPLETED
+  /// Se agotaron los minutos gratis de la prueba
+  FREE_LIMIT_REACHED
 }
 
 enum QueueMode {
