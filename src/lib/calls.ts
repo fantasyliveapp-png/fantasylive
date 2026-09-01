@@ -366,8 +366,18 @@ export async function endCall(
   });
   if (!session || session.status === 'ENDED') return;
 
-  // Cobro final del tramo pendiente (silencioso si falla por saldo)
-  if (session.status === 'ACTIVE' && reason !== 'INSUFFICIENT_TOKENS') {
+  // Cobro final del tramo pendiente (silencioso si falla por saldo).
+  //
+  // OJO con la recursion: estos dos motivos los decide processBillingTick, que
+  // acto seguido llama aqui. Volver a cobrar desde el cierre haria que el tick
+  // detectase otra vez la misma condicion y llamase de nuevo a endCall, en
+  // bucle infinito: la peticion se quedaba colgada para siempre. Cuando el
+  // cierre viene del cobro, el tramo ya esta cobrado.
+  const yaCobradoPorElTick: CallEndReason[] = [
+    'INSUFFICIENT_TOKENS',
+    'FREE_LIMIT_REACHED',
+  ];
+  if (session.status === 'ACTIVE' && !yaCobradoPorElTick.includes(reason)) {
     try {
       await processBillingTick(sessionId, actorId);
     } catch {

@@ -228,6 +228,8 @@ enum NotificationType {
   CONTENT_REQUEST_DELIVERED
   NEW_MESSAGE
   MESSAGE_ATTACHMENT_UNLOCKED
+  /// Alguien esta llamando ahora mismo
+  INCOMING_CALL
 }
 
 // =============================================================================

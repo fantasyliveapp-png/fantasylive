@@ -5,6 +5,7 @@ import type { CallEndReason, Gender } from '@prisma/client';
 
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { prisma } from '@/lib/prisma';
+import { createNotification } from '@/lib/notifications';
 import {
   GEO_BLOCKED_MESSAGE,
   getViewerCountry,
@@ -291,6 +292,17 @@ export async function startPrivateCallAction(
         ratePerMinute,
       },
       select: { id: true },
+    });
+
+    // Sin este aviso la creadora no se entera de nada y quien llama se queda
+    // esperando indefinidamente: no habia ninguna otra senal de llamada
+    // entrante en toda la aplicacion.
+    await createNotification(prisma, {
+      userId: model.userId,
+      type: 'INCOMING_CALL',
+      title: `${user.name ?? 'Alguien'} te esta llamando`,
+      body: `Videollamada privada a ${ratePerMinute} tokens/min`,
+      link: `/call/${session.id}`,
     });
 
     return { ok: true, data: { sessionId: session.id } };
