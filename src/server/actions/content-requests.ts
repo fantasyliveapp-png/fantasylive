@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { createNotification } from '@/lib/notifications';
 import { prisma } from '@/lib/prisma';
+import { checkNoContactInfo } from '@/lib/content-filter';
 import { GEO_BLOCKED_MESSAGE, isBlockedForViewer } from '@/lib/geo';
 import { InsufficientTokensError, transferWithCommission } from '@/lib/tokens';
 
@@ -41,6 +42,9 @@ export async function createContentRequestAction(input: {
     if (!parsed.success) {
       return { ok: false, error: 'Contanos con mas detalle que queres (min. 10 caracteres).' };
     }
+
+    const contactError = checkNoContactInfo(parsed.data.description);
+    if (contactError) return { ok: false, error: contactError };
 
     const model = await prisma.modelProfile.findUnique({
       where: { id: parsed.data.modelId },

@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { prisma } from '@/lib/prisma';
+import { checkNoContactInfo } from '@/lib/content-filter';
 import { config } from '@/lib/config';
 import { applyLedgerEntry, tokensToPayoutCents } from '@/lib/tokens';
 import { encryptSecret, maskDestination } from '@/lib/crypto';
@@ -65,6 +66,15 @@ export async function updateModelProfileAction(input: {
     const { profile } = await requireModelProfile();
     const parsed = profileSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: 'Datos de perfil invalidos.' };
+
+    // La biografia es la via mas comoda para colar un Instagram, asi que
+    // pasa por el mismo filtro que los mensajes.
+    const contactError = checkNoContactInfo(
+      [parsed.data.stageName, parsed.data.headline, parsed.data.bio]
+        .filter(Boolean)
+        .join(' \n '),
+    );
+    if (contactError) return { ok: false, error: contactError };
 
     await prisma.modelProfile.update({
       where: { id: profile.id },

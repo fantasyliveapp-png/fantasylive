@@ -4,7 +4,7 @@ import type { CallEndReason } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
 import { config } from '@/lib/config';
-import { closeRoom } from '@/lib/livekit';
+import { closeRoom, countRoomParticipants } from '@/lib/livekit';
 import { applyLedgerEntry, splitEarnings, InsufficientTokensError } from '@/lib/tokens';
 
 export interface BillingTickResult {
@@ -15,14 +15,33 @@ export interface BillingTickResult {
   /** true si hay que cortar la llamada ya */
   shouldTerminate: boolean;
   reason?: CallEndReason;
+  /** Llamada sin tarifa: prueba gratuita */
+  isFreeTrial: boolean;
+  /** Segundos gratis que quedan (null si la llamada es de pago o sin limite) */
+  freeSecondsRemaining: number | null;
+  /** El otro participante aun no esta en la sala: no se cobra */
+  waitingForPartner: boolean;
 }
 
 /**
  * Cobra el tiempo transcurrido desde el ultimo tick.
  *
- * Se llama desde el cliente cada CALL_BILLING_INTERVAL_SECONDS, pero el importe
- * NO depende del cliente: se calcula con timestamps de servidor, asi que
- * manipular el intervalo no cambia lo que se cobra.
+ * Reglas:
+ *
+ *  - El importe NO depende del cliente: se calcula con timestamps de servidor,
+ *    asi que acelerar o falsear los ticks no altera lo que se cobra.
+ *
+ *  - Solo se cobra el tiempo en que HAY DOS PERSONAS en la sala. La presencia
+ *    se consulta a LiveKit, que es la unica fuente fiable; mientras esperas a
+ *    que se una la otra persona el contador no corre.
+ *
+ *  - El redondeo se hace UNA VEZ sobre el total acumulado, no en cada tick.
+ *    Redondear al alza cada 15 s inflaba la factura (a 40 tokens/min se
+ *    cobraban 48). Ahora: total = ceil(tarifa * segundos / 60) y se cobra la
+ *    diferencia con lo ya cobrado.
+ *
+ *  - Las llamadas sin tarifa son la prueba gratuita y se cortan al llegar a
+ *    config.economy.freeCallSeconds.
  */
 export async function processBillingTick(
   sessionId: string,
@@ -40,6 +59,7 @@ export async function processBillingTick(
       startedAt: true,
       lastBilledAt: true,
       billedSeconds: true,
+      tokensSpent: true,
       roomName: true,
     },
   });
@@ -53,43 +73,90 @@ export async function processBillingTick(
     (await prisma.wallet.findUnique({ where: { userId }, select: { balance: true } }))
       ?.balance ?? 0;
 
+  const isFreeTrial = session.ratePerMinute <= 0 || !session.calleeId;
+  const freeLimit = config.economy.freeCallSeconds;
+
   if (session.status !== 'ACTIVE' || !session.startedAt) {
     return {
       ok: false,
-      balance: await balanceOf(session.callerId),
+      balance: await balanceOf(requesterId),
       tokensCharged: 0,
       billedSeconds: session.billedSeconds,
       shouldTerminate: true,
       reason: 'DISCONNECTED',
+      isFreeTrial,
+      freeSecondsRemaining: null,
+      waitingForPartner: false,
     };
   }
 
-  // Llamada gratuita: solo actualiza duracion
-  if (session.ratePerMinute <= 0 || !session.calleeId) {
-    const elapsed = Math.floor(
-      (Date.now() - session.startedAt.getTime()) / 1000,
-    );
+  const now = new Date();
+  const since = session.lastBilledAt ?? session.startedAt;
+  const deltaSeconds = Math.max(
+    0,
+    Math.floor((now.getTime() - since.getTime()) / 1000),
+  );
+
+  // Presencia real en la sala. Si LiveKit no esta configurado devuelve null y
+  // se asume que hay compania, para no romper el modo demo local.
+  const participants = await countRoomParticipants(session.roomName);
+  const bothPresent = participants === null || participants >= 2;
+
+  // Solo (esperando o el otro colgo): el reloj no corre.
+  if (!bothPresent) {
     await prisma.callSession.update({
       where: { id: session.id },
-      data: { billedSeconds: elapsed, lastBilledAt: new Date() },
+      data: { lastBilledAt: now },
     });
     return {
       ok: true,
       balance: await balanceOf(requesterId),
       tokensCharged: 0,
-      billedSeconds: elapsed,
+      billedSeconds: session.billedSeconds,
       shouldTerminate: false,
+      isFreeTrial,
+      freeSecondsRemaining: isFreeTrial && freeLimit > 0
+        ? Math.max(0, freeLimit - session.billedSeconds)
+        : null,
+      waitingForPartner: true,
     };
   }
 
+  const newBilledSeconds = session.billedSeconds + deltaSeconds;
+
+  // --- Prueba gratuita ------------------------------------------------------
+  if (isFreeTrial) {
+    const capped =
+      freeLimit > 0 ? Math.min(newBilledSeconds, freeLimit) : newBilledSeconds;
+
+    await prisma.callSession.update({
+      where: { id: session.id },
+      data: { billedSeconds: capped, lastBilledAt: now },
+    });
+
+    const exhausted = freeLimit > 0 && newBilledSeconds >= freeLimit;
+    if (exhausted) {
+      await endCall(session.id, requesterId, 'FREE_LIMIT_REACHED');
+    }
+
+    return {
+      ok: true,
+      balance: await balanceOf(requesterId),
+      tokensCharged: 0,
+      billedSeconds: capped,
+      shouldTerminate: exhausted,
+      reason: exhausted ? 'FREE_LIMIT_REACHED' : undefined,
+      isFreeTrial: true,
+      freeSecondsRemaining: freeLimit > 0 ? Math.max(0, freeLimit - capped) : null,
+      waitingForPartner: false,
+    };
+  }
+
+  // --- Llamada de pago ------------------------------------------------------
   const payerId = session.callerId;
-  const earnerId = session.calleeId;
+  const earnerId = session.calleeId!;
 
-  const now = new Date();
-  const since = session.lastBilledAt ?? session.startedAt;
-  const deltaSeconds = Math.floor((now.getTime() - since.getTime()) / 1000);
-
-  // Aun no toca cobrar (protege contra ticks duplicados/agresivos)
+  // Aun no toca cobrar (protege contra ticks duplicados o agresivos)
   if (deltaSeconds < 5) {
     return {
       ok: true,
@@ -97,11 +164,32 @@ export async function processBillingTick(
       tokensCharged: 0,
       billedSeconds: session.billedSeconds,
       shouldTerminate: false,
+      isFreeTrial: false,
+      freeSecondsRemaining: null,
+      waitingForPartner: false,
     };
   }
 
-  // Cobro proporcional al segundo, redondeado hacia arriba al token
-  const tokensDue = Math.ceil((session.ratePerMinute * deltaSeconds) / 60);
+  // Redondeo unico sobre el acumulado, no por tick.
+  const dueTotal = Math.ceil((session.ratePerMinute * newBilledSeconds) / 60);
+  const tokensDue = Math.max(0, dueTotal - session.tokensSpent);
+
+  if (tokensDue === 0) {
+    await prisma.callSession.update({
+      where: { id: session.id },
+      data: { billedSeconds: newBilledSeconds, lastBilledAt: now },
+    });
+    return {
+      ok: true,
+      balance: await balanceOf(payerId),
+      tokensCharged: 0,
+      billedSeconds: newBilledSeconds,
+      shouldTerminate: false,
+      isFreeTrial: false,
+      freeSecondsRemaining: null,
+      waitingForPartner: false,
+    };
+  }
 
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -140,7 +228,7 @@ export async function processBillingTick(
         where: { id: session.id },
         data: {
           lastBilledAt: now,
-          billedSeconds: { increment: deltaSeconds },
+          billedSeconds: newBilledSeconds,
           tokensSpent: { increment: tokensDue },
           tokensEarned: { increment: modelTokens },
           platformFeeTokens: { increment: platformFeeTokens },
@@ -168,6 +256,9 @@ export async function processBillingTick(
       billedSeconds: result.billedSeconds,
       shouldTerminate,
       reason: shouldTerminate ? 'INSUFFICIENT_TOKENS' : undefined,
+      isFreeTrial: false,
+      freeSecondsRemaining: null,
+      waitingForPartner: false,
     };
   } catch (error) {
     if (error instanceof InsufficientTokensError) {
@@ -179,10 +270,67 @@ export async function processBillingTick(
         billedSeconds: session.billedSeconds,
         shouldTerminate: true,
         reason: 'INSUFFICIENT_TOKENS',
+        isFreeTrial: false,
+        freeSecondsRemaining: null,
+        waitingForPartner: false,
       };
     }
     throw error;
   }
+}
+
+/**
+ * Cierra las llamadas que se quedaron colgadas.
+ *
+ * Hace falta porque el cobro lo dispara el navegador: si alguien cierra la
+ * pestana de golpe, mata el proceso o simplemente deja de mandar ticks, la
+ * sesion se quedaria ACTIVE para siempre y la prueba gratuita seria infinita.
+ * Lo ejecuta el timer de systemd (deploy/fantasylive-sweep.timer).
+ */
+export async function sweepStaleCalls(): Promise<{
+  freeExpired: number;
+  abandoned: number;
+}> {
+  const now = Date.now();
+  const freeLimit = config.economy.freeCallSeconds;
+
+  const active = await prisma.callSession.findMany({
+    where: { status: 'ACTIVE' },
+    select: {
+      id: true,
+      callerId: true,
+      ratePerMinute: true,
+      calleeId: true,
+      startedAt: true,
+      lastBilledAt: true,
+      billedSeconds: true,
+    },
+  });
+
+  let freeExpired = 0;
+  let abandoned = 0;
+
+  for (const session of active) {
+    const reference = session.lastBilledAt ?? session.startedAt;
+    const silentSeconds = reference
+      ? Math.floor((now - reference.getTime()) / 1000)
+      : Infinity;
+
+    // Sin ticks durante 3 intervalos: nadie esta al otro lado.
+    if (silentSeconds > config.economy.callBillingIntervalSeconds * 3 + 30) {
+      await endCall(session.id, session.callerId, 'DISCONNECTED');
+      abandoned++;
+      continue;
+    }
+
+    const isFree = session.ratePerMinute <= 0 || !session.calleeId;
+    if (isFree && freeLimit > 0 && session.billedSeconds >= freeLimit) {
+      await endCall(session.id, session.callerId, 'FREE_LIMIT_REACHED');
+      freeExpired++;
+    }
+  }
+
+  return { freeExpired, abandoned };
 }
 
 /** Marca la sesion como ACTIVE cuando ambos han conectado. */

@@ -73,3 +73,24 @@ export async function removeParticipant(
 export function isLiveKitConfigured(): boolean {
   return config.media.livekit.configured && Boolean(config.media.livekit.url);
 }
+
+/**
+ * Numero de participantes conectados a la sala.
+ *
+ * Es la unica fuente fiable de "hay alguien al otro lado": el navegador podria
+ * mentir para seguir hablando gratis o para no pagar. Devuelve null si LiveKit
+ * no esta configurado, y quien llama decide que hacer (en local, seguir).
+ */
+export async function countRoomParticipants(
+  roomName: string,
+): Promise<number | null> {
+  const svc = roomService();
+  if (!svc) return null;
+  try {
+    const participants = await svc.listParticipants(roomName);
+    return participants.length;
+  } catch {
+    // La sala puede no existir todavia: se trata como "aun no hay nadie"
+    return 0;
+  }
+}

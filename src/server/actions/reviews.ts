@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { createNotification } from '@/lib/notifications';
 import { prisma } from '@/lib/prisma';
+import { checkNoContactInfo } from '@/lib/content-filter';
 
 export interface ReviewActionResult {
   ok: boolean;
@@ -32,6 +33,11 @@ export async function upsertReviewAction(input: {
     const parsed = reviewSchema.safeParse(input);
     if (!parsed.success) {
       return { ok: false, error: 'Elegi una puntuacion de 1 a 5 estrellas.' };
+    }
+
+    if (parsed.data.comment) {
+      const contactError = checkNoContactInfo(parsed.data.comment);
+      if (contactError) return { ok: false, error: contactError };
     }
 
     const model = await prisma.modelProfile.findUnique({

@@ -109,7 +109,14 @@ export async function tryMatch(entryId: string): Promise<MatchResult | null> {
           id: true,
           gender: true,
           isVip: true,
-          modelProfile: { select: { blockedCountries: true } },
+          modelProfile: {
+            select: {
+              blockedCountries: true,
+              isVipEnabled: true,
+              isAvailableForVip: true,
+              vipRatePerMinute: true,
+            },
+          },
         },
       },
     },
@@ -232,15 +239,36 @@ export async function tryMatch(entryId: string): Promise<MatchResult | null> {
       return null;
     }
 
-    // Determina quien paga y a que tarifa
-    const partnerModel = partner.user.modelProfile;
+    // Determina quien paga y a que tarifa.
+    //
+    // En VIP paga SIEMPRE el usuario y cobra la modelo. Cualquiera de los dos
+    // puede ser quien dispara el emparejamiento, asi que hay que mirar de que
+    // lado esta el perfil de modelo.
+    //
+    // OJO: aqui habia un bug. Las dos ramas del ternario devolvian
+    // entry.userId, de modo que cuando era la modelo la que entraba en cola
+    // acababa siendo ella la pagadora y el usuario el que cobraba: el cobro
+    // salia invertido la mitad de las veces.
     const isVipCall = entry.mode === 'VIP';
-    const ratePerMinute =
-      isVipCall && partnerModel ? partnerModel.vipRatePerMinute : 0;
+    const partnerModel = partner.user.modelProfile;
+    const entryModel = entry.user.modelProfile;
 
-    // En VIP el "caller" (quien paga) es el usuario, el "callee" es la modelo
-    const callerId = isVipCall && partnerModel ? entry.userId : entry.userId;
-    const calleeId = partner.userId;
+    const partnerIsVipModel = Boolean(
+      partnerModel?.isVipEnabled && partnerModel?.isAvailableForVip,
+    );
+    const entryIsVipModel = Boolean(
+      entryModel?.isVipEnabled && entryModel?.isAvailableForVip,
+    );
+
+    // La modelo es el "callee" (cobra); el otro es el "caller" (paga).
+    const modelIsEntry = isVipCall && entryIsVipModel && !partnerIsVipModel;
+
+    const callerId = modelIsEntry ? partner.userId : entry.userId;
+    const calleeId = modelIsEntry ? entry.userId : partner.userId;
+
+    const billingModel = modelIsEntry ? entryModel : partnerModel;
+    const ratePerMinute =
+      isVipCall && billingModel ? billingModel.vipRatePerMinute : 0;
 
     const session = await tx.callSession.create({
       data: {

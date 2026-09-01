@@ -361,6 +361,22 @@ En el log debe aparecer `published simulcast track` y, al lanzar un segundo part
 
 El cliente envía un tick a `POST /api/calls/:id/billing` cada `CALL_BILLING_INTERVAL_SECONDS`, **pero el importe lo calcula el servidor** a partir de sus propios `startedAt` / `lastBilledAt`. Acelerar o falsear las peticiones desde el navegador no cambia lo que se cobra. Cuando el saldo no cubre el siguiente intervalo, el servidor cierra la sesión con `INSUFFICIENT_TOKENS` y expulsa de la sala.
 
+### Prueba gratuita y fin de llamada
+
+Las llamadas del modo aleatorio no tienen tarifa: son la prueba gratuita y duran **5 minutos** (`FREE_CALL_SECONDS`). Al agotarse, el servidor corta la llamada con el motivo `FREE_LIMIT_REACHED` y aparece un panel que ofrece **seguir la conversación por chat**, recargar tokens o buscar a otra persona. El contador va visible desde el primer segundo.
+
+Sólo cuenta el tiempo en que **hay dos personas en la sala**: la espera no consume la prueba ni se cobra. La presencia se consulta a LiveKit, no al navegador, porque el cliente podría mentir para hablar gratis.
+
+Como el tick lo dispara el navegador, cerrar la pestaña de golpe dejaría la sesión viva para siempre. Por eso `scripts/sweep-calls.mts` corre cada minuto (`deploy/fantasylive-sweep.timer`) y cierra las llamadas que agotaron su límite o llevan varios intervalos sin dar señales.
+
+### Sin datos de contacto fuera de la plataforma
+
+`src/lib/content-filter.ts` rechaza teléfonos, correos, enlaces, redes sociales y `@usuarios` en mensajes, primer mensaje, pedidos a medida, reseñas, mensajes de regalo y en el **perfil público de la creadora** (nombre, titular y biografía, que es la vía más cómoda para colar un Instagram).
+
+Da por hecho que quien lo intenta lo hace a propósito, así que normaliza antes de buscar: quita acentos, deshace el *leet* (`1nst4gr4m`) y colapsa separadores (`i n s t a g r a m`, `t.e.l.e.g.r.a.m`). También detecta números deletreados («seis uno dos tres…») y «arroba gmail punto com».
+
+El umbral de teléfono son 8 dígitos, y antes se descartan fechas y horas: así «quedamos el 01/02/2026 a las 22:30» o «cuesta 2500 tokens» no saltan. Se prefiere un falso positivo ocasional a una fuga, y el mensaje de error dice qué se ha detectado para que la persona reformule.
+
 ### Matchmaking
 
 `joinQueue()` inserta la entrada y busca de inmediato un candidato compatible (modo, filtro recíproco de género, exclusión de bloqueos y skips recientes). La reserva del compañero es un `UPDATE ... WHERE status = 'WAITING'` condicional: solo un emparejador gana, y si se pierde la carrera se libera al otro. Las entradas sin heartbeat durante 30 s se marcan como expiradas.

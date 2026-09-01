@@ -2,16 +2,29 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ConnectionQuality,
   ConnectionState,
   RemoteTrack,
   Room,
   RoomEvent,
   Track,
+  VideoPresets,
   createLocalTracks,
   type LocalTrack,
+  type Participant,
   type RemoteParticipant,
   type RemoteTrackPublication,
 } from 'livekit-client';
+
+/** Calidad de conexion normalizada para la interfaz. */
+export type CallQuality = 'excellent' | 'good' | 'poor' | 'unknown';
+
+function mapQuality(q: ConnectionQuality): CallQuality {
+  if (q === ConnectionQuality.Excellent) return 'excellent';
+  if (q === ConnectionQuality.Good) return 'good';
+  if (q === ConnectionQuality.Poor) return 'poor';
+  return 'unknown';
+}
 
 export type RoomStatus =
   | 'idle'
@@ -50,6 +63,7 @@ export function useVideoRoom({
   const [isMicEnabled, setMicEnabled] = useState(true);
   const [isCameraEnabled, setCameraEnabled] = useState(true);
   const [partnerIdentity, setPartnerIdentity] = useState<string | null>(null);
+  const [quality, setQuality] = useState<CallQuality>('unknown');
 
   const roomRef = useRef<Room | null>(null);
   const localTracksRef = useRef<LocalTrack[]>([]);
@@ -79,10 +93,18 @@ export function useVideoRoom({
     setStatus('requesting-media');
 
     try {
-      // 1. Camara y microfono locales (siempre, incluso en demo)
+      // 1. Camara y microfono locales (siempre, incluso en demo).
+      //    El procesado de audio se pide al navegador: sin cancelacion de eco
+      //    la llamada acopla en cuanto alguien sube el volumen.
       const tracks = await createLocalTracks({
-        audio: true,
-        video: { resolution: { width: 1280, height: 720 } },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+        video: {
+          resolution: VideoPresets.h720.resolution,
+        },
       });
       localTracksRef.current = tracks;
 
@@ -99,9 +121,32 @@ export function useVideoRoom({
 
       // 3. Conexion real a LiveKit
       const room = new Room({
+        // Ajusta la calidad recibida al tamano real del <video> y deja de
+        // enviar capas que nadie mira.
         adaptiveStream: true,
         dynacast: true,
         disconnectOnPageLeave: true,
+        videoCaptureDefaults: {
+          resolution: VideoPresets.h720.resolution,
+        },
+        audioCaptureDefaults: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+        publishDefaults: {
+          // Simulcast: se publican tres calidades y el SFU sirve a cada quien
+          // la que aguante su conexion, en vez de cortar el video al primer
+          // bache de red.
+          simulcast: true,
+          videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360],
+          videoEncoding: VideoPresets.h720.encoding,
+          // DTX deja de transmitir en los silencios; RED manda el audio por
+          // duplicado para que la voz siga entendiendose con perdida de
+          // paquetes. Las dos cosas juntas mejoran mucho en redes moviles.
+          dtx: true,
+          red: true,
+        },
       });
       roomRef.current = room;
 
@@ -131,6 +176,17 @@ export function useVideoRoom({
         })
         .on(RoomEvent.Disconnected, () => {
           setStatus('disconnected');
+        })
+        .on(
+          RoomEvent.ConnectionQualityChanged,
+          (q: ConnectionQuality, _p: Participant) => {
+            setQuality(mapQuality(q));
+          },
+        )
+        .on(RoomEvent.MediaDevicesError, (err: Error) => {
+          setError(
+            'No se pudo acceder a la camara o el microfono: ' + err.message,
+          );
         })
         .on(RoomEvent.ConnectionStateChanged, (state: ConnectionState) => {
           if (state === ConnectionState.Connected) {
@@ -212,6 +268,7 @@ export function useVideoRoom({
   return {
     status,
     error,
+    quality,
     partnerIdentity,
     isMicEnabled,
     isCameraEnabled,
