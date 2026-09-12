@@ -33,9 +33,10 @@ export async function recordProfileVisit(params: {
   const day = utcDay();
 
   try {
-    // viewerId null (visitante sin cuenta) no puede ir en el unique compuesto
-    // de Prisma, asi que esas visitas se agregan por dia con un create suelto
-    // y el recuento anonimo vive en profileViews.
+    // Solo las visitas con cuenta van a ProfileVisit: viewerId null no puede
+    // participar en el unique compuesto de Prisma, asi que no se podrian
+    // deduplicar. profileViews cuenta TODAS las cargas (con cuenta y sin
+    // ella), y es el unico rastro que dejan los visitantes anonimos.
     if (params.viewerId) {
       await prisma.profileVisit.upsert({
         where: {

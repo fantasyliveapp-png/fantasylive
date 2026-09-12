@@ -6,7 +6,11 @@ import { z } from 'zod';
 import { getAuthedUserOrThrow, getCurrentUser } from '@/lib/auth/guards';
 import { config } from '@/lib/config';
 import { checkNoContactInfo } from '@/lib/content-filter';
-import { GEO_BLOCKED_MESSAGE, isBlockedForViewer } from '@/lib/geo';
+import {
+  GEO_BLOCKED_MESSAGE,
+  getViewerCountry,
+  isBlockedForViewer,
+} from '@/lib/geo';
 import {
   createBroadcasterToken,
   createRtmpIngress,
@@ -20,7 +24,6 @@ import {
 import { closeRoom, countRoomParticipants } from '@/lib/livekit';
 import { prisma } from '@/lib/prisma';
 import { maybeSendAutoGreeting } from '@/lib/greeting';
-import { getViewerCountry } from '@/lib/geo';
 import { recordProfileVisit } from '@/lib/visits';
 
 export interface LiveActionResult<T = unknown> {
@@ -370,7 +373,10 @@ export async function joinStreamAction(
       data: {
         viewerCount,
         viewerPeak: Math.max(stream.viewerPeak, viewerCount),
-        uniqueViewers: { increment: 1 },
+        // Cuenta ENTRADAS a la sala, no personas distintas: quien recarga
+        // la pagina entra otra vez. Las personas distintas salen de
+        // ProfileVisit, que si deduplica.
+        totalJoins: { increment: 1 },
       },
     });
 
