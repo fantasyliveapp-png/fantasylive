@@ -33,6 +33,7 @@ const DEBIT_TYPES: TransactionType[] = [
   'CONTENT_REQUEST_PAYMENT',
   'MESSAGE_UNLOCK',
   'MESSAGE_ATTACHMENT_UNLOCK',
+  'POST_UNLOCK',
 ];
 
 /** Tipos de movimiento que representan ingresos de una modelo. */
@@ -44,6 +45,7 @@ const EARNING_TYPES: TransactionType[] = [
   'CONTENT_REQUEST_EARNING',
   'MESSAGE_UNLOCK_EARNING',
   'MESSAGE_ATTACHMENT_EARNING',
+  'POST_EARNING',
 ];
 
 export interface LedgerEntry {
@@ -67,6 +69,8 @@ export interface LedgerEntry {
   contentRequestId?: string;
   conversationId?: string;
   messageAttachmentId?: string;
+  postId?: string;
+  liveStreamId?: string;
   platformFeeTokens?: number;
 }
 
@@ -193,6 +197,8 @@ export async function applyLedgerEntry(
       contentRequestId: entry.contentRequestId,
       conversationId: entry.conversationId,
       messageAttachmentId: entry.messageAttachmentId,
+      postId: entry.postId,
+      liveStreamId: entry.liveStreamId,
       platformFeeTokens: entry.platformFeeTokens ?? 0,
     },
     select: { id: true },
@@ -241,6 +247,8 @@ export async function transferWithCommission(
     contentRequestId?: string;
     conversationId?: string;
     messageAttachmentId?: string;
+    postId?: string;
+    liveStreamId?: string;
     metadata?: Prisma.InputJsonValue;
   },
 ) {
@@ -259,6 +267,8 @@ export async function transferWithCommission(
     contentRequestId: params.contentRequestId,
     conversationId: params.conversationId,
     messageAttachmentId: params.messageAttachmentId,
+    postId: params.postId,
+    liveStreamId: params.liveStreamId,
     metadata: params.metadata,
     platformFeeTokens,
   });
@@ -278,6 +288,8 @@ export async function transferWithCommission(
       contentRequestId: params.contentRequestId,
       conversationId: params.conversationId,
       messageAttachmentId: params.messageAttachmentId,
+      postId: params.postId,
+      liveStreamId: params.liveStreamId,
       metadata: params.metadata,
     });
   }
@@ -295,8 +307,19 @@ export function tokensToRetailCents(tokens: number): number {
   return Math.round(tokens * config.economy.tokenValueCents);
 }
 
-/** Minutos que el usuario puede sostener a una tarifa dada. */
-export function affordableMinutes(balance: number, ratePerMinute: number) {
-  if (ratePerMinute <= 0) return Infinity;
-  return Math.floor(balance / ratePerMinute);
+/**
+ * Reparte un retiro entre la comision de retiro y lo que cobra la creadora.
+ *
+ * Es una comision DISTINTA de la de plataforma: esa ya se cobro cuando el
+ * usuario gasto el token. Esta cubre el coste de sacar el dinero del sistema
+ * (wire, PayPal, USDT) y se descuenta de los tokens solicitados.
+ */
+export function splitPayoutFee(tokens: number): {
+  feeTokens: number;
+  netTokens: number;
+} {
+  const feeTokens = Math.round(
+    (tokens * config.economy.payoutFeePercent) / 100,
+  );
+  return { feeTokens, netTokens: tokens - feeTokens };
 }

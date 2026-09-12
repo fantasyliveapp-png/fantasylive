@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { prisma } from '@/lib/prisma';
+import { tokensForMinutes } from '@/lib/rates';
 import { GEO_BLOCKED_MESSAGE, isBlockedForViewer } from '@/lib/geo';
 import { applyLedgerEntry, InsufficientTokensError } from '@/lib/tokens';
 import { applySubscriberDiscount, getActiveSubscription } from '@/lib/subscriptions';
@@ -51,7 +52,7 @@ export async function createBookingAction(input: {
         id: true,
         userId: true,
         stageName: true,
-        privateRatePerMinute: true,
+        privateRateCentitokens: true,
         minPrivateMinutes: true,
         acceptsBookings: true,
         kycStatus: true,
@@ -99,13 +100,16 @@ export async function createBookingAction(input: {
     }
 
     const subscription = await getActiveSubscription(user.id, model.id);
-    const ratePerMinute = subscription
+    const rateCentitokens = subscription
       ? applySubscriberDiscount(
-          model.privateRatePerMinute,
+          model.privateRateCentitokens,
           subscription.discountPercent,
         )
-      : model.privateRatePerMinute;
-    const totalTokens = ratePerMinute * parsed.data.durationMinutes;
+      : model.privateRateCentitokens;
+    const totalTokens = tokensForMinutes(
+      rateCentitokens,
+      parsed.data.durationMinutes,
+    );
 
     const booking = await prisma.$transaction(async (tx) => {
       const created = await tx.booking.create({
@@ -114,7 +118,7 @@ export async function createBookingAction(input: {
           modelId: model.id,
           startsAt,
           durationMinutes: parsed.data.durationMinutes,
-          ratePerMinute,
+          rateCentitokens,
           totalTokens,
           userNote: parsed.data.note ?? null,
           status: 'PENDING_CONFIRMATION',
@@ -306,7 +310,7 @@ export async function startBookingCallAction(
           calleeId: booking.model.userId,
           roomName: randomRoomName('book'),
           // Ya se retuvo el importe al reservar: no se cobra por minuto
-          ratePerMinute: 0,
+          rateCentitokens: 0,
           bookingId: booking.id,
         },
         select: { id: true },

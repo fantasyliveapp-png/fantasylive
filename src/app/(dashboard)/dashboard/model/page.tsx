@@ -17,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { requireModel } from '@/lib/auth/guards';
 import { CALL_TYPE_LABELS } from '@/lib/constants';
 import { prisma } from '@/lib/prisma';
+import { formatRate } from '@/lib/rates';
 import { getWalletSummary, tokensToPayoutCents } from '@/lib/tokens';
 import {
   formatDateTime,
@@ -173,12 +174,12 @@ export default async function ModelOverviewPage() {
         <CardContent className="grid gap-4 sm:grid-cols-3">
           <RateBox
             label="Llamada VIP"
-            value={`${profile.vipRatePerMinute}/min`}
+            value={formatRate(profile.vipRateCentitokens)}
             active={profile.isVipEnabled}
           />
           <RateBox
             label="Privado reservado"
-            value={`${profile.privateRatePerMinute}/min`}
+            value={formatRate(profile.privateRateCentitokens)}
             active={profile.acceptsBookings}
           />
           <RateBox

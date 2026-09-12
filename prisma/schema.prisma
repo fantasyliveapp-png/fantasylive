@@ -62,9 +62,9 @@ enum ContentType {
 }
 
 enum CallType {
-  RANDOM        // Omegle-style gratuito / bajo costo
-  VIP_RANDOM    // Aleatorio solo con modelos VIP, cobro por minuto
-  PRIVATE       // 1 a 1 reservado con una modelo concreta
+  RANDOM // Omegle-style gratuito / bajo costo
+  VIP_RANDOM // Aleatorio solo con modelos VIP, cobro por minuto
+  PRIVATE // 1 a 1 reservado con una modelo concreta
 }
 
 enum CallStatus {
@@ -100,29 +100,33 @@ enum QueueStatus {
 }
 
 enum TransactionType {
-  TOKEN_PURCHASE     // usuario compra tokens (+)
-  SIGNUP_BONUS       // regalo de bienvenida (+)
-  ADMIN_CREDIT       // ajuste manual admin (+)
-  ADMIN_DEBIT        // ajuste manual admin (-)
-  CALL_CHARGE        // consumo por minuto (-)
-  CALL_EARNING       // ingreso de la modelo (+)
-  CONTENT_UNLOCK     // desbloqueo de pack (-)
-  CONTENT_EARNING    // ingreso de la modelo por pack (+)
-  TIP                // propina enviada (-)
-  TIP_EARNING        // propina recibida (+)
-  BOOKING_HOLD       // retencion al reservar (-)
-  BOOKING_REFUND     // devolucion por cancelacion (+)
-  PAYOUT             // retiro de la modelo (-)
-  REFUND             // devolucion al usuario (+)
-  PLATFORM_FEE       // comision de la plataforma
+  TOKEN_PURCHASE // usuario compra tokens (+)
+  SIGNUP_BONUS // regalo de bienvenida (+)
+  ADMIN_CREDIT // ajuste manual admin (+)
+  ADMIN_DEBIT // ajuste manual admin (-)
+  CALL_CHARGE // consumo por minuto (-)
+  CALL_EARNING // ingreso de la modelo (+)
+  CONTENT_UNLOCK // desbloqueo de pack (-)
+  CONTENT_EARNING // ingreso de la modelo por pack (+)
+  TIP // propina enviada (-)
+  TIP_EARNING // propina recibida (+)
+  BOOKING_HOLD // retencion al reservar (-)
+  BOOKING_REFUND // devolucion por cancelacion (+)
+  PAYOUT // retiro de la modelo (-)
+  REFUND // devolucion al usuario (+)
+  PLATFORM_FEE // comision de la plataforma
   SUBSCRIPTION_PURCHASE // usuario paga suscripcion mensual (-)
-  SUBSCRIPTION_EARNING  // ingreso de la modelo por suscripcion (+)
+  SUBSCRIPTION_EARNING // ingreso de la modelo por suscripcion (+)
   CONTENT_REQUEST_PAYMENT // usuario paga un pedido de contenido a medida (-)
   CONTENT_REQUEST_EARNING // ingreso de la modelo por un pedido (+)
-  MESSAGE_UNLOCK          // usuario paga para abrir una conversacion (-)
-  MESSAGE_UNLOCK_EARNING  // ingreso de la modelo por abrir conversacion (+)
-  MESSAGE_ATTACHMENT_UNLOCK         // usuario paga por un archivo adjunto (-)
-  MESSAGE_ATTACHMENT_EARNING        // ingreso de la modelo por un archivo adjunto (+)
+  MESSAGE_UNLOCK // usuario paga para abrir una conversacion (-)
+  MESSAGE_UNLOCK_EARNING // ingreso de la modelo por abrir conversacion (+)
+  MESSAGE_ATTACHMENT_UNLOCK // usuario paga por un archivo adjunto (-)
+  MESSAGE_ATTACHMENT_EARNING // ingreso de la modelo por un archivo adjunto (+)
+  POST_UNLOCK // usuario desbloquea una publicacion del feed (-)
+  POST_EARNING // ingreso de la modelo por una publicacion (+)
+  /// Comision de retiro (10%): se descuenta al solicitar el payout
+  PAYOUT_FEE
 }
 
 enum SubscriptionStatus {
@@ -131,11 +135,11 @@ enum SubscriptionStatus {
 }
 
 enum ContentRequestStatus {
-  PENDING   // esperando cotizacion de la modelo
-  QUOTED    // modelo coloco un precio, esperando pago
-  PAID      // usuario pago, la modelo debe entregar
+  PENDING // esperando cotizacion de la modelo
+  QUOTED // modelo coloco un precio, esperando pago
+  PAID // usuario pago, la modelo debe entregar
   DELIVERED // contenido entregado y desbloqueado
-  DECLINED  // la modelo rechazo el pedido
+  DECLINED // la modelo rechazo el pedido
   CANCELLED // el usuario cancelo antes de pagar
 }
 
@@ -149,6 +153,7 @@ enum TransactionStatus {
 
 enum PaymentProvider {
   STRIPE
+  PAYPAL
   CCBILL
   CRYPTO
   MOCK
@@ -230,6 +235,44 @@ enum NotificationType {
   MESSAGE_ATTACHMENT_UNLOCKED
   /// Alguien esta llamando ahora mismo
   INCOMING_CALL
+  /// Una creadora a la que sigues acaba de empezar un directo
+  LIVE_STARTED
+  /// Nueva publicacion en el feed de alguien a quien sigues
+  NEW_POST
+  /// Has recibido un regalo en tokens
+  GIFT_RECEIVED
+}
+
+enum LiveStreamStatus {
+  /// Sala creada y credenciales de OBS listas, pero sin video todavia
+  PREPARING
+  /// Emitiendo: aparece en la portada y en /live
+  LIVE
+  ENDED
+}
+
+/// Como se emite el directo. Determina si hay que crear un ingress RTMP.
+enum LiveStreamSource {
+  /// Camara del navegador (WebRTC directo a LiveKit)
+  BROWSER
+  /// OBS / Streamlabs por RTMP a traves de LiveKit Ingress
+  OBS_RTMP
+}
+
+enum PostVisibility {
+  /// Visible para cualquiera
+  PUBLIC
+  /// Se ve borroso hasta pagar priceTokens
+  LOCKED
+  /// Incluido en la suscripcion: solo suscriptores activos
+  SUBSCRIBERS
+}
+
+/// De donde viene una visita registrada para las analiticas de la creadora.
+enum VisitSource {
+  PROFILE
+  LIVE
+  POST
 }
 
 // =============================================================================
@@ -248,21 +291,21 @@ model User {
   status        UserStatus @default(ACTIVE)
 
   // Perfil / compliance
-  birthDate     DateTime?
-  ageVerified   Boolean     @default(false)
-  gender        Gender?
-  orientation   Orientation?
-  country       String?
-  city          String?
-  languages     String[]    @default([])
-  bio           String?
+  birthDate   DateTime?
+  ageVerified Boolean      @default(false)
+  gender      Gender?
+  orientation Orientation?
+  country     String?
+  city        String?
+  languages   String[]     @default([])
+  bio         String?
 
   // Estado de plataforma
-  isVip         Boolean   @default(false)
-  vipUntil      DateTime?
-  lastSeenAt    DateTime?
+  isVip          Boolean   @default(false)
+  vipUntil       DateTime?
+  lastSeenAt     DateTime?
   suspendedUntil DateTime?
-  banReason     String?
+  banReason      String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -272,31 +315,36 @@ model User {
   sessions Session[]
 
   // Relaciones de dominio
-  wallet            Wallet?
-  modelProfile      ModelProfile?
-  transactions      Transaction[]      @relation("UserTransactions")
-  callsInitiated    CallSession[]      @relation("CallCaller")
-  callsReceived     CallSession[]      @relation("CallCallee")
-  queueEntries      MatchQueueEntry[]
-  unlocks           ContentUnlock[]
-  bookings          Booking[]          @relation("BookingUser")
-  giftsSent         Gift[]             @relation("GiftSender")
-  giftsReceived     Gift[]             @relation("GiftReceiver")
-  reportsFiled      Report[]           @relation("Reporter")
-  reportsAgainst    Report[]           @relation("ReportedUser")
-  reportsReviewed   Report[]           @relation("ReportReviewer")
-  kycReviewed       KycVerification[]  @relation("KycReviewer")
-  payoutsProcessed  PayoutRequest[]    @relation("PayoutProcessor")
-  auditLogs         AuditLog[]
-  blocksMade        BlockedPair[]      @relation("Blocker")
-  blocksReceived    BlockedPair[]      @relation("Blocked")
-  follows           Follow[]
-  subscriptions     Subscription[]
-  contentRequests   ContentRequest[]
-  conversations     Conversation[]
-  messagesSent      Message[]
+  wallet                   Wallet?
+  modelProfile             ModelProfile?
+  transactions             Transaction[]             @relation("UserTransactions")
+  callsInitiated           CallSession[]             @relation("CallCaller")
+  callsReceived            CallSession[]             @relation("CallCallee")
+  queueEntries             MatchQueueEntry[]
+  unlocks                  ContentUnlock[]
+  bookings                 Booking[]                 @relation("BookingUser")
+  giftsSent                Gift[]                    @relation("GiftSender")
+  giftsReceived            Gift[]                    @relation("GiftReceiver")
+  reportsFiled             Report[]                  @relation("Reporter")
+  reportsAgainst           Report[]                  @relation("ReportedUser")
+  reportsReviewed          Report[]                  @relation("ReportReviewer")
+  kycReviewed              KycVerification[]         @relation("KycReviewer")
+  payoutsProcessed         PayoutRequest[]           @relation("PayoutProcessor")
+  auditLogs                AuditLog[]
+  blocksMade               BlockedPair[]             @relation("Blocker")
+  blocksReceived           BlockedPair[]             @relation("Blocked")
+  follows                  Follow[]
+  subscriptions            Subscription[]
+  contentRequests          ContentRequest[]
+  conversations            Conversation[]
+  messagesSent             Message[]
   messageAttachmentUnlocks MessageAttachmentUnlock[]
-  notifications     Notification[]
+  notifications            Notification[]
+  postUnlocks              PostUnlock[]
+  postLikes                PostLike[]
+  postComments             PostComment[]
+  profileVisits            ProfileVisit[]
+  greetingsReceived        AutoGreetingLog[]
 
   @@index([role, status])
   @@index([createdAt])
@@ -350,15 +398,15 @@ model VerificationToken {
 // =============================================================================
 
 model Wallet {
-  id      String @id @default(cuid())
-  userId  String @unique
+  id     String @id @default(cuid())
+  userId String @unique
 
   /// Saldo disponible para gastar
-  balance           Int @default(0)
+  balance         Int @default(0)
   /// Tokens retenidos por reservas pendientes (no gastables)
-  heldBalance       Int @default(0)
+  heldBalance     Int @default(0)
   /// Tokens ganados pendientes de retiro (solo modelos)
-  pendingEarnings   Int @default(0)
+  pendingEarnings Int @default(0)
 
   // Contadores historicos (para dashboards, evita agregaciones costosas)
   lifetimePurchased Int @default(0)
@@ -407,7 +455,7 @@ model Transaction {
   status TransactionStatus @default(COMPLETED)
 
   /// Delta de tokens con signo: positivo acredita, negativo debita
-  tokens Int
+  tokens       Int
   /// Saldo del monedero despues del movimiento (snapshot de auditoria)
   balanceAfter Int?
 
@@ -422,16 +470,18 @@ model Transaction {
   metadata    Json?
 
   // Vinculos opcionales al origen del movimiento
-  tokenPackageId String?
-  callSessionId  String?
-  contentPackageId String?
-  bookingId      String?
-  giftId         String?   @unique
-  payoutRequestId String?
-  subscriptionId String?
-  contentRequestId String?
-  conversationId String?
+  tokenPackageId      String?
+  callSessionId       String?
+  contentPackageId    String?
+  bookingId           String?
+  giftId              String? @unique
+  payoutRequestId     String?
+  subscriptionId      String?
+  contentRequestId    String?
+  conversationId      String?
   messageAttachmentId String?
+  postId              String?
+  liveStreamId        String?
 
   /// Comision retenida por la plataforma en este movimiento (tokens)
   platformFeeTokens Int @default(0)
@@ -447,9 +497,11 @@ model Transaction {
   gift              Gift?              @relation(fields: [giftId], references: [id], onDelete: SetNull)
   payoutRequest     PayoutRequest?     @relation(fields: [payoutRequestId], references: [id], onDelete: SetNull)
   subscription      Subscription?      @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
-  contentRequest     ContentRequest?    @relation(fields: [contentRequestId], references: [id], onDelete: SetNull)
-  conversation       Conversation?      @relation(fields: [conversationId], references: [id], onDelete: SetNull)
-  messageAttachment   MessageAttachment? @relation(fields: [messageAttachmentId], references: [id], onDelete: SetNull)
+  contentRequest    ContentRequest?    @relation(fields: [contentRequestId], references: [id], onDelete: SetNull)
+  conversation      Conversation?      @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  messageAttachment MessageAttachment? @relation(fields: [messageAttachmentId], references: [id], onDelete: SetNull)
+  post              Post?              @relation(fields: [postId], references: [id], onDelete: SetNull)
+  liveStream        LiveStream?        @relation(fields: [liveStreamId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt])
   @@index([type, status])
@@ -472,12 +524,12 @@ model ModelProfile {
 
   gender      Gender
   orientation Orientation
-  tier        ModelTier @default(STANDARD)
+  tier        ModelTier   @default(STANDARD)
 
-  birthYear  Int?
-  country    String?
-  languages  String[] @default([])
-  tags       String[] @default([])
+  birthYear Int?
+  country   String?
+  languages String[] @default([])
+  tags      String[] @default([])
 
   /// Codigos ISO 3166-1 alpha-2 desde los que este perfil NO es visible.
   /// Lo gestiona la propia modelo desde /dashboard/model/privacy.
@@ -486,10 +538,18 @@ model ModelProfile {
   avatarUrl String?
   coverUrl  String?
 
-  // Tarifas en tokens por minuto
-  vipRatePerMinute     Int @default(20)
-  privateRatePerMinute Int @default(40)
-  minPrivateMinutes    Int @default(10)
+  // ---------------------------------------------------------------------------
+  // TARIFAS POR MINUTO, EN CENTITOKENS (1 token = 100 centitokens)
+  //
+  // La creadora puede pedir desde 1,75 hasta 25 tokens/min, y el minimo tiene
+  // decimales, asi que un Int de tokens no sirve. Se guardan x100 para que el
+  // calculo del cobro siga siendo aritmetica entera (ver src/lib/rates.ts):
+  //   175 = 1,75 tokens/min   250 = 2,50 (default)   2500 = 25 tokens/min
+  // ---------------------------------------------------------------------------
+  vipRateCentitokens     Int @default(250)
+  privateRateCentitokens Int @default(250)
+  /// Minutos que se facturan como minimo en una llamada de pago
+  minPrivateMinutes      Int @default(5)
 
   // Suscripcion mensual (fan club): contenido exclusivo + descuento en llamadas
   subscriptionEnabled         Boolean @default(false)
@@ -500,44 +560,101 @@ model ModelProfile {
 
   // Mensajeria privada: el primer mensaje se paga; para seguir escribiendo
   // el usuario debe mantener saldo positivo en su monedero
-  messagingEnabled    Boolean @default(false)
-  messagePriceTokens  Int     @default(0)
+  messagingEnabled   Boolean @default(false)
+  messagePriceTokens Int     @default(0)
 
   // Disponibilidad y estado
-  isVipEnabled     Boolean @default(false)
-  acceptsBookings  Boolean @default(true)
-  isOnline         Boolean @default(false)
-  isAvailableForVip Boolean @default(false)
-  lastOnlineAt     DateTime?
+  isVipEnabled      Boolean   @default(false)
+  acceptsBookings   Boolean   @default(true)
+  isOnline          Boolean   @default(false)
+  isAvailableForVip Boolean   @default(false)
+  lastOnlineAt      DateTime?
+
+  // ---------------------------------------------------------------------------
+  // MENSAJE AUTOMATICO DE BIENVENIDA
+  //
+  // Se envia a las primeras personas que entran al perfil o al directo. Lo
+  // manda la creadora, asi que abrir la conversacion es GRATIS para quien lo
+  // recibe; la foto adjunta puede llevar precio y se desbloquea aparte.
+  // El tope diario evita que una visita masiva vacie la lista de contactos.
+  // ---------------------------------------------------------------------------
+  autoGreetingEnabled     Boolean @default(false)
+  autoGreetingText        String?
+  /// Clave privada en S3/R2 de la foto que se adjunta (opcional)
+  autoGreetingAssetKey    String?
+  autoGreetingAssetMime   String?
+  /// Clave de la miniatura difuminada que SI se ve sin pagar
+  autoGreetingPreviewKey  String?
+  /// 0 = la foto va gratis; >0 hay que desbloquearla
+  autoGreetingPriceTokens Int     @default(0)
+  /// Cuantos saludos como maximo por dia natural
+  autoGreetingDailyLimit  Int     @default(20)
+  autoGreetingSentToday   Int     @default(0)
+  /// Dia (UTC) al que corresponde autoGreetingSentToday
+  autoGreetingCounterDay  String?
+
+  // ---------------------------------------------------------------------------
+  // DIRECTOS
+  // ---------------------------------------------------------------------------
+  /// Solo se puede activar con el KYC aprobado (ver setLiveEnabledAction).
+  liveEnabled Boolean @default(false)
+  /// Clave de emision para OBS. Se regenera a peticion de la creadora.
+  streamKey   String? @unique
 
   // Metricas (denormalizadas para el catalogo)
-  ratingAvg        Float @default(0)
-  ratingCount      Int   @default(0)
-  totalCalls       Int   @default(0)
-  totalMinutes     Int   @default(0)
-  totalTokensEarned Int  @default(0)
-  followersCount   Int   @default(0)
+  ratingAvg         Float @default(0)
+  ratingCount       Int   @default(0)
+  totalCalls        Int   @default(0)
+  totalMinutes      Int   @default(0)
+  totalTokensEarned Int   @default(0)
+  followersCount    Int   @default(0)
+  postsCount        Int   @default(0)
+  /// Visitas al perfil acumuladas (el detalle esta en ProfileVisit)
+  profileViews      Int   @default(0)
 
   kycStatus KycStatus @default(NOT_SUBMITTED)
+
+  // ---------------------------------------------------------------------------
+  // PERFIL ATENDIDO POR IA
+  //
+  // isAi hace que los mensajes entrantes los conteste un modelo de lenguaje en
+  // vez de una persona. NO es un detalle de implementacion que se pueda ocultar:
+  // la mensajeria se cobra en tokens, asi que un usuario que paga creyendo que
+  // habla con una persona real estaria siendo enganado. La interfaz muestra la
+  // etiqueta "IA" en el catalogo, en el perfil y en cada mensaje generado, y el
+  // prompt del sistema le prohibe afirmar que es humana.
+  // ---------------------------------------------------------------------------
+  isAi Boolean @default(false)
+
+  /// Personalidad e instrucciones que se inyectan en el system prompt.
+  aiPersona String?
+
+  /// Model ID de Anthropic con el que responde este perfil.
+  aiModel String @default("claude-opus-5")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  contentPackages ContentPackage[]
-  bookings        Booking[]
-  availability    AvailabilitySlot[]
+  user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contentPackages  ContentPackage[]
+  bookings         Booking[]
+  availability     AvailabilitySlot[]
   kycVerifications KycVerification[]
-  payoutRequests  PayoutRequest[]
-  reviews         Review[]
-  followers       Follow[]
-  subscribers     Subscription[]
-  contentRequests ContentRequest[]
-  conversations   Conversation[]
+  payoutRequests   PayoutRequest[]
+  reviews          Review[]
+  followers        Follow[]
+  subscribers      Subscription[]
+  contentRequests  ContentRequest[]
+  conversations    Conversation[]
+  posts            Post[]
+  streams          LiveStream[]
+  visits           ProfileVisit[]
+  greetings        AutoGreetingLog[]
 
   @@index([isOnline, isVipEnabled])
   @@index([gender, tier])
   @@index([slug])
+  @@index([liveEnabled])
   @@map("model_profiles")
 }
 
@@ -561,7 +678,7 @@ model AvailabilitySlot {
 }
 
 model Review {
-  id      String @id @default(cuid())
+  id      String  @id @default(cuid())
   modelId String
   userId  String
   rating  Int
@@ -684,10 +801,14 @@ model Message {
   // Puede ir vacio si el mensaje es solo un archivo adjunto.
   body String?
 
+  /// true si lo genero el asistente de un perfil isAi. La interfaz lo etiqueta
+  /// para que el usuario sepa siempre que no le contesta una persona.
+  isAiGenerated Boolean @default(false)
+
   createdAt DateTime @default(now())
 
-  conversation Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender       User              @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  conversation Conversation       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User               @relation(fields: [senderId], references: [id], onDelete: Cascade)
   attachment   MessageAttachment?
 
   @@index([conversationId, createdAt])
@@ -708,7 +829,7 @@ model MessageAttachment {
 
   createdAt DateTime @default(now())
 
-  message      Message                    @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  message      Message                   @relation(fields: [messageId], references: [id], onDelete: Cascade)
   unlocks      MessageAttachmentUnlock[]
   transactions Transaction[]
 
@@ -765,15 +886,15 @@ model ContentPackage {
   type        ContentType @default(PHOTO)
 
   /// 0 = gratis/publico
-  priceTokens Int     @default(0)
-  isPublic    Boolean @default(false)
-  isPublished Boolean @default(true)
+  priceTokens    Int     @default(0)
+  isPublic       Boolean @default(false)
+  isPublished    Boolean @default(true)
   /// Incluido gratis para suscriptores activos; no se compra suelto
   subscriberOnly Boolean @default(false)
 
   /// Miniatura visible sin desbloquear (borrosa/censurada en el cliente)
   previewUrl String?
-  assetCount Int @default(0)
+  assetCount Int     @default(0)
 
   purchaseCount Int @default(0)
   tokensEarned  Int @default(0)
@@ -781,11 +902,11 @@ model ContentPackage {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  model         ModelProfile    @relation(fields: [modelId], references: [id], onDelete: Cascade)
-  assets        ContentAsset[]
-  unlocks       ContentUnlock[]
-  transactions  Transaction[]
-  deliveredFor  ContentRequest?
+  model        ModelProfile    @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  assets       ContentAsset[]
+  unlocks      ContentUnlock[]
+  transactions Transaction[]
+  deliveredFor ContentRequest?
 
   @@index([modelId, isPublished])
   @@map("content_packages")
@@ -845,17 +966,18 @@ model CallSession {
   /// Nombre unico de la sala (LiveKit) o del canal de senalizacion P2P
   roomName String @unique
 
-  /// Tarifa aplicada en tokens/minuto (0 en RANDOM gratuito)
-  ratePerMinute Int @default(0)
+  /// Tarifa aplicada en CENTITOKENS/minuto (0 en RANDOM gratuito).
+  /// 1 token = 100 centitokens; ver src/lib/rates.ts.
+  rateCentitokens Int @default(0)
 
-  startedAt DateTime?
-  endedAt   DateTime?
+  startedAt    DateTime?
+  endedAt      DateTime?
   /// Ultima marca de cobro procesada, base del calculo incremental
   lastBilledAt DateTime?
 
-  billedSeconds Int @default(0)
-  tokensSpent   Int @default(0)
-  tokensEarned  Int @default(0)
+  billedSeconds     Int @default(0)
+  tokensSpent       Int @default(0)
+  tokensEarned      Int @default(0)
   platformFeeTokens Int @default(0)
 
   endReason CallEndReason?
@@ -864,9 +986,9 @@ model CallSession {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  caller       User          @relation("CallCaller", fields: [callerId], references: [id], onDelete: Cascade)
-  callee       User?         @relation("CallCallee", fields: [calleeId], references: [id], onDelete: SetNull)
-  booking      Booking?      @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  caller       User              @relation("CallCaller", fields: [callerId], references: [id], onDelete: Cascade)
+  callee       User?             @relation("CallCallee", fields: [calleeId], references: [id], onDelete: SetNull)
+  booking      Booking?          @relation(fields: [bookingId], references: [id], onDelete: SetNull)
   billingTicks CallBillingTick[]
   gifts        Gift[]
   transactions Transaction[]
@@ -883,10 +1005,10 @@ model CallBillingTick {
   id        String @id @default(cuid())
   sessionId String
 
-  seconds       Int
-  tokensCharged Int
+  seconds        Int
+  tokensCharged  Int
   tokensCredited Int
-  feeTokens     Int @default(0)
+  feeTokens      Int @default(0)
 
   createdAt DateTime @default(now())
 
@@ -903,10 +1025,10 @@ model MatchQueueEntry {
   status QueueStatus @default(WAITING)
 
   // Filtros de emparejamiento
-  genderPreference   Gender[]      @default([])
+  genderPreference      Gender[]      @default([])
   orientationPreference Orientation[] @default([])
-  countryPreference  String?
-  minAge             Int?
+  countryPreference     String?
+  minAge                Int?
 
   /// Genero/rol declarado del usuario en cola (para el matching reciproco)
   selfGender Gender?
@@ -936,10 +1058,10 @@ model MatchQueueEntry {
 
 /// Evita reemparejar a dos usuarios que se saltaron o bloquearon
 model BlockedPair {
-  id        String @id @default(cuid())
+  id        String    @id @default(cuid())
   blockerId String
   blockedId String
-  isSkip    Boolean @default(false)
+  isSkip    Boolean   @default(false)
   expiresAt DateTime?
 
   createdAt DateTime @default(now())
@@ -955,6 +1077,8 @@ model BlockedPair {
 model Gift {
   id        String  @id @default(cuid())
   sessionId String?
+  /// Regalo enviado durante un directo (excluyente con sessionId)
+  streamId  String?
 
   senderId   String
   receiverId String
@@ -965,12 +1089,14 @@ model Gift {
 
   createdAt DateTime @default(now())
 
-  session  CallSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
-  sender   User         @relation("GiftSender", fields: [senderId], references: [id], onDelete: Cascade)
-  receiver User         @relation("GiftReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  session     CallSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  stream      LiveStream?  @relation(fields: [streamId], references: [id], onDelete: SetNull)
+  sender      User         @relation("GiftSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver    User         @relation("GiftReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
   transaction Transaction?
 
   @@index([sessionId])
+  @@index([streamId, createdAt])
   @@index([receiverId, createdAt])
   @@map("gifts")
 }
@@ -987,23 +1113,24 @@ model Booking {
 
   startsAt        DateTime
   durationMinutes Int
-  ratePerMinute   Int
+  /// Tarifa en CENTITOKENS/minuto congelada al reservar (ver src/lib/rates.ts)
+  rateCentitokens Int
   /// Tokens retenidos al crear la reserva
   totalTokens     Int
 
   userNote  String?
   modelNote String?
 
-  confirmedAt DateTime?
-  cancelledAt DateTime?
-  completedAt DateTime?
-  refundedTokens Int @default(0)
+  confirmedAt    DateTime?
+  cancelledAt    DateTime?
+  completedAt    DateTime?
+  refundedTokens Int       @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user         User         @relation("BookingUser", fields: [userId], references: [id], onDelete: Cascade)
-  model        ModelProfile @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  user         User          @relation("BookingUser", fields: [userId], references: [id], onDelete: Cascade)
+  model        ModelProfile  @relation(fields: [modelId], references: [id], onDelete: Cascade)
   callSession  CallSession?
   transactions Transaction[]
 
@@ -1022,21 +1149,21 @@ model KycVerification {
   modelId String
   status  KycStatus @default(PENDING)
 
-  fullLegalName String
-  birthDate     DateTime
-  country       String
-  documentType  DocumentType
+  fullLegalName  String
+  birthDate      DateTime
+  country        String
+  documentType   DocumentType
   documentNumber String?
 
   // Claves privadas en S3/R2 (acceso solo con URL firmada de admin)
-  documentFrontKey String
-  documentBackKey  String?
-  selfieKey        String
+  documentFrontKey   String
+  documentBackKey    String?
+  selfieKey          String
   /// Selfie sujetando el documento + nota manuscrita (2257 compliance)
   handwrittenNoteKey String?
 
-  reviewerId  String?
-  reviewNotes String?
+  reviewerId      String?
+  reviewNotes     String?
   rejectionReason String?
 
   submittedAt DateTime  @default(now())
@@ -1060,29 +1187,35 @@ model PayoutRequest {
   modelId String
   status  PayoutStatus @default(REQUESTED)
 
+  /// Tokens brutos que la creadora pidio retirar (lo que se le debita)
   tokens      Int
+  /// Comision de retiro retenida (10% por defecto), en tokens
+  feeTokens   Int    @default(0)
+  /// tokens - feeTokens: lo que realmente se le transfiere
+  netTokens   Int    @default(0)
+  /// Importe en centavos correspondiente a netTokens
   amountCents Int
   currency    String @default("USD")
 
-  method      PayoutMethod
+  method PayoutMethod
 
   /// Datos de cobro CIFRADOS (AES-256-GCM, ver src/lib/crypto.ts).
   /// Nunca se exponen en claro: solo un admin puede descifrarlos.
-  destination String
+  destination       String
   /// Version enmascarada para mostrar en listados sin descifrar (ej. "****4321")
   destinationMasked String?
 
-  processorId String?
-  notes       String?
+  processorId     String?
+  notes           String?
   rejectionReason String?
-  externalRef String?
+  externalRef     String?
 
   requestedAt DateTime  @default(now())
   processedAt DateTime?
   paidAt      DateTime?
 
-  model        ModelProfile @relation(fields: [modelId], references: [id], onDelete: Cascade)
-  processor    User?        @relation("PayoutProcessor", fields: [processorId], references: [id], onDelete: SetNull)
+  model        ModelProfile  @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  processor    User?         @relation("PayoutProcessor", fields: [processorId], references: [id], onDelete: SetNull)
   transactions Transaction[]
 
   @@index([status, requestedAt])
@@ -1101,14 +1234,14 @@ model Report {
   reportedId String
   sessionId  String?
 
-  reason  ReportReason
-  details String?
+  reason       ReportReason
+  details      String?
   /// Capturas/evidencia (claves S3)
-  evidenceKeys String[] @default([])
+  evidenceKeys String[]     @default([])
 
-  status     ReportStatus @default(OPEN)
-  reviewerId String?
-  resolution String?
+  status      ReportStatus @default(OPEN)
+  reviewerId  String?
+  resolution  String?
   actionTaken String?
 
   createdAt  DateTime  @default(now())
@@ -1125,7 +1258,7 @@ model Report {
 }
 
 model AuditLog {
-  id     String @id @default(cuid())
+  id      String  @id @default(cuid())
   actorId String?
 
   action     String
@@ -1150,4 +1283,216 @@ model PlatformSetting {
   updatedAt   DateTime @updatedAt
 
   @@map("platform_settings")
+}
+
+// =============================================================================
+// FEED SOCIAL
+//
+// El feed es el modo de descubrimiento principal de la app: /feed muestra todo
+// el catalogo y /feed/siguiendo solo a quien sigues. Una publicacion LOCKED se
+// ve SIEMPRE borrosa hasta que se paga: la imagen real nunca sale del bucket
+// privado, lo que viaja al navegador es `previewKey`, una miniatura de 32 px
+// difuminada al subirla. Difuminar con CSS no serviria: el original estaria en
+// el HTML y bastaria con quitar el filtro desde el inspector.
+// =============================================================================
+
+model Post {
+  id      String @id @default(cuid())
+  modelId String
+
+  body       String?
+  visibility PostVisibility @default(PUBLIC)
+
+  /// Precio de desbloqueo. Obligatorio (>0) si visibility = LOCKED.
+  priceTokens Int     @default(0)
+  isPublished Boolean @default(true)
+
+  likeCount    Int @default(0)
+  commentCount Int @default(0)
+  unlockCount  Int @default(0)
+  viewCount    Int @default(0)
+  tokensEarned Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  model        ModelProfile  @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  assets       PostAsset[]
+  unlocks      PostUnlock[]
+  likes        PostLike[]
+  comments     PostComment[]
+  transactions Transaction[]
+
+  @@index([isPublished, createdAt])
+  @@index([modelId, createdAt])
+  @@map("posts")
+}
+
+model PostAsset {
+  id     String @id @default(cuid())
+  postId String
+
+  /// Clave privada del original. Solo se firma para quien ha desbloqueado.
+  storageKey  String
+  /// Miniatura difuminada, servible a cualquiera. Sin ella un post LOCKED
+  /// no muestra nada.
+  previewKey  String?
+  mimeType    String
+  sizeBytes   Int?
+  width       Int?
+  height      Int?
+  durationSec Int?
+  sortOrder   Int     @default(0)
+
+  createdAt DateTime @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId, sortOrder])
+  @@map("post_assets")
+}
+
+model PostUnlock {
+  id          String @id @default(cuid())
+  userId      String
+  postId      String
+  tokensSpent Int
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@index([postId])
+  @@map("post_unlocks")
+}
+
+model PostLike {
+  id     String @id @default(cuid())
+  userId String
+  postId String
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@index([postId])
+  @@map("post_likes")
+}
+
+model PostComment {
+  id     String @id @default(cuid())
+  userId String
+  postId String
+  body   String
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId, createdAt])
+  @@map("post_comments")
+}
+
+// =============================================================================
+// DIRECTOS (LIVE STREAMING)
+//
+// Solo emiten creadoras con KYC aprobado. Dos caminos de entrada:
+//   BROWSER  -> la camara publica directo a LiveKit por WebRTC.
+//   OBS_RTMP -> LiveKit Ingress expone una URL rtmp:// + clave; OBS publica
+//               ahi y el ingress reenvia el video a la sala.
+// Los espectadores reciben un token de SOLO SUSCRIPCION (canPublish = false):
+// sin eso cualquiera podria publicar su camara en el directo de otra persona.
+// =============================================================================
+
+model LiveStream {
+  id      String           @id @default(cuid())
+  modelId String
+  status  LiveStreamStatus @default(PREPARING)
+  source  LiveStreamSource @default(BROWSER)
+
+  title    String?
+  /// Sala de LiveKit
+  roomName String  @unique
+
+  /// Identificador del ingress en LiveKit (solo OBS_RTMP)
+  ingressId String?
+  /// URL rtmp:// que se pega en OBS (solo OBS_RTMP)
+  rtmpUrl   String?
+  /// Clave de emision que se pega en OBS. Secreto: solo la ve su dueña.
+  streamKey String?
+
+  viewerCount   Int @default(0)
+  viewerPeak    Int @default(0)
+  /// Espectadores distintos que han entrado
+  uniqueViewers Int @default(0)
+  giftsCount    Int @default(0)
+  tokensEarned  Int @default(0)
+
+  startedAt DateTime?
+  endedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  model        ModelProfile  @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  gifts        Gift[]
+  transactions Transaction[]
+
+  @@index([status, startedAt])
+  @@index([modelId, createdAt])
+  @@map("live_streams")
+}
+
+// =============================================================================
+// ANALITICAS DE CREADORA
+// =============================================================================
+
+/// Una visita al perfil, al directo o a una publicacion. Es la base del panel
+/// de analiticas: "quien me visita mas". Se deduplica por (perfil, visitante,
+/// dia) para que recargar la pagina no infle el numero.
+model ProfileVisit {
+  id       String      @id @default(cuid())
+  modelId  String
+  /// null si la visita es de alguien sin cuenta
+  viewerId String?
+  source   VisitSource @default(PROFILE)
+
+  /// Pais ISO-3166 alpha-2 resuelto en el momento de la visita
+  country String?
+  /// Dia UTC en formato YYYY-MM-DD, usado para deduplicar
+  day     String
+
+  visits    Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  model  ModelProfile @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  viewer User?        @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+
+  @@unique([modelId, viewerId, source, day])
+  @@index([modelId, createdAt])
+  @@index([modelId, viewerId])
+  @@map("profile_visits")
+}
+
+/// Registro de a quien ya se le mando el saludo automatico, para no repetirlo.
+model AutoGreetingLog {
+  id      String      @id @default(cuid())
+  modelId String
+  userId  String
+  source  VisitSource @default(PROFILE)
+
+  createdAt DateTime @default(now())
+
+  model ModelProfile @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  user  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([modelId, userId])
+  @@index([modelId, createdAt])
+  @@map("auto_greeting_logs")
 }

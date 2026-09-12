@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import {
   BadgeCheck,
+  Bot,
   Clock,
   Coins,
   Crown,
@@ -28,6 +29,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SubscribeButton } from '@/components/models/subscribe-button';
 import { getCurrentUser } from '@/lib/auth/guards';
 import { getViewerCountry, isCountryBlocked } from '@/lib/geo';
+import { formatRateNumber } from '@/lib/rates';
 import { GENDER_LABELS, ORIENTATION_LABELS } from '@/lib/constants';
 import { prisma } from '@/lib/prisma';
 import { applySubscriberDiscount, getActiveSubscription } from '@/lib/subscriptions';
@@ -130,10 +132,10 @@ export default async function ModelProfilePage({
 
   const effectivePrivateRate = activeSubscription
     ? applySubscriberDiscount(
-        model.privateRatePerMinute,
+        model.privateRateCentitokens,
         activeSubscription.discountPercent,
       )
-    : model.privateRatePerMinute;
+    : model.privateRateCentitokens;
 
   // Paquetes ya desbloqueados por quien mira
   const unlockedIds = viewer
@@ -238,6 +240,12 @@ export default async function ModelProfilePage({
                       {model.tier}
                     </Badge>
                   )}
+                  {model.isAi && (
+                    <Badge variant="muted" className="gap-1">
+                      <Bot className="h-3 w-3" />
+                      Perfil con IA
+                    </Badge>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -245,7 +253,7 @@ export default async function ModelProfilePage({
                     <div className="text-right">
                       <p className="flex items-center gap-1 text-xl font-bold text-token">
                         <Coins className="h-4 w-4" />
-                        {effectivePrivateRate}/min
+                        {formatRateNumber(effectivePrivateRate)}/min
                       </p>
                       <p className="text-xs text-muted-foreground">
                         tarifa privado ahora
@@ -258,6 +266,22 @@ export default async function ModelProfilePage({
 
               {model.headline && (
                 <p className="mt-2 text-muted-foreground">{model.headline}</p>
+              )}
+
+              {/*
+                La mensajeria se cobra en tokens. Si contesta una IA hay que
+                decirlo antes del pago, no despues: la etiqueta del titulo se
+                puede pasar por alto, esta frase no.
+              */}
+              {model.isAi && (
+                <p className="mt-3 flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+                  <Bot className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>
+                    Los mensajes de este perfil los responde un asistente de
+                    inteligencia artificial, no una persona. No habra
+                    videollamadas ni contenido propio.
+                  </span>
+                </p>
               )}
 
               {!isOwnProfile && (
@@ -534,7 +558,7 @@ export default async function ModelProfilePage({
                         </span>
                         <span className="flex items-center gap-1 font-semibold text-token">
                           <Coins className="h-4 w-4" />
-                          {model.vipRatePerMinute}/min
+                          {formatRateNumber(model.vipRateCentitokens)}/min
                         </span>
                       </div>
                     )}
@@ -546,7 +570,7 @@ export default async function ModelProfilePage({
                       <span className="flex items-center gap-1.5 font-semibold text-token">
                         {activeSubscription && (
                           <span className="text-xs font-normal text-muted-foreground line-through">
-                            {model.privateRatePerMinute}
+                            {formatRateNumber(model.privateRateCentitokens)}
                           </span>
                         )}
                         <Coins className="h-4 w-4" />
@@ -596,7 +620,7 @@ export default async function ModelProfilePage({
                       slug={model.slug}
                       stageName={model.stageName}
                       isOnline={model.isOnline}
-                      ratePerMinute={effectivePrivateRate}
+                      rateCentitokens={effectivePrivateRate}
                       minMinutes={model.minPrivateMinutes}
                       isAuthenticated={Boolean(viewer)}
                     />
@@ -613,7 +637,7 @@ export default async function ModelProfilePage({
               <BookingWidget
                 slug={model.slug}
                 stageName={model.stageName}
-                ratePerMinute={effectivePrivateRate}
+                rateCentitokens={effectivePrivateRate}
                 minMinutes={model.minPrivateMinutes}
                 isAuthenticated={Boolean(viewer)}
                 availability={model.availability.map((a) => ({

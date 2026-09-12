@@ -36,6 +36,7 @@ import {
   skipAndRequeueAction,
 } from '@/server/actions/calls';
 import { formatDuration, formatTokens, initials } from '@/lib/utils';
+import { formatRateNumber } from '@/lib/rates';
 
 export interface CallPartner {
   id: string;
@@ -49,7 +50,7 @@ export interface CallPartner {
 interface VideoCallRoomProps {
   sessionId: string;
   callType: CallType;
-  ratePerMinute: number;
+  rateCentitokens: number;
   isPayer: boolean;
   initialBalance: number;
   partner: CallPartner | null;
@@ -60,7 +61,7 @@ interface VideoCallRoomProps {
 export function VideoCallRoom({
   sessionId,
   callType,
-  ratePerMinute,
+  rateCentitokens,
   isPayer,
   initialBalance,
   partner,
@@ -128,7 +129,7 @@ export function VideoCallRoom({
   // 3. Cobro por minuto
   const billing = useCallBilling({
     sessionId,
-    ratePerMinute: isPayer ? ratePerMinute : 0,
+    rateCentitokens: isPayer ? rateCentitokens : 0,
     intervalSeconds: tokenData?.billingIntervalSeconds ?? 15,
     active: isLive && Boolean(tokenData),
     initialBalance,
@@ -313,7 +314,7 @@ export function VideoCallRoom({
           </div>
 
           <div className="flex items-center gap-2">
-            {isPayer && ratePerMinute > 0 && (
+            {isPayer && rateCentitokens > 0 && (
               <>
                 <Badge variant="token" className="gap-1">
                   <Coins className="h-3.5 w-3.5" />
@@ -323,7 +324,8 @@ export function VideoCallRoom({
                   variant={billing.remainingMinutes <= 3 ? 'destructive' : 'muted'}
                   className="bg-black/50 backdrop-blur"
                 >
-                  -{ratePerMinute}/min · ~{billing.remainingMinutes} min
+                  -{formatRateNumber(rateCentitokens)}/min · ~
+                  {billing.remainingMinutes} min
                 </Badge>
               </>
             )}

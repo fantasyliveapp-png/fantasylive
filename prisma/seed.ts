@@ -36,7 +36,7 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 const SEED_PASSWORD = process.env.SEED_PASSWORD || 'Password123!';
-const COMMISSION = Number(process.env.PLATFORM_COMMISSION_PERCENT ?? 30);
+const COMMISSION = Number(process.env.PLATFORM_COMMISSION_PERCENT ?? 40);
 
 // ---------------------------------------------------------------------------
 // Utilidades
@@ -126,8 +126,8 @@ const MODEL_SEEDS: ModelSeed[] = [
     bio: 'Bailarina y creadora de contenido. Me encanta conocer gente nueva y crear experiencias personalizadas. Habla conmigo antes del show.',
     languages: ['Espanol', 'Ingles'],
     tags: ['latina', 'curvy', 'tatuajes', 'roleplay'],
-    vipRate: 45,
-    privateRate: 90,
+    vipRate: 450,
+    privateRate: 900,
     isOnline: true,
     vipEnabled: true,
     kyc: KycStatus.APPROVED,
@@ -145,8 +145,8 @@ const MODEL_SEEDS: ModelSeed[] = [
     bio: 'Me gusta lo intimo y sin prisas. Sesiones privadas con foco total en ti.',
     languages: ['Italiano', 'Ingles', 'Espanol'],
     tags: ['europea', 'rubia', 'fitness'],
-    vipRate: 35,
-    privateRate: 70,
+    vipRate: 350,
+    privateRate: 700,
     isOnline: true,
     vipEnabled: true,
     kyc: KycStatus.APPROVED,
@@ -164,8 +164,8 @@ const MODEL_SEEDS: ModelSeed[] = [
     bio: 'Sesiones de rol y dominacion suave. Escribeme tus limites antes de empezar y los respetamos.',
     languages: ['Espanol', 'Ingles'],
     tags: ['domina', 'morena', 'fetiche', 'piercing'],
-    vipRate: 50,
-    privateRate: 100,
+    vipRate: 500,
+    privateRate: 1000,
     isOnline: false,
     vipEnabled: true,
     kyc: KycStatus.APPROVED,
@@ -183,8 +183,8 @@ const MODEL_SEEDS: ModelSeed[] = [
     bio: 'Brasileno, fitness y buen rollo. Sesiones divertidas y sin postureo.',
     languages: ['Portugues', 'Espanol', 'Ingles'],
     tags: ['fitness', 'tatuajes', 'moreno'],
-    vipRate: 30,
-    privateRate: 60,
+    vipRate: 300,
+    privateRate: 600,
     isOnline: true,
     vipEnabled: true,
     kyc: KycStatus.APPROVED,
@@ -202,8 +202,8 @@ const MODEL_SEEDS: ModelSeed[] = [
     bio: 'Musico de noche, modelo de dia. Me gusta charlar tanto como el show.',
     languages: ['Ingles', 'Aleman'],
     tags: ['europea', 'gamer', 'tatuajes'],
-    vipRate: 22,
-    privateRate: 45,
+    vipRate: 220,
+    privateRate: 450,
     isOnline: false,
     vipEnabled: false,
     kyc: KycStatus.PENDING,
@@ -221,8 +221,8 @@ const MODEL_SEEDS: ModelSeed[] = [
     bio: 'Espacio seguro, sin juicios. Cosplay y roleplay a medida.',
     languages: ['Ruso', 'Ingles'],
     tags: ['cosplay', 'pelirroja', 'roleplay'],
-    vipRate: 38,
-    privateRate: 75,
+    vipRate: 380,
+    privateRate: 750,
     isOnline: true,
     vipEnabled: true,
     kyc: KycStatus.APPROVED,
@@ -240,8 +240,8 @@ const MODEL_SEEDS: ModelSeed[] = [
     bio: 'Ilustrador/a y streamer. Cosplay a peticion y sesiones creativas.',
     languages: ['Ingles', 'Espanol'],
     tags: ['asiatica', 'cosplay', 'gamer'],
-    vipRate: 25,
-    privateRate: 50,
+    vipRate: 250,
+    privateRate: 500,
     isOnline: true,
     vipEnabled: true,
     kyc: KycStatus.APPROVED,
@@ -259,8 +259,8 @@ const MODEL_SEEDS: ModelSeed[] = [
     bio: 'Nada de prisas. Me gusta escuchar y que la sesion fluya.',
     languages: ['Espanol'],
     tags: ['milf', 'latina', 'morena'],
-    vipRate: 28,
-    privateRate: 55,
+    vipRate: 280,
+    privateRate: 550,
     isOnline: false,
     vipEnabled: true,
     kyc: KycStatus.APPROVED,
@@ -278,8 +278,8 @@ const MODEL_SEEDS: ModelSeed[] = [
     bio: 'Somos pareja en la vida real. Sesiones para uno o para dos.',
     languages: ['Frances', 'Ingles'],
     tags: ['pareja', 'europea', 'fitness'],
-    vipRate: 60,
-    privateRate: 120,
+    vipRate: 600,
+    privateRate: 1200,
     isOnline: true,
     vipEnabled: true,
     kyc: KycStatus.APPROVED,
@@ -297,8 +297,8 @@ const MODEL_SEEDS: ModelSeed[] = [
     bio: 'Sesiones autenticas y sin guion. Comunidad queer bienvenida.',
     languages: ['Espanol', 'Ingles'],
     tags: ['latina', 'tatuajes', 'fitness'],
-    vipRate: 26,
-    privateRate: 52,
+    vipRate: 260,
+    privateRate: 520,
     isOnline: false,
     vipEnabled: false,
     kyc: KycStatus.REJECTED,
@@ -316,8 +316,8 @@ const MODEL_SEEDS: ModelSeed[] = [
     bio: 'Bailarina profesional. Las sesiones empiezan siempre con musica.',
     languages: ['Frances', 'Ingles', 'Espanol'],
     tags: ['morena', 'curvy', 'roleplay'],
-    vipRate: 40,
-    privateRate: 80,
+    vipRate: 400,
+    privateRate: 800,
     isOnline: true,
     vipEnabled: true,
     kyc: KycStatus.APPROVED,
@@ -335,8 +335,8 @@ const MODEL_SEEDS: ModelSeed[] = [
     bio: 'Prefiero calidad a cantidad. Pocas sesiones, muy cuidadas.',
     languages: ['Ingles', 'Aleman'],
     tags: ['europea', 'rubio', 'fitness'],
-    vipRate: 24,
-    privateRate: 48,
+    vipRate: 240,
+    privateRate: 480,
     isOnline: false,
     vipEnabled: true,
     kyc: KycStatus.NOT_SUBMITTED,
@@ -621,9 +621,9 @@ async function main() {
         tags: m.tags,
         avatarUrl: avatar(m.email),
         coverUrl: cover(m.stageName),
-        vipRatePerMinute: m.vipRate,
-        privateRatePerMinute: m.privateRate,
-        minPrivateMinutes: pick([10, 15, 20]),
+        vipRateCentitokens: m.vipRate,
+        privateRateCentitokens: m.privateRate,
+        minPrivateMinutes: pick([5, 10, 15]),
         isVipEnabled: m.vipEnabled && m.kyc === KycStatus.APPROVED,
         acceptsBookings: m.kyc === KycStatus.APPROVED,
         isOnline: m.isOnline,
@@ -741,7 +741,9 @@ async function main() {
             PayoutStatus.PROCESSING,
           ]),
           tokens: payoutTokens,
-          amountCents: payoutTokens * 5,
+          feeTokens: Math.round(payoutTokens * 0.1),
+          netTokens: payoutTokens - Math.round(payoutTokens * 0.1),
+          amountCents: (payoutTokens - Math.round(payoutTokens * 0.1)) * 10,
           currency: 'USD',
           method: pick([
             PayoutMethod.BANK_TRANSFER,
@@ -848,11 +850,12 @@ async function main() {
       type === CallType.RANDOM
         ? 0
         : type === CallType.VIP_RANDOM
-          ? target.profile.vipRatePerMinute
-          : target.profile.privateRatePerMinute;
+          ? target.profile.vipRateCentitokens
+          : target.profile.privateRateCentitokens;
 
     const seconds = randInt(45, 2400);
-    const tokensSpent = Math.ceil((rate * seconds) / 60);
+    // rate esta en centitokens/min: 60 s * 100 centitokens = 6000.
+    const tokensSpent = Math.ceil((rate * seconds) / 6000);
     const fee = Math.round((tokensSpent * COMMISSION) / 100);
     const startedAt = daysAgo(Math.random() * 45);
     const endedAt = new Date(startedAt.getTime() + seconds * 1000);
@@ -864,7 +867,7 @@ async function main() {
         callerId: user.id,
         calleeId: target.user.id,
         roomName: `seed_${type.toLowerCase()}_${i}_${Date.now().toString(36)}`,
-        ratePerMinute: rate,
+        rateCentitokens: rate,
         startedAt,
         endedAt,
         lastBilledAt: endedAt,
@@ -989,8 +992,8 @@ async function main() {
     const user = pick(users);
     const target = pick(bookableModels);
     const duration = pick([15, 20, 30, 45, 60]);
-    const rate = target.profile.privateRatePerMinute;
-    const total = rate * duration;
+    const rate = target.profile.privateRateCentitokens;
+    const total = Math.ceil((rate * duration) / 100);
 
     const booking = await prisma.booking.create({
       data: {
@@ -999,7 +1002,7 @@ async function main() {
         status: plan.status,
         startsAt: hoursFromNow(plan.hoursOffset),
         durationMinutes: duration,
-        ratePerMinute: rate,
+        rateCentitokens: rate,
         totalTokens: total,
         userNote: pick([
           'Quiero una sesion tranquila, primera vez.',

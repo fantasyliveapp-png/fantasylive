@@ -23,7 +23,7 @@ export interface MatchResult {
   sessionId?: string;
   roomName?: string;
   partnerId?: string;
-  ratePerMinute?: number;
+  rateCentitokens?: number;
 }
 
 const QUEUE_TTL_MS = config.matchmaking.queueTtlSeconds * 1000;
@@ -114,7 +114,7 @@ export async function tryMatch(entryId: string): Promise<MatchResult | null> {
               blockedCountries: true,
               isVipEnabled: true,
               isAvailableForVip: true,
-              vipRatePerMinute: true,
+              vipRateCentitokens: true,
             },
           },
         },
@@ -128,7 +128,7 @@ export async function tryMatch(entryId: string): Promise<MatchResult | null> {
   if (entry.status === 'MATCHED' && entry.matchedSessionId) {
     const session = await prisma.callSession.findUnique({
       where: { id: entry.matchedSessionId },
-      select: { id: true, roomName: true, ratePerMinute: true },
+      select: { id: true, roomName: true, rateCentitokens: true },
     });
     if (session) {
       return {
@@ -137,7 +137,7 @@ export async function tryMatch(entryId: string): Promise<MatchResult | null> {
         sessionId: session.id,
         roomName: session.roomName,
         partnerId: entry.matchedWithId ?? undefined,
-        ratePerMinute: session.ratePerMinute,
+        rateCentitokens: session.rateCentitokens,
       };
     }
   }
@@ -178,7 +178,7 @@ export async function tryMatch(entryId: string): Promise<MatchResult | null> {
                 blockedCountries: true,
                 isVipEnabled: true,
                 isAvailableForVip: true,
-                vipRatePerMinute: true,
+                vipRateCentitokens: true,
                 kycStatus: true,
                 userId: true,
               },
@@ -267,8 +267,8 @@ export async function tryMatch(entryId: string): Promise<MatchResult | null> {
     const calleeId = modelIsEntry ? entry.userId : partner.userId;
 
     const billingModel = modelIsEntry ? entryModel : partnerModel;
-    const ratePerMinute =
-      isVipCall && billingModel ? billingModel.vipRatePerMinute : 0;
+    const rateCentitokens =
+      isVipCall && billingModel ? billingModel.vipRateCentitokens : 0;
 
     const session = await tx.callSession.create({
       data: {
@@ -277,9 +277,9 @@ export async function tryMatch(entryId: string): Promise<MatchResult | null> {
         callerId,
         calleeId,
         roomName: randomRoomName(isVipCall ? 'vip' : 'rnd'),
-        ratePerMinute,
+        rateCentitokens,
       },
-      select: { id: true, roomName: true, ratePerMinute: true },
+      select: { id: true, roomName: true, rateCentitokens: true },
     });
 
     await tx.matchQueueEntry.updateMany({
@@ -293,7 +293,7 @@ export async function tryMatch(entryId: string): Promise<MatchResult | null> {
       sessionId: session.id,
       roomName: session.roomName,
       partnerId: partner.userId,
-      ratePerMinute: session.ratePerMinute,
+      rateCentitokens: session.rateCentitokens,
     };
   });
 }

@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { affordableMinutesAtRate } from '@/lib/rates';
+
 export interface BillingState {
   balance: number;
   tokensSpent: number;
@@ -32,7 +34,7 @@ export interface BillingState {
  */
 export function useCallBilling({
   sessionId,
-  ratePerMinute,
+  rateCentitokens,
   intervalSeconds,
   active,
   initialBalance,
@@ -40,7 +42,7 @@ export function useCallBilling({
   onLowBalance,
 }: {
   sessionId: string;
-  ratePerMinute: number;
+  rateCentitokens: number;
   intervalSeconds: number;
   active: boolean;
   initialBalance: number;
@@ -71,8 +73,8 @@ export function useCallBilling({
     onLowBalanceRef.current = onLowBalance;
   });
 
-  const rateRef = useRef(ratePerMinute);
-  rateRef.current = ratePerMinute;
+  const rateRef = useRef(rateCentitokens);
+  rateRef.current = rateCentitokens;
 
   const sendTick = useCallback(async () => {
     try {
@@ -163,8 +165,10 @@ export function useCallBilling({
     };
   }, [sendTick]);
 
-  const remainingMinutes =
-    ratePerMinute > 0 ? Math.floor(state.balance / ratePerMinute) : Infinity;
+  const remainingMinutes = affordableMinutesAtRate(
+    state.balance,
+    rateCentitokens,
+  );
 
   return { ...state, remainingMinutes, sendTick };
 }

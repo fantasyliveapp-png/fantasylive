@@ -7,6 +7,7 @@ interface MessageWithAttachment {
   body: string | null;
   createdAt: Date;
   senderId: string;
+  isAiGenerated: boolean;
   attachment: {
     id: string;
     mimeType: string;
@@ -63,6 +64,7 @@ export async function buildMessageRows(
         body: m.body,
         createdAt: m.createdAt.toISOString(),
         isMine: m.senderId === viewerId,
+        isAiGenerated: m.isAiGenerated,
         attachment,
       };
     }),

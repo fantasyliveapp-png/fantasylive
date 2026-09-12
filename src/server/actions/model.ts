@@ -7,9 +7,15 @@ import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { prisma } from '@/lib/prisma';
 import { checkNoContactInfo } from '@/lib/content-filter';
 import { config } from '@/lib/config';
-import { applyLedgerEntry, tokensToPayoutCents } from '@/lib/tokens';
+import { applyLedgerEntry, splitPayoutFee, tokensToPayoutCents } from '@/lib/tokens';
 import { encryptSecret, maskDestination } from '@/lib/crypto';
 import { normalizeCountryCode } from '@/lib/countries';
+import {
+  MAX_RATE_CENTITOKENS,
+  MIN_BILLED_CALL_MINUTES,
+  MIN_RATE_CENTITOKENS,
+  formatRate,
+} from '@/lib/rates';
 import {
   destinationIdentifier,
   payoutDestinationSchema,
@@ -98,9 +104,22 @@ export async function updateModelProfileAction(input: {
 }
 
 const ratesSchema = z.object({
-  vipRatePerMinute: z.number().int().min(1).max(1000),
-  privateRatePerMinute: z.number().int().min(1).max(2000),
-  minPrivateMinutes: z.number().int().min(5).max(120),
+  // Tarifas en centitokens/min: el rango permitido es 1,75 - 25 tokens/min.
+  vipRateCentitokens: z
+    .number()
+    .int()
+    .min(MIN_RATE_CENTITOKENS)
+    .max(MAX_RATE_CENTITOKENS),
+  privateRateCentitokens: z
+    .number()
+    .int()
+    .min(MIN_RATE_CENTITOKENS)
+    .max(MAX_RATE_CENTITOKENS),
+  minPrivateMinutes: z
+    .number()
+    .int()
+    .min(MIN_BILLED_CALL_MINUTES)
+    .max(120),
   isVipEnabled: z.boolean(),
   acceptsBookings: z.boolean(),
   subscriptionEnabled: z.boolean(),
@@ -111,8 +130,8 @@ const ratesSchema = z.object({
 });
 
 export async function updateRatesAction(input: {
-  vipRatePerMinute: number;
-  privateRatePerMinute: number;
+  vipRateCentitokens: number;
+  privateRateCentitokens: number;
   minPrivateMinutes: number;
   isVipEnabled: boolean;
   acceptsBookings: boolean;
@@ -125,7 +144,14 @@ export async function updateRatesAction(input: {
   try {
     const { profile } = await requireModelProfile();
     const parsed = ratesSchema.safeParse(input);
-    if (!parsed.success) return { ok: false, error: 'Tarifas invalidas.' };
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: `Tarifas invalidas. El precio por minuto va de ${formatRate(
+          MIN_RATE_CENTITOKENS,
+        )} a ${formatRate(MAX_RATE_CENTITOKENS)} y el minimo de llamada es de ${MIN_BILLED_CALL_MINUTES} min.`,
+      };
+    }
 
     if (
       config.moderation.requireKycToStream &&
@@ -589,6 +615,13 @@ const payoutSchema = z.object({
  *
  * Los datos de cobro se guardan CIFRADOS (AES-256-GCM); en la base de datos
  * solo queda ademas una version enmascarada para poder listarlos.
+ *
+ * COMISION DE RETIRO: se retiene un `payoutFeePercent` (10% por defecto) de
+ * los tokens solicitados. Se debita el bruto del monedero y solo se transfiere
+ * el neto; la diferencia queda registrada en `feeTokens` y en
+ * `platformFeeTokens` del asiento, para que el desglose sea auditable. Es una
+ * comision DISTINTA de la de plataforma, que ya se cobro cuando el usuario
+ * gasto el token.
  */
 export async function requestPayoutAction(input: {
   tokens: number;
@@ -634,7 +667,11 @@ export async function requestPayoutAction(input: {
       };
     }
 
-    const amountCents = tokensToPayoutCents(tokens);
+    const { feeTokens, netTokens } = splitPayoutFee(tokens);
+    if (netTokens <= 0) {
+      return { ok: false, error: 'El importe no cubre la comision de retiro.' };
+    }
+    const amountCents = tokensToPayoutCents(netTokens);
 
     // El cifrado se hace ANTES de abrir la transaccion: si la clave no esta
     // configurada preferimos fallar sin haber tocado el monedero.
@@ -646,6 +683,8 @@ export async function requestPayoutAction(input: {
         data: {
           modelId: profile.id,
           tokens,
+          feeTokens,
+          netTokens,
           amountCents,
           currency: 'USD',
           method: destination.method,
@@ -666,6 +705,7 @@ export async function requestPayoutAction(input: {
         currency: 'USD',
         description: `Solicitud de retiro (${PAYOUT_METHOD_LABELS[destination.method]})`,
         payoutRequestId: payout.id,
+        platformFeeTokens: feeTokens,
       });
 
       // pendingEarnings nunca debe quedar negativo: se relee dentro de la
@@ -688,7 +728,13 @@ export async function requestPayoutAction(input: {
           action: 'PAYOUT_REQUESTED',
           entityType: 'PayoutRequest',
           entityId: payout.id,
-          metadata: { tokens, amountCents, method: destination.method },
+          metadata: {
+            tokens,
+            feeTokens,
+            netTokens,
+            amountCents,
+            method: destination.method,
+          },
         },
       });
     });
@@ -697,7 +743,10 @@ export async function requestPayoutAction(input: {
     revalidatePath('/admin/payouts');
     return {
       ok: true,
-      message: `Retiro solicitado: ${tokens} tokens (${(amountCents / 100).toFixed(2)} USD).`,
+      message:
+        feeTokens > 0
+          ? `Retiro solicitado: ${tokens} tokens menos ${feeTokens} de comision (${config.economy.payoutFeePercent}%) = ${netTokens} tokens, ${(amountCents / 100).toFixed(2)} USD.`
+          : `Retiro solicitado: ${tokens} tokens (${(amountCents / 100).toFixed(2)} USD).`,
     };
   } catch (error) {
     return { ok: false, error: toMessage(error) };

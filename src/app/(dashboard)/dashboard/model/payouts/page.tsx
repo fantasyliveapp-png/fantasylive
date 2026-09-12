@@ -60,6 +60,13 @@ export default async function PayoutsPage() {
         <p className="mt-2 text-muted-foreground">
           Convierte tus tokens en dolares. Minimo{' '}
           {formatTokens(config.economy.minPayoutTokens)} tokens por solicitud.
+          {config.economy.payoutFeePercent > 0 && (
+            <>
+              {' '}
+              Se descuenta una comision de retiro del{' '}
+              {config.economy.payoutFeePercent}% sobre los tokens solicitados.
+            </>
+          )}
         </p>
       </div>
 
@@ -89,6 +96,7 @@ export default async function PayoutsPage() {
         balance={wallet.balance}
         minTokens={config.economy.minPayoutTokens}
         centsPerToken={centsPerToken}
+        feePercent={config.economy.payoutFeePercent}
         kycApproved={profile.kycStatus === 'APPROVED'}
         hasOpenRequest={hasOpenRequest}
       />

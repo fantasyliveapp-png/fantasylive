@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { formatRateNumber, tokensForMinutes } from '@/lib/rates';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -23,7 +24,7 @@ interface Slot {
 interface BookingWidgetProps {
   slug: string;
   stageName: string;
-  ratePerMinute: number;
+  rateCentitokens: number;
   minMinutes: number;
   isAuthenticated: boolean;
   availability: Slot[];
@@ -46,7 +47,7 @@ function nextDays(count: number) {
 export function BookingWidget({
   slug,
   stageName,
-  ratePerMinute,
+  rateCentitokens,
   minMinutes,
   isAuthenticated,
   availability,
@@ -89,7 +90,7 @@ export function BookingWidget({
     return slots;
   }, [availability, selectedDay, duration]);
 
-  const totalTokens = ratePerMinute * duration;
+  const totalTokens = tokensForMinutes(rateCentitokens, duration);
 
   const availableWeekdays = new Set(availability.map((a) => a.weekday));
 
@@ -253,7 +254,7 @@ export function BookingWidget({
         <div className="rounded-lg bg-muted/50 p-3">
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">
-              {duration} min x {ratePerMinute} tokens
+              {duration} min x {formatRateNumber(rateCentitokens)} tokens
             </span>
             <Badge variant="token" className="gap-1">
               <Coins className="h-3 w-3" />

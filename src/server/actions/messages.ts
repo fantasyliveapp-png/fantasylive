@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
+import { maybeReplyAsAi } from '@/lib/ai-responder';
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { createNotification } from '@/lib/notifications';
 import { prisma } from '@/lib/prisma';
@@ -113,6 +114,10 @@ export async function startConversationAction(input: {
       return conversation.id;
     });
 
+    // Si el perfil lo atiende una IA, contesta antes de retornar: el hilo se
+    // repinta con router.refresh() y asi aparecen los dos mensajes juntos.
+    await maybeReplyAsAi(conversationId);
+
     revalidatePath(`/models/${model.slug}`);
     revalidatePath('/dashboard/messages');
     revalidatePath('/dashboard/model/messages');
@@ -196,6 +201,10 @@ export async function sendMessageAction(input: {
       title: `${user.name ?? 'Alguien'} te escribio un mensaje`,
       link: isCustomer ? '/dashboard/model/messages' : '/dashboard/messages',
     });
+
+    // Solo contesta a lo que escribe el cliente. Si el que escribe es el dueno
+    // del perfil, no hay nada que responder.
+    if (isCustomer) await maybeReplyAsAi(conversation.id);
 
     revalidatePath(`/dashboard/messages/${conversation.model.slug}`);
     revalidatePath(`/dashboard/model/messages/${conversation.id}`);

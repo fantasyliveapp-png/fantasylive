@@ -43,7 +43,7 @@ export default async function AdminKycPage({
         </h1>
         <p className="mt-2 text-muted-foreground">
           Comprueba que la persona del selfie coincide con el documento y que es
-          mayor de 18 anos antes de aprobar.
+          mayor de 18 años antes de aprobar.
         </p>
       </div>
 

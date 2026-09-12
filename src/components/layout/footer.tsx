@@ -70,7 +70,7 @@ export function Footer() {
             reservados.
           </p>
           <p>
-            Sitio etiquetado RTA &middot; Solo mayores de 18 anos &middot;
+            Sitio etiquetado RTA &middot; Solo mayores de 18 años &middot;
             Cumplimiento 18 U.S.C. 2257
           </p>
         </div>

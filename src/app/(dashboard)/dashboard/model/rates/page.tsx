@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { RatesForm } from '@/components/model/rates-form';
 import { ProfileForm } from '@/components/model/profile-form';
 import { requireModel } from '@/lib/auth/guards';
+import { config } from '@/lib/config';
 
 export const metadata: Metadata = { title: 'Tarifas y perfil' };
 export const dynamic = 'force-dynamic';
@@ -20,8 +21,8 @@ export default async function RatesPage() {
       </div>
 
       <RatesForm
-        vipRatePerMinute={profile.vipRatePerMinute}
-        privateRatePerMinute={profile.privateRatePerMinute}
+        vipRateCentitokens={profile.vipRateCentitokens}
+        privateRateCentitokens={profile.privateRateCentitokens}
         minPrivateMinutes={profile.minPrivateMinutes}
         isVipEnabled={profile.isVipEnabled}
         acceptsBookings={profile.acceptsBookings}
@@ -31,6 +32,8 @@ export default async function RatesPage() {
         messagingEnabled={profile.messagingEnabled}
         messagePriceTokens={profile.messagePriceTokens}
         kycApproved={profile.kycStatus === 'APPROVED'}
+        modelSharePercent={config.economy.modelRevenueSharePercent}
+        payoutCentsPerToken={config.economy.modelPayoutCentsPerToken}
       />
 
       <ProfileForm

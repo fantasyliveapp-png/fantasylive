@@ -58,12 +58,15 @@ export function PayoutRequestForm({
   balance,
   minTokens,
   centsPerToken,
+  feePercent,
   kycApproved,
   hasOpenRequest,
 }: {
   balance: number;
   minTokens: number;
   centsPerToken: number;
+  /** Comision de retiro en % que se descuenta de los tokens solicitados. */
+  feePercent: number;
   kycApproved: boolean;
   hasOpenRequest: boolean;
 }) {
@@ -78,7 +81,12 @@ export function PayoutRequestForm({
   const [paypalEmail, setPaypalEmail] = useState('');
 
   const canRequest = kycApproved && !hasOpenRequest && balance >= minTokens;
-  const amountCents = Math.round(tokens * centsPerToken);
+
+  // Mismo calculo que splitPayoutFee en el servidor: se retiene un % de los
+  // tokens solicitados y solo el resto se convierte a dolares.
+  const feeTokens = Math.round((tokens * feePercent) / 100);
+  const netTokens = Math.max(0, tokens - feeTokens);
+  const amountCents = Math.round(netTokens * centsPerToken);
 
   const quickAmounts = useMemo(() => {
     const options = [minTokens, 1000, 2500, 5000].filter(
@@ -175,13 +183,24 @@ export function PayoutRequestForm({
               }
               disabled={!canRequest}
             />
-            <p className="text-xs text-muted-foreground">
-              Recibiras{' '}
-              <strong className="text-emerald-400">
-                {formatMoney(amountCents)}
-              </strong>{' '}
-              ({formatMoney(centsPerToken)} por token)
-            </p>
+            <div className="space-y-1 text-xs text-muted-foreground">
+              {feePercent > 0 && (
+                <p>
+                  Comision de retiro ({feePercent}%):{' '}
+                  <strong className="text-amber-400">
+                    -{formatTokens(feeTokens)} tokens
+                  </strong>
+                </p>
+              )}
+              <p>
+                Recibiras{' '}
+                <strong className="text-emerald-400">
+                  {formatMoney(amountCents)}
+                </strong>{' '}
+                ({formatTokens(netTokens)} tokens netos a{' '}
+                {formatMoney(centsPerToken)} cada uno)
+              </p>
+            </div>
           </div>
 
           <div className="space-y-2">

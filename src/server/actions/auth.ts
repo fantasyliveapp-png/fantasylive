@@ -58,7 +58,7 @@ export async function registerAction(
   const age = calculateAge(birthDate);
   if (age < config.app.minAge) {
     return {
-      error: `Debes tener al menos ${config.app.minAge} anos para registrarte.`,
+      error: `Debes tener al menos ${config.app.minAge} años para registrarte.`,
     };
   }
 

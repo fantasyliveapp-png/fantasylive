@@ -21,6 +21,11 @@ import {
 } from '@/lib/calls';
 import { applySubscriberDiscount, getActiveSubscription } from '@/lib/subscriptions';
 import {
+  DEFAULT_RATE_CENTITOKENS,
+  formatRate,
+  tokensForMinutes,
+} from '@/lib/rates';
+import {
   joinQueue,
   leaveQueue,
   pollQueue,
@@ -55,14 +60,18 @@ export async function joinQueueAction(input: {
     if (input.mode === 'VIP') {
       const cheapest = await prisma.modelProfile.findFirst({
         where: { isVipEnabled: true, isAvailableForVip: true, isOnline: true },
-        orderBy: { vipRatePerMinute: 'asc' },
-        select: { vipRatePerMinute: true },
+        orderBy: { vipRateCentitokens: 'asc' },
+        select: { vipRateCentitokens: true },
       });
-      const minRate = cheapest?.vipRatePerMinute ?? 20;
-      if ((profile?.wallet?.balance ?? 0) < minRate) {
+      // La tarifa viene en centitokens/min: hay que traducirla a los tokens
+      // enteros que cuesta un minuto antes de compararla con el saldo.
+      const cheapestRate =
+        cheapest?.vipRateCentitokens ?? DEFAULT_RATE_CENTITOKENS;
+      const minTokens = tokensForMinutes(cheapestRate, 1);
+      if ((profile?.wallet?.balance ?? 0) < minTokens) {
         return {
           ok: false,
-          error: `Necesitas al menos ${minRate} tokens para entrar en la sala VIP.`,
+          error: `Necesitas al menos ${minTokens} tokens para entrar en la sala VIP.`,
         };
       }
     }
@@ -171,7 +180,7 @@ export async function getCallTokenAction(
         url: process.env.NEXT_PUBLIC_LIVEKIT_URL || '',
         roomName: session.roomName,
         configured: isLiveKitConfigured(),
-        ratePerMinute: session.ratePerMinute,
+        rateCentitokens: session.rateCentitokens,
         billingIntervalSeconds: config.economy.callBillingIntervalSeconds,
       },
     };
@@ -237,7 +246,7 @@ export async function startPrivateCallAction(
         userId: true,
         stageName: true,
         isOnline: true,
-        privateRatePerMinute: true,
+        privateRateCentitokens: true,
         minPrivateMinutes: true,
         kycStatus: true,
         blockedCountries: true,
@@ -262,14 +271,16 @@ export async function startPrivateCallAction(
     }
 
     const subscription = await getActiveSubscription(user.id, model.id);
-    const ratePerMinute = subscription
+    const rateCentitokens = subscription
       ? applySubscriberDiscount(
-          model.privateRatePerMinute,
+          model.privateRateCentitokens,
           subscription.discountPercent,
         )
-      : model.privateRatePerMinute;
+      : model.privateRateCentitokens;
 
-    const required = ratePerMinute * model.minPrivateMinutes;
+    // Minimo facturable: hay que poder pagar los 5 minutos completos antes
+    // de empezar, porque se cobran igual si se cuelga antes.
+    const required = tokensForMinutes(rateCentitokens, model.minPrivateMinutes);
     const wallet = await prisma.wallet.findUnique({
       where: { userId: user.id },
       select: { balance: true },
@@ -278,7 +289,7 @@ export async function startPrivateCallAction(
     if ((wallet?.balance ?? 0) < required) {
       return {
         ok: false,
-        error: `Necesitas ${required} tokens (minimo ${model.minPrivateMinutes} min a ${ratePerMinute}/min).`,
+        error: `Necesitas ${required} tokens (minimo ${model.minPrivateMinutes} min a ${formatRate(rateCentitokens)}).`,
       };
     }
 
@@ -289,7 +300,7 @@ export async function startPrivateCallAction(
         callerId: user.id,
         calleeId: model.userId,
         roomName: randomRoomName('priv'),
-        ratePerMinute,
+        rateCentitokens,
       },
       select: { id: true },
     });
@@ -301,7 +312,7 @@ export async function startPrivateCallAction(
       userId: model.userId,
       type: 'INCOMING_CALL',
       title: `${user.name ?? 'Alguien'} te esta llamando`,
-      body: `Videollamada privada a ${ratePerMinute} tokens/min`,
+      body: `Videollamada privada a ${formatRate(rateCentitokens)}`,
       link: `/call/${session.id}`,
     });
 

@@ -1,10 +1,11 @@
 import Link from 'next/link';
-import { Coins, Crown, Star } from 'lucide-react';
+import { Bot, Coins, Crown, Star } from 'lucide-react';
 import type { Gender, ModelTier, Orientation } from '@prisma/client';
 
 import { Badge } from '@/components/ui/badge';
 import { GENDER_LABELS, ORIENTATION_LABELS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
+import { formatRateNumber } from '@/lib/rates';
 
 export interface ModelCardData {
   id: string;
@@ -18,10 +19,13 @@ export interface ModelCardData {
   avatarUrl?: string | null;
   coverUrl?: string | null;
   isOnline: boolean;
+  /// Perfil atendido por IA. Se etiqueta en la tarjeta para que se sepa antes
+  /// de entrar, no despues de pagar por escribirle.
+  isAi: boolean;
   isVipEnabled: boolean;
   isAvailableForVip: boolean;
-  vipRatePerMinute: number;
-  privateRatePerMinute: number;
+  vipRateCentitokens: number;
+  privateRateCentitokens: number;
   ratingAvg: number;
   ratingCount: number;
   tags: string[];
@@ -64,6 +68,13 @@ export function ModelCard({ model }: { model: ModelCardData }) {
               {model.tier}
             </Badge>
           )}
+
+          {model.isAi && (
+            <Badge variant="muted" className="gap-1">
+              <Bot className="h-3 w-3" />
+              IA
+            </Badge>
+          )}
         </div>
 
         {/* Rating */}
@@ -93,11 +104,11 @@ export function ModelCard({ model }: { model: ModelCardData }) {
                 )}
               >
                 <Coins className="h-3 w-3" />
-                {model.vipRatePerMinute}/min VIP
+                {formatRateNumber(model.vipRateCentitokens)}/min VIP
               </span>
             )}
             <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur">
-              {model.privateRatePerMinute}/min privado
+              {formatRateNumber(model.privateRateCentitokens)}/min privado
             </span>
           </div>
         </div>

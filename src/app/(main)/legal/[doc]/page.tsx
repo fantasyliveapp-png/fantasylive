@@ -19,7 +19,7 @@ const DOCS: Record<string, LegalDoc> = {
       {
         heading: '1. Edad minima y elegibilidad',
         body: [
-          'El acceso a FantasyLive esta restringido a personas mayores de 18 anos o de la mayoria de edad legal en su jurisdiccion, la que sea mayor. Al registrarte declaras cumplir este requisito.',
+          'El acceso a FantasyLive esta restringido a personas mayores de 18 años o de la mayoria de edad legal en su jurisdiccion, la que sea mayor. Al registrarte declaras cumplir este requisito.',
           'La plataforma se reserva el derecho de solicitar verificacion documental de la edad en cualquier momento y de suspender las cuentas que no la superen.',
         ],
       },
@@ -104,7 +104,7 @@ const DOCS: Record<string, LegalDoc> = {
       {
         heading: 'Declaracion de mantenimiento de registros',
         body: [
-          'Todos los modelos, actores, actrices y demas personas que aparecen en cualquier representacion visual de conducta sexualmente explicita real o simulada publicada en esta plataforma tenian 18 anos de edad o mas en el momento de la creacion de dichas representaciones.',
+          'Todos los modelos, actores, actrices y demas personas que aparecen en cualquier representacion visual de conducta sexualmente explicita real o simulada publicada en esta plataforma tenian 18 años de edad o mas en el momento de la creacion de dichas representaciones.',
           'FantasyLive verifica la identidad y la edad de cada creador mediante documentacion oficial antes de permitir la emision o publicacion de contenido. Los registros exigidos por 18 U.S.C. 2257 y 28 C.F.R. 75 se conservan por el custodio de registros designado.',
         ],
       },

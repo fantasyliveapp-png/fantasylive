@@ -24,7 +24,7 @@ export default async function CallPage({
       status: true,
       callerId: true,
       calleeId: true,
-      ratePerMinute: true,
+      rateCentitokens: true,
     },
   });
 
@@ -67,7 +67,7 @@ export default async function CallPage({
     <VideoCallRoom
       sessionId={session.id}
       callType={session.type}
-      ratePerMinute={session.ratePerMinute}
+      rateCentitokens={session.rateCentitokens}
       isPayer={isPayer}
       initialBalance={wallet?.balance ?? 0}
       allowSkip={session.type === 'RANDOM' || session.type === 'VIP_RANDOM'}

@@ -30,12 +30,17 @@ function clampPercent(value: number): number {
  * MODEL_PAYOUT_CENTS_PER_TOKEN == TOKEN_VALUE_CENTS salvo que se quiera
  * justamente eso.
  *
- * Con los valores por defecto (comision 50%, token a $0.10):
- *   usuario paga $10 -> 100 tokens -> modelo recibe 50 tokens -> retira $5.00
+ * Con los valores por defecto (comision 40%, token a $0.10, retiro 10%):
+ *   usuario paga $10 -> 100 tokens -> la modelo recibe 60 tokens
+ *   -> al retirarlos se le descuenta el 10% -> cobra 54 tokens = $5.40
+ *
+ * Son dos comisiones distintas y deliberadas: la de plataforma se cobra
+ * cuando se gasta el token, y la de retiro cuando el dinero sale del sistema
+ * (cubre el coste real de wire/PayPal/USDT).
  */
 const tokenValueCents = num(process.env.TOKEN_VALUE_CENTS, 10);
 const platformCommissionPercent = clampPercent(
-  num(process.env.PLATFORM_COMMISSION_PERCENT, 50),
+  num(process.env.PLATFORM_COMMISSION_PERCENT, 40),
 );
 
 export const config = {
@@ -64,6 +69,11 @@ export const config = {
      */
     freeCallSeconds: num(process.env.FREE_CALL_SECONDS, 300),
     minPayoutTokens: num(process.env.MIN_PAYOUT_TOKENS, 500),
+    /**
+     * Comision de retiro (%). Se descuenta de los tokens que la creadora
+     * solicita, no del saldo restante: pide 1000, se le abonan 900.
+     */
+    payoutFeePercent: clampPercent(num(process.env.PAYOUT_FEE_PERCENT, 10)),
     /** Cada cuantos segundos el cliente envia un tick de cobro */
     callBillingIntervalSeconds: num(process.env.CALL_BILLING_INTERVAL_SECONDS, 15),
   },
@@ -122,6 +132,7 @@ export const config = {
   payments: {
     provider: (process.env.PAYMENT_PROVIDER || 'mock') as
       | 'stripe'
+      | 'paypal'
       | 'ccbill'
       | 'crypto'
       | 'mock',
@@ -149,9 +160,59 @@ export const config = {
       },
     },
   },
+  /**
+   * PERFILES ATENDIDOS POR IA
+   *
+   * Solo afecta a los perfiles con isAi = true. Si falta la API key, esos
+   * perfiles simplemente no contestan: nunca se degrada a que responda una
+   * persona sin avisar, ni al reves.
+   */
+  ai: {
+    apiKey: process.env.ANTHROPIC_API_KEY || '',
+    /** Modelo por defecto si el perfil no especifica uno propio. */
+    defaultModel: process.env.AI_DEFAULT_MODEL || 'claude-opus-5',
+    /** Tope de tokens de la respuesta. Los mensajes de chat son cortos. */
+    maxTokens: num(process.env.AI_MAX_TOKENS, 300),
+    /** Cuantos mensajes previos se le pasan como contexto. */
+    historyLimit: num(process.env.AI_HISTORY_LIMIT, 20),
+    get configured() {
+      return Boolean(process.env.ANTHROPIC_API_KEY);
+    },
+  },
   moderation: {
     adminAlertEmail: process.env.ADMIN_ALERT_EMAIL || 'admin@fantasylive.test',
     requireKycToStream: bool(process.env.REQUIRE_KYC_TO_STREAM, true),
+  },
+  /**
+   * DIRECTOS
+   *
+   * El ingress RTMP es un servicio aparte de LiveKit (livekit-ingress) que
+   * recibe el video de OBS y lo reenvia a la sala. Si no esta desplegado,
+   * `rtmpUrl` queda vacio y la interfaz solo ofrece emitir por navegador en
+   * vez de dar una URL que no funcionaria.
+   */
+  live: {
+    /** URL base rtmp:// del ingress, ej. rtmp://fantasylive.app/x. */
+    rtmpUrl: process.env.LIVEKIT_RTMP_URL || '',
+    /** URL base de WHIP (WebRTC-HTTP ingest), alternativa moderna a RTMP. */
+    whipUrl: process.env.LIVEKIT_WHIP_URL || '',
+    /** Espectadores maximos por sala antes de rechazar entradas nuevas. */
+    maxViewers: num(process.env.LIVE_MAX_VIEWERS, 2000),
+    get obsConfigured() {
+      return Boolean(process.env.LIVEKIT_RTMP_URL);
+    },
+  },
+  /**
+   * IDIOMAS DE LA INTERFAZ
+   *
+   * El idioma se resuelve por cookie y, si no hay, por Accept-Language.
+   * No hay prefijo de ruta (/es, /en): las URL son las mismas para todos,
+   * asi que los enlaces compartidos no arrastran el idioma de quien los pego.
+   */
+  i18n: {
+    defaultLocale: (process.env.NEXT_PUBLIC_DEFAULT_LOCALE || 'es') as
+      | 'es'
+      | 'en',
   },
   matchmaking: {
     /** Segundos sin heartbeat tras los que una entrada de cola se descarta */

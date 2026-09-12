@@ -9,6 +9,7 @@ import { requireUser } from '@/lib/auth/guards';
 import { getVisibilityContext } from '@/lib/geo';
 import { getQueueStats } from '@/lib/matchmaking';
 import { prisma } from '@/lib/prisma';
+import { DEFAULT_RATE_CENTITOKENS } from '@/lib/rates';
 import { getWalletSummary } from '@/lib/tokens';
 
 export const metadata: Metadata = { title: 'Sala VIP' };
@@ -31,8 +32,8 @@ export default async function VipPage() {
         isOnline: true,
         ...geoFilter,
       },
-      orderBy: { vipRatePerMinute: 'asc' },
-      select: { vipRatePerMinute: true },
+      orderBy: { vipRateCentitokens: 'asc' },
+      select: { vipRateCentitokens: true },
     }),
     prisma.modelProfile.findMany({
       where: {
@@ -56,10 +57,11 @@ export default async function VipPage() {
         avatarUrl: true,
         coverUrl: true,
         isOnline: true,
+        isAi: true,
         isVipEnabled: true,
         isAvailableForVip: true,
-        vipRatePerMinute: true,
-        privateRatePerMinute: true,
+        vipRateCentitokens: true,
+        privateRateCentitokens: true,
         ratingAvg: true,
         ratingCount: true,
         tags: true,
@@ -72,7 +74,9 @@ export default async function VipPage() {
       <MatchmakingLobby
         mode="VIP"
         balance={wallet.balance}
-        minRate={cheapest?.vipRatePerMinute ?? 20}
+        minRateCentitokens={
+          cheapest?.vipRateCentitokens ?? DEFAULT_RATE_CENTITOKENS
+        }
         stats={{
           waiting: stats.waitingVip,
           onlineModels: stats.onlineModels,

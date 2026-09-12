@@ -27,7 +27,7 @@ export default function AuthLayout({
           <Link href="/legal/privacy" className="underline hover:text-foreground">
             politica de privacidad
           </Link>
-          . Solo mayores de 18 anos.
+          . Solo mayores de 18 años.
         </p>
       </div>
     </div>

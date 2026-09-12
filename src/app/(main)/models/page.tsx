@@ -65,9 +65,9 @@ export default async function ModelsPage({
 
   const orderBy: Prisma.ModelProfileOrderByWithRelationInput[] =
     params.sort === 'price_asc'
-      ? [{ privateRatePerMinute: 'asc' }]
+      ? [{ privateRateCentitokens: 'asc' }]
       : params.sort === 'price_desc'
-        ? [{ privateRatePerMinute: 'desc' }]
+        ? [{ privateRateCentitokens: 'desc' }]
         : params.sort === 'rating'
           ? [{ ratingAvg: 'desc' }, { ratingCount: 'desc' }]
           : params.sort === 'new'
@@ -92,10 +92,11 @@ export default async function ModelsPage({
         avatarUrl: true,
         coverUrl: true,
         isOnline: true,
+        isAi: true,
         isVipEnabled: true,
         isAvailableForVip: true,
-        vipRatePerMinute: true,
-        privateRatePerMinute: true,
+        vipRateCentitokens: true,
+        privateRateCentitokens: true,
         ratingAvg: true,
         ratingCount: true,
         tags: true,

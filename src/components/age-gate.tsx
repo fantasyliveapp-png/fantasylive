@@ -36,15 +36,15 @@ export function AgeGate() {
         <h2 className="text-2xl font-bold">Confirma tu edad</h2>
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
           FantasyLive conecta personas mayores de edad para chatear en vivo y
-          descubrir contenido de sus creadores favoritos. Algunas areas son
-          privadas y pueden incluir contenido intimo. Al continuar declaras
-          tener al menos 18 anos o la mayoria de edad legal en tu
-          jurisdiccion.
+          descubrir contenido de sus creadores favoritos. Algunas áreas son
+          privadas y pueden incluir contenido íntimo. Al continuar declaras
+          tener al menos 18 años o la mayoría de edad legal en tu
+          jurisdicción.
         </p>
 
         <div className="mt-7 space-y-3">
           <Button variant="brand" size="lg" className="w-full" onClick={accept}>
-            Tengo 18 anos o mas - Entrar
+            Tengo 18 años o más - Entrar
           </Button>
           <Button
             variant="outline"
@@ -59,7 +59,7 @@ export function AgeGate() {
         </div>
 
         <p className="mt-6 text-xs text-muted-foreground">
-          Este sitio esta etiquetado con RTA. Puedes bloquearlo con software de
+          Este sitio está etiquetado con RTA. Puedes bloquearlo con software de
           control parental.
         </p>
       </div>
