@@ -12,6 +12,8 @@
 #   7881 TCP            -> ABRIR. Respaldo de WebRTC cuando el UDP esta
 #                          filtrado en la red del visitante.
 #   7882 UDP            -> ABRIR. Camino normal del video.
+#   1935 TCP            -> ABRIR solo si usas el ingress RTMP (OBS). Lo
+#                          escucha livekit-ingress, no este proceso.
 #
 # El media NUNCA pasa por Cloudflare: CF no proxia UDP, asi que el navegador
 # habla directamente con la IP de esta maquina. Es inherente a WebRTC
@@ -31,6 +33,19 @@ rtc:
 
 keys:
   REEMPLAZA_API_KEY: REEMPLAZA_API_SECRET
+
+# ---------------------------------------------------------------------------
+# REDIS
+#
+# Obligatorio SOLO si usas el ingress RTMP para OBS (deploy/livekit-ingress.*).
+# El SFU y el ingress se coordinan a traves de Redis: si cada uno apunta a un
+# Redis distinto (o uno no tiene ninguno), el ingress crea la sala en un mundo
+# que el SFU no ve y el directo se queda en negro sin dar ningun error.
+#
+# Descomenta este bloque a la vez que despliegas el ingress.
+# ---------------------------------------------------------------------------
+# redis:
+#   address: 127.0.0.1:6379
 
 room:
   auto_create: true
