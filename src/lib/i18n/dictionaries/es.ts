@@ -178,6 +178,25 @@ export const es = {
     countriesDescription:
       'Tu perfil, tus publicaciones y tus directos no se ven desde los paises que marques.',
   },
+  footer: {
+    tagline:
+      'Conoce gente nueva y a tus creadores de contenido favoritos, en un espacio privado y verificado.',
+    platform: 'Plataforma',
+    forCreators: 'Para creadores',
+    legal: 'Legal',
+    discoverCreators: 'Descubrir creadores',
+    randomCalls: 'Llamadas aleatorias',
+    workWithUs: 'Trabaja con nosotros',
+    creatorDashboard: 'Panel de creador',
+    kyc: 'Verificacion KYC',
+    payouts: 'Retiros',
+    terms: 'Terminos de servicio',
+    privacy: 'Privacidad',
+    compliance2257: 'Cumplimiento 18 USC 2257',
+    rights: 'Todos los derechos reservados.',
+    ratingNotice:
+      'Sitio etiquetado RTA · Solo mayores de 18 anos · Cumplimiento 18 U.S.C. 2257',
+  },
   payouts: {
     fee: 'Comision de retiro ({percent}%)',
     net: 'Recibiras {amount}',
