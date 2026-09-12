@@ -1,6 +1,8 @@
 # FantasyLive
 
-Plataforma web para adultos (18+) de interacción en vivo: videollamadas aleatorias estilo Omegle, sala VIP con cobro por minuto, catálogo de modelos multi-género, contenido exclusivo desbloqueable y reservas privadas — todo sobre un monedero único de tokens.
+Plataforma web para adultos (18+) de interacción en vivo: **feed social** para descubrir creadoras, **directos** (desde el navegador o desde OBS), videollamadas aleatorias estilo Omegle, sala VIP con cobro por minuto, publicaciones y contenido de pago desbloqueable, y reservas privadas — todo sobre un monedero único de tokens.
+
+Interfaz en **español e inglés**, con panel de analíticas para las creadoras y retiros por transferencia, PayPal o USDT (TRC20).
 
 > **Aviso:** este proyecto es un scaffold funcional completo, listo para pruebas locales y despliegue. Antes de operar comercialmente debes revisar con un profesional jurídico los documentos legales (`/legal/*`), contratar una pasarela que admita contenido adulto (Stripe restringe este vertical; CCBill/Segpay/Epoch son las habituales) y completar el proceso de verificación de edad exigido en tu jurisdicción.
 
@@ -15,6 +17,11 @@ Plataforma web para adultos (18+) de interacción en vivo: videollamadas aleator
 5. [Estructura del proyecto](#estructura-del-proyecto)
 6. [Modelo de datos](#modelo-de-datos)
 7. [Cómo funciona cada módulo](#cómo-funciona-cada-módulo)
+   - [Feed social](#feed-social)
+   - [Directos y OBS](#directos-y-obs)
+   - [Analíticas de creadora](#analíticas-de-creadora)
+   - [Mensaje automático de bienvenida](#mensaje-automático-de-bienvenida)
+   - [Idiomas](#idiomas)
 8. [Servicios externos (opcionales)](#servicios-externos-opcionales)
 9. [Subir a GitHub](#subir-a-github)
 10. [Desplegar en Vercel](#desplegar-en-vercel)
@@ -34,6 +41,8 @@ Plataforma web para adultos (18+) de interacción en vivo: videollamadas aleator
 | Base de datos | PostgreSQL 16 + Prisma ORM 6 |
 | Autenticación | NextAuth / Auth.js v5 (JWT, multi-rol: `USER`, `MODEL`, `ADMIN`) |
 | Vídeo | LiveKit (SFU) con modo demo sin configuración |
+| Directos | LiveKit + LiveKit Ingress (RTMP para OBS) |
+| Idiomas | Diccionarios propios con tipado estricto (ES / EN, sin dependencias) |
 | Señalización | Server-Sent Events sobre API Routes (compatible con Vercel serverless) |
 | Almacenamiento | S3 / Cloudflare R2 / MinIO con URLs firmadas privadas |
 | Pagos | Stripe, CCBill o proveedor `mock` para desarrollo |
@@ -260,20 +269,154 @@ Todo movimiento pasa por `applyLedgerEntry()` (`src/lib/tokens.ts`), que se ejec
 
 El reparto usuario → modelo (`transferWithCommission`) descuenta, aplica `PLATFORM_COMMISSION_PERCENT` y acredita el neto al creador en la misma transacción.
 
-### Reparto de ingresos (50 / 50)
+### Reparto de ingresos (60 / 40) y comisión de retiro
 
-La comisión se aplica **una sola vez**, en el momento en que el usuario gasta tokens (`splitEarnings` en `src/lib/tokens.ts`): la plataforma retiene `PLATFORM_COMMISSION_PERCENT` (50 %) y el resto se acredita a la creadora. Por eso el retiro paga el token a su valor íntegro (`MODEL_PAYOUT_CENTS_PER_TOKEN` = `TOKEN_VALUE_CENTS`): si además se recortase ahí, la comisión se cobraría dos veces.
+Hay **dos comisiones distintas y deliberadas**:
+
+1. **Comisión de plataforma** (`PLATFORM_COMMISSION_PERCENT`, 40 %). Se aplica **una sola vez**, en el momento en que el usuario gasta tokens (`splitEarnings` en `src/lib/tokens.ts`): la creadora se queda el **60 %**.
+2. **Comisión de retiro** (`PAYOUT_FEE_PERCENT`, 10 %). Se descuenta cuando el dinero **sale** del sistema, y cubre el coste real de wire / PayPal / USDT.
+
+Por eso el token se paga íntegro al retirar (`MODEL_PAYOUT_CENTS_PER_TOKEN` = `TOKEN_VALUE_CENTS`): si además se recortase ahí, la comisión de plataforma se cobraría dos veces.
 
 Con los valores por defecto:
 
 ```
 usuario paga 10 USD  ->  100 tokens
    gasta los 100 en una creadora
-   -> plataforma 50 tokens (5,00 USD)
-   -> creadora   50 tokens (5,00 USD)  ->  retira 5,00 USD
+   -> plataforma 40 tokens (4,00 USD)
+   -> creadora   60 tokens (6,00 USD)
+        al retirarlos: -10 % de comisión de retiro
+        -> se le abonan 54 tokens = 5,40 USD
 ```
 
-`config.economy.modelRevenueSharePercent` es un valor derivado (`100 - comisión`), nunca se configura aparte, así que los dos porcentajes no pueden descuadrarse.
+`config.economy.modelRevenueSharePercent` es un valor derivado (`100 - comisión`), nunca se configura aparte, así que los dos porcentajes no pueden descuadrarse. El formulario de retiro muestra el desglose antes de confirmar, y `PayoutRequest` guarda `tokens`, `feeTokens` y `netTokens` para que la solicitud sea auditable.
+
+### Tarifas por minuto (centitokens)
+
+La creadora fija su precio por minuto entre **1,75 y 25 tokens/min**, con **2,5 tokens/min** por defecto. El mínimo tiene decimales y un `Int` de tokens no los representa, así que las tarifas se guardan en **centitokens** (tokens × 100) y todo el cálculo del cobro sigue siendo aritmética entera, sin errores de coma flotante acumulados a lo largo de una llamada de una hora:
+
+```
+175  = 1,75 tokens/min   (mínimo)
+250  = 2,50 tokens/min   (por defecto)
+2500 = 25 tokens/min     (máximo)
+```
+
+Las constantes y las conversiones viven en un único sitio, `src/lib/rates.ts`. Los campos se llaman `vipRateCentitokens`, `privateRateCentitokens` y `CallSession.rateCentitokens` precisamente para que ningún sitio siga tratando el valor como si fueran tokens enteros.
+
+### Duración mínima facturable
+
+Las llamadas de pago facturan un **mínimo de 5 minutos** (`MIN_BILLED_CALL_MINUTES`), aunque quien llama cuelgue antes. Se cobra **desde el primer tick**, no al colgar: es lo único que impide esquivarlo cerrando la pestaña de golpe, y encaja con el saldo que ya se exige para poder iniciar la llamada. El diálogo de confirmación y un distintivo dentro de la llamada lo dicen con esas palabras.
+
+### Feed social
+
+El descubrimiento principal ya no es un catálogo de fichas, sino un feed:
+
+- `/feed` — todo lo que publican las creadoras con KYC aprobado.
+- `/feed/siguiendo` — solo a quien sigues.
+- `/live` — quién está emitiendo ahora.
+
+Las tres son rutas de verdad (no estado de cliente) para que cada pestaña se pueda compartir, marcar y renderizar en servidor con sus propias consultas. La paginación va por cursor en la URL, así que un enlace a la página 3 sigue funcionando. En móvil hay una barra inferior fija con las cinco acciones del día a día, que es lo que hace que la web se use como una app; se oculta dentro de una llamada o un directo para no tapar los controles.
+
+Una publicación puede ser **pública**, **de pago** o **solo para suscriptores**.
+
+#### Por qué las publicaciones borrosas son realmente borrosas
+
+La forma fácil de hacer un *paywall* visual es servir la imagen completa y taparla con `filter: blur()`. **Eso no protege nada:** el original viaja en el HTML y se ve quitando el filtro desde el inspector, o abriendo directamente la URL que aparece en la pestaña de red.
+
+Aquí, al subir, el navegador de la creadora genera con `canvas` una miniatura de **32 px de ancho** con el difuminado **cocido en los píxeles** (`src/lib/blur-preview.ts`). A ese tamaño no hay detalle que recuperar: es literalmente un borrón de colores. El original se sube a una clave distinta del bucket y esa clave **solo se firma para quien ha pagado** (`src/lib/posts.ts`). El archivo real nunca llega al navegador de quien no ha desbloqueado.
+
+Se genera en el cliente a propósito: el servidor no necesita `sharp` ni procesar imágenes. El compositor exige miniatura para las publicaciones de pago; si no se puede generar (por ejemplo, un vídeo), avisa y no publica en vez de servir algo en claro.
+
+El desbloqueo cobra y registra el acceso **en la misma transacción**, así que no existe el estado intermedio de «pagado pero sin acceso», y el `unique (userId, postId)` impide pagar dos veces con dos pestañas.
+
+### Directos y OBS
+
+Solo pueden emitir las creadoras con **KYC aprobado**, y se comprueba en el servidor (`startStreamAction`), no escondiendo el botón. Mientras emiten aparecen en la portada, en `/live` y con un aviso en su propia ficha; sus seguidores reciben una notificación.
+
+Dos caminos de entrada de vídeo:
+
+| Origen | Cómo funciona |
+|---|---|
+| **Navegador** | La cámara publica por WebRTC contra la misma sala de LiveKit que usan las videollamadas. Un clic y a emitir. |
+| **OBS (RTMP)** | LiveKit Ingress expone una URL `rtmp://` y una clave. OBS publica ahí y el ingress reenvía el vídeo a la sala como un participante más. |
+
+Detalles que importan:
+
+- Los espectadores reciben un token de **solo suscripción** (`canPublish: false`). Sin eso, cualquiera con el enlace podría publicar su propia cámara dentro del directo de otra persona.
+- No se le pide la cámara al espectador. Pedir permisos para *ver* un directo espantaría a media audiencia.
+- El directo nace en `PREPARING` y solo pasa a `LIVE` cuando hay vídeo de verdad en la sala, así que la portada nunca anuncia un directo que todavía está cargando OBS.
+- Con OBS, la pestaña de la creadora se conecta como espectadora de su propio directo: puede comprobar que se está viendo antes de que entre nadie.
+- El chat va por el canal de datos de la sala, no por la base de datos: son mensajes efímeros de una sala en vivo, no un historial.
+- Los regalos en tokens usan el mismo reparto que las propinas y suman a `giftsCount` / `tokensEarned` del directo.
+- El recuento de espectadores se lee de **LiveKit**, que es la única fuente fiable; el contador de la base de datos es un espejo para poder ordenar la portada sin consultar a LiveKit en cada render.
+- Un directo a la vez por creadora: dos salas en paralelo dividirían a la audiencia y los regalos irían a la sala equivocada.
+
+#### Desplegar el ingress RTMP (para OBS)
+
+Si `LIVEKIT_RTMP_URL` está vacía, la interfaz **solo ofrece emitir desde el navegador**: es la única forma honesta de no dar unas credenciales de OBS que no llevarían a ningún sitio.
+
+```bash
+# 1. Redis y ffmpeg (el ingress transcodifica con ffmpeg)
+apt-get install -y redis-server ffmpeg
+
+# 2. El SFU tiene que usar el MISMO Redis: descomenta el bloque redis:
+#    de /etc/livekit/livekit.yaml y reinicia
+systemctl restart livekit
+
+# 3. Binario del ingress
+curl -sSL https://get.livekit.io/ingress | bash
+
+# 4. Configuración (mismas claves que el SFU y que el .env de la app)
+cp deploy/livekit-ingress.yaml.example /etc/livekit/ingress.yaml
+chown root:livekit /etc/livekit/ingress.yaml && chmod 640 /etc/livekit/ingress.yaml
+
+# 5. Servicio
+install -m 644 deploy/livekit-ingress.service /etc/systemd/system/
+systemctl daemon-reload && systemctl enable --now livekit-ingress
+
+# 6. Puerto RTMP. NO pasa por nginx: RTMP no es HTTP.
+ufw allow 1935/tcp
+
+# 7. En el .env de la aplicación
+#    LIVEKIT_RTMP_URL="rtmp://tudominio.com:1935/x"
+systemctl restart fantasylive
+```
+
+> **Si el SFU y el ingress apuntan a Redis distintos** (o uno no tiene ninguno), el ingress crea la sala en un mundo que el SFU no ve: el directo se queda en negro **sin dar ningún error**. Es el fallo más habitual al montar esto.
+
+### Analíticas de creadora
+
+`/dashboard/model/analytics` responde a tres preguntas: **quién me compra**, **quién me visita** y **de dónde sale mi dinero**. Incluye mejores compradores, visitantes más frecuentes, ingresos por origen y por día, países y conversión de visita a compra, con rangos de 7, 30 y 90 días.
+
+Todo se calcula sobre las tablas que ya existen (`Transaction`, `ProfileVisit`, `Follow`, `ContentUnlock`, `PostUnlock`), sin tablas de agregación nuevas: con el volumen de una creadora individual las consultas son baratas y los números **nunca se quedan desincronizados de la contabilidad real**.
+
+Los ingresos se leen de las transacciones de la **cuenta de la creadora** (tipos `*_EARNING`), no de lo que gastó el usuario, así que el panel muestra lo que de verdad entra en su monedero, ya descontada la comisión.
+
+Las visitas se registran en `ProfileVisit` y se **deduplican por (perfil, visitante, origen, día)**: recargar la ficha veinte veces cuenta como una visita del día, que es lo que la creadora espera leer. El contador `visits` guarda cuántas veces volvió ese día. La visita se registra **después** del bloqueo geográfico: quien no debería ver el perfil tampoco cuenta como visita.
+
+### Mensaje automático de bienvenida
+
+`/dashboard/model/greeting`. Se envía **una sola vez** a cada persona que entra a su perfil o a su directo, hasta agotar el tope diario.
+
+- Lo manda la **creadora**, así que abrir la conversación es **gratis** para quien lo recibe. Cobrar por un mensaje que el usuario no pidió sería cobrar por spam.
+- La **foto adjunta sí puede llevar precio**: es el gancho comercial. Se guarda como un `MessageAttachment` normal, con su miniatura difuminada, y se desbloquea por el mismo camino que cualquier otro adjunto.
+- `AutoGreetingLog` con `unique (modelId, userId)` es lo que garantiza el «una sola vez»: sin él, cada visita al perfil dispararía otro mensaje. El registro se crea **primero** dentro de la transacción, así que dos peticiones simultáneas no pueden duplicarlo.
+- El tope diario se cuenta contra el día UTC guardado en el propio perfil y se reinicia en el mismo `UPDATE`, sin necesidad de un cron.
+- El texto pasa por el mismo filtro de contactos que los mensajes: un saludo automático sería el sitio perfecto para repartir un Telegram a todo el que entre.
+
+### Idiomas
+
+Interfaz en **español** e **inglés**. El idioma se resuelve así:
+
+1. Cookie `fl_locale` — elección explícita del visitante, manda siempre.
+2. `Accept-Language` del navegador.
+3. `NEXT_PUBLIC_DEFAULT_LOCALE`.
+
+**No hay prefijo de ruta** (`/es`, `/en`): las URL son las mismas para todos, así que un enlace compartido se ve en el idioma de quien lo abre y no en el de quien lo pegó, y no hay que duplicar el árbol de rutas.
+
+Los diccionarios (`src/lib/i18n/dictionaries/`) están tipados: el inglés se declara con el tipo derivado del español, así que **añadir una clave sin traducirla es un error de compilación**, no un hueco en blanco en producción. Si una clave faltase en tiempo de ejecución, `t()` cae al español y, en último caso, muestra la propia clave: se ve el fallo de inmediato en vez de un espacio vacío.
+
+> **Cobertura actual:** la superficie pública (portada, feed, directos, navegación, perfiles) y los textos de las funciones nuevas están traducidos. El panel de administración y algunos formularios internos del panel de creadora siguen en español; la infraestructura ya está puesta, así que traducirlos es añadir claves al diccionario.
 
 ### Bloqueo por país
 
@@ -287,7 +430,7 @@ El país del visitante se resuelve en `src/lib/geo.ts` con esta prioridad:
 
 > **Importante:** esas cabeceras las puede falsificar cualquiera si llegan directas a la aplicación. `deploy/nginx.conf` las vacía antes de reenviar la petición y fija `X-Real-IP` a `$remote_addr`, de modo que el valor que ve la app es siempre el que calculó el proxy. Si expones la app sin ese nginx delante, pon `GEO_TRUST_PROXY_HEADERS=false`.
 
-El bloqueo se aplica en todas las vías de acceso, no solo en el catálogo: portada, `/models`, sala VIP, ficha de la creadora (responde **404**, no 403, para no confirmar que existe), llamada privada, reserva, suscripción, mensaje, pedido a medida, desbloqueo de contenido, URLs firmadas de los assets y emparejamiento aleatorio —este último en ambos sentidos—. La propia creadora y los administradores nunca se ven afectados.
+El bloqueo se aplica en todas las vías de acceso, no solo en el catálogo: portada, `/models`, **feed de descubrimiento y de seguidos**, **lista de directos y sala del directo** (responde 403), sala VIP, ficha de la creadora (responde **404**, no 403, para no confirmar que existe), llamada privada, reserva, suscripción, mensaje, pedido a medida, desbloqueo de contenido y de publicaciones, comentarios, regalos, URLs firmadas de los assets y emparejamiento aleatorio —este último en ambos sentidos—. La propia creadora y los administradores nunca se ven afectados.
 
 Un usuario con VPN puede aparentar otro país: es una capa de privacidad, no una garantía. La interfaz lo dice explícitamente.
 
@@ -304,6 +447,7 @@ Los datos de cobro son PII sensible, así que se guardan **cifrados con AES-256-
 Controles sobre el saldo:
 
 - Los tokens se debitan **al solicitar**, con el `UPDATE` condicional del libro mayor: dos solicitudes simultáneas no pueden retirar el mismo saldo.
+- Se retiene `PAYOUT_FEE_PERCENT` (10 %) de los tokens solicitados: se debita el bruto y solo se transfiere el neto. La diferencia queda en `feeTokens` y en `platformFeeTokens` del asiento.
 - **Un solo retiro abierto** por creadora.
 - Rechazar devuelve tokens, `pendingEarnings` y `lifetimeWithdrawn`, y usa un `UPDATE` condicional por estado para que dos administradores no puedan reembolsar dos veces.
 
@@ -366,6 +510,8 @@ El cliente envía un tick a `POST /api/calls/:id/billing` cada `CALL_BILLING_INT
 Las llamadas del modo aleatorio no tienen tarifa: son la prueba gratuita y duran **5 minutos** (`FREE_CALL_SECONDS`). Al agotarse, el servidor corta la llamada con el motivo `FREE_LIMIT_REACHED` y aparece un panel que ofrece **seguir la conversación por chat**, recargar tokens o buscar a otra persona. El contador va visible desde el primer segundo.
 
 Sólo cuenta el tiempo en que **hay dos personas en la sala**: la espera no consume la prueba ni se cobra. La presencia se consulta a LiveKit, no al navegador, porque el cliente podría mentir para hablar gratis.
+
+> No confundir con el **mínimo facturable de 5 minutos** de las llamadas de pago: la prueba gratuita es un techo (5 minutos gratis como máximo), el mínimo facturable es un suelo (5 minutos se cobran aunque se use menos). Son dos límites distintos y se configuran por separado (`FREE_CALL_SECONDS` y `MIN_BILLED_CALL_MINUTES`).
 
 Como el tick lo dispara el navegador, cerrar la pestaña de golpe dejaría la sesión viva para siempre. Por eso `scripts/sweep-calls.mts` corre cada minuto (`deploy/fantasylive-sweep.timer`) y cierra las llamadas que agotaron su límite o llevan varios intervalos sin dar señales.
 
@@ -588,6 +734,10 @@ La aplicación corre como el usuario de sistema `fantasylive`, nunca como root, 
 |---|---|
 | `deploy/nginx.conf` | Proxy inverso, SSE sin buffering, caché de estáticos y **limpieza de las cabeceras de geolocalización que envíe el cliente** |
 | `deploy/fantasylive.service` | Unidad systemd endurecida |
+| `deploy/livekit.yaml.example` | Configuración del SFU (incluye el bloque Redis que necesita el ingress) |
+| `deploy/livekit.service` | Unidad systemd del SFU |
+| `deploy/livekit-ingress.yaml.example` | Configuración del ingress RTMP para OBS |
+| `deploy/livekit-ingress.service` | Unidad systemd del ingress (limita CPU: transcodificar es caro) |
 | `scripts/bootstrap-production.mts` | Alta idempotente de ajustes, packs de tokens y administrador |
 
 ### Pasos
