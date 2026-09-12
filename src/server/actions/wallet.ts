@@ -7,6 +7,7 @@ import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { prisma } from '@/lib/prisma';
 import { checkNoContactInfo } from '@/lib/content-filter';
 import { GEO_BLOCKED_MESSAGE, isBlockedForViewer } from '@/lib/geo';
+import { createNotification } from '@/lib/notifications';
 import { startTokenPurchase } from '@/lib/payments';
 import {
   InsufficientTokensError,
@@ -145,15 +146,23 @@ const giftSchema = z.object({
   receiverId: z.string().min(1),
   tokens: z.number().int().min(1).max(100000),
   sessionId: z.string().optional(),
+  streamId: z.string().optional(),
   emoji: z.string().max(8).optional(),
   message: z.string().max(200).optional(),
 });
 
-/** Envia una propina (tip) durante o fuera de una llamada. */
+/**
+ * Envia una propina (tip) en una llamada, en un directo o desde el perfil.
+ *
+ * `sessionId` y `streamId` son excluyentes: un regalo pertenece a una
+ * videollamada o a un directo, nunca a los dos. El reparto con la plataforma
+ * es el mismo en los tres casos, asi que se reutiliza TIP / TIP_EARNING.
+ */
 export async function sendGiftAction(input: {
   receiverId: string;
   tokens: number;
   sessionId?: string;
+  streamId?: string;
   emoji?: string;
   message?: string;
 }): Promise<WalletActionResult> {
@@ -162,7 +171,8 @@ export async function sendGiftAction(input: {
     const parsed = giftSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: 'Datos de regalo invalidos.' };
 
-    const { receiverId, tokens, sessionId, emoji, message } = parsed.data;
+    const { receiverId, tokens, sessionId, streamId, emoji, message } =
+      parsed.data;
 
     if (message) {
       const contactError = checkNoContactInfo(message);
@@ -191,6 +201,7 @@ export async function sendGiftAction(input: {
           senderId: user.id,
           receiverId,
           sessionId: sessionId ?? null,
+          streamId: streamId ?? null,
           tokens,
           emoji: emoji ?? null,
           message: message ?? null,
@@ -198,7 +209,7 @@ export async function sendGiftAction(input: {
         select: { id: true },
       });
 
-      const { debit } = await transferWithCommission(tx, {
+      const { debit, modelTokens } = await transferWithCommission(tx, {
         fromUserId: user.id,
         toUserId: receiverId,
         tokens,
@@ -206,7 +217,27 @@ export async function sendGiftAction(input: {
         creditType: 'TIP_EARNING',
         description: `Regalo para ${receiver.name ?? 'modelo'}`,
         callSessionId: sessionId,
+        liveStreamId: streamId,
         giftId: gift.id,
+      });
+
+      // Contadores del directo: son lo que la creadora ve al terminar de
+      // emitir, sin tener que agregar la tabla de regalos.
+      if (streamId) {
+        await tx.liveStream.update({
+          where: { id: streamId },
+          data: {
+            giftsCount: { increment: 1 },
+            tokensEarned: { increment: modelTokens },
+          },
+        });
+      }
+
+      await createNotification(tx, {
+        userId: receiverId,
+        type: 'GIFT_RECEIVED',
+        title: `${user.name ?? 'Alguien'} te ha enviado ${tokens} tokens`,
+        body: message ?? undefined,
       });
 
       return debit.balanceAfter;

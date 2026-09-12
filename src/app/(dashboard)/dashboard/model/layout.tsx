@@ -44,6 +44,16 @@ export default async function ModelDashboardLayout({
           exact: true,
         },
         {
+          href: '/dashboard/model/live',
+          label: 'Directos',
+          icon: 'radio',
+        },
+        {
+          href: '/dashboard/model/posts',
+          label: 'Publicaciones',
+          icon: 'posts',
+        },
+        {
           href: '/dashboard/model/bookings',
           label: 'Reservas',
           icon: 'calendar',
@@ -62,6 +72,11 @@ export default async function ModelDashboardLayout({
     {
       title: 'Ingresos',
       links: [
+        {
+          href: '/dashboard/model/analytics',
+          label: 'Analiticas',
+          icon: 'trending',
+        },
         { href: '/dashboard/model/earnings', label: 'Ganancias', icon: 'coins' },
         { href: '/dashboard/model/payouts', label: 'Retiros', icon: 'wallet' },
       ],
@@ -70,6 +85,11 @@ export default async function ModelDashboardLayout({
       title: 'Cuenta',
       links: [
         { href: '/dashboard/model/rates', label: 'Tarifas y perfil', icon: 'settings' },
+        {
+          href: '/dashboard/model/greeting',
+          label: 'Mensaje de bienvenida',
+          icon: 'greeting',
+        },
         { href: '/dashboard/model/kyc', label: 'Verificacion KYC', icon: 'badgeCheck' },
         {
           href: '/dashboard/model/privacy',

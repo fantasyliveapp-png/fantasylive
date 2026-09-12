@@ -36,7 +36,7 @@ import {
   skipAndRequeueAction,
 } from '@/server/actions/calls';
 import { formatDuration, formatTokens, initials } from '@/lib/utils';
-import { formatRateNumber } from '@/lib/rates';
+import { MIN_BILLED_CALL_MINUTES, formatRateNumber } from '@/lib/rates';
 
 export interface CallPartner {
   id: string;
@@ -327,6 +327,15 @@ export function VideoCallRoom({
                   -{formatRateNumber(rateCentitokens)}/min · ~
                   {billing.remainingMinutes} min
                 </Badge>
+                {billing.minimumPaddingSeconds > 0 && (
+                  <Badge
+                    variant="muted"
+                    className="hidden bg-black/50 backdrop-blur sm:flex"
+                  >
+                    <Timer className="h-3 w-3" />
+                    Minimo {MIN_BILLED_CALL_MINUTES} min
+                  </Badge>
+                )}
               </>
             )}
             <Badge

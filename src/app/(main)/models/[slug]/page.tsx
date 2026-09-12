@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
   BadgeCheck,
@@ -8,6 +9,7 @@ import {
   Crown,
   Globe,
   MessageCircle,
+  Radio,
   Star,
   Users,
   Video,
@@ -21,14 +23,19 @@ import { MessageButton } from '@/components/messages/message-button';
 import { ReviewForm } from '@/components/models/review-form';
 import { ShareProfileButton } from '@/components/models/share-profile-button';
 import { StartPrivateCallButton } from '@/components/calls/start-private-call-button';
+import { PostCard } from '@/components/feed/post-card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SubscribeButton } from '@/components/models/subscribe-button';
 import { getCurrentUser } from '@/lib/auth/guards';
 import { getViewerCountry, isCountryBlocked } from '@/lib/geo';
+import { maybeSendAutoGreeting } from '@/lib/greeting';
+import { getModelPosts } from '@/lib/posts';
+import { recordProfileVisit } from '@/lib/visits';
 import { formatRateNumber } from '@/lib/rates';
 import { GENDER_LABELS, ORIENTATION_LABELS } from '@/lib/constants';
 import { prisma } from '@/lib/prisma';
@@ -91,10 +98,35 @@ export default async function ModelProfilePage({
   // siguen viendo el perfil; para el resto se comporta como inexistente (404
   // en vez de 403, para no confirmar que la modelo existe).
   const isOwner = viewer?.id === model.userId;
+  const viewerCountry = await getViewerCountry();
   if (!isOwner && viewer?.role !== 'ADMIN') {
-    const viewerCountry = await getViewerCountry();
     if (isCountryBlocked(model.blockedCountries, viewerCountry)) notFound();
   }
+
+  // Analiticas de la creadora y saludo automatico. Se hace DESPUES del
+  // bloqueo geografico: una visita que no deberia ver el perfil tampoco debe
+  // contar como visita ni recibir un mensaje.
+  if (!isOwner) {
+    await recordProfileVisit({
+      modelId: model.id,
+      modelUserId: model.userId,
+      viewerId: viewer?.id ?? null,
+      viewerCountry,
+      source: 'PROFILE',
+    });
+    await maybeSendAutoGreeting({
+      modelId: model.id,
+      viewerId: viewer?.id ?? null,
+      source: 'PROFILE',
+    });
+  }
+
+  // Directo en curso: el perfil enlaza a la sala en vez de dejar al visitante
+  // adivinar que la creadora esta emitiendo ahora mismo.
+  const liveStream = await prisma.liveStream.findFirst({
+    where: { modelId: model.id, status: 'LIVE' },
+    select: { id: true, title: true, viewerCount: true },
+  });
 
   // En vivo = tiene una llamada activa ahora mismo (distinto de "conectado",
   // que solo indica que la sesion esta abierta).
@@ -136,6 +168,12 @@ export default async function ModelProfilePage({
         activeSubscription.discountPercent,
       )
     : model.privateRateCentitokens;
+
+  const feedPosts = await getModelPosts({
+    modelId: model.id,
+    viewerId: viewer?.id ?? null,
+    take: 6,
+  });
 
   // Paquetes ya desbloqueados por quien mira
   const unlockedIds = viewer
@@ -269,6 +307,31 @@ export default async function ModelProfilePage({
               )}
 
               {/*
+                Directo en curso: el aviso va arriba del todo porque es la
+                accion con mas valor en ese momento y desaparece al minuto.
+              */}
+              {liveStream && (
+                <Link href={`/live/${model.slug}`} className="mt-4 block">
+                  <div className="flex items-center gap-3 rounded-lg border border-rose-500/40 bg-rose-500/10 p-3">
+                    <span className="live-dot" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold">
+                        {model.stageName} esta en directo ahora
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {liveStream.title || 'Entra al directo'} ·{' '}
+                        {liveStream.viewerCount} viendo
+                      </p>
+                    </div>
+                    <Button variant="brand" size="sm">
+                      <Radio className="h-4 w-4" />
+                      Ver directo
+                    </Button>
+                  </div>
+                </Link>
+              )}
+
+              {/*
                 La mensajeria se cobra en tokens. Si contesta una IA hay que
                 decirlo antes del pago, no despues: la etiqueta del titulo se
                 puede pasar por alto, esta frase no.
@@ -349,10 +412,26 @@ export default async function ModelProfilePage({
               )}
             </div>
 
-            {/* Feed: siempre visible, no escondido atras de una pestana */}
+            {/* Publicaciones del feed */}
+            {feedPosts.length > 0 && (
+              <div className="mt-8 space-y-5">
+                <h2 className="section-title text-xl">
+                  Publicaciones ({model.postsCount})
+                </h2>
+                {feedPosts.map((post) => (
+                  <PostCard
+                    key={post.id}
+                    post={post}
+                    isAuthenticated={Boolean(viewer)}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Packs de contenido: siempre visibles, no tras una pestana */}
             <div className="mt-8">
               <h2 className="section-title text-xl">
-                Publicaciones ({model.contentPackages.length})
+                Contenido exclusivo ({model.contentPackages.length})
               </h2>
               <div className="mt-4">
                 <ContentGallery

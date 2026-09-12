@@ -29,6 +29,7 @@ export const en: Dictionary = {
     somethingWentWrong: 'Something went wrong. Please try again.',
     language: 'Language',
     empty: 'Nothing here yet.',
+    loginRequired: 'Create an account to do this.',
   },
   nav: {
     discover: 'Discover',

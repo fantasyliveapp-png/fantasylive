@@ -16,7 +16,11 @@ import {
 } from '@/components/ui/dialog';
 import { startPrivateCallAction } from '@/server/actions/calls';
 import { cn } from '@/lib/utils';
-import { formatRate, formatRateNumber } from '@/lib/rates';
+import {
+  formatRate,
+  formatRateNumber,
+  tokensForMinutes,
+} from '@/lib/rates';
 
 export function StartPrivateCallButton({
   slug,
@@ -86,8 +90,11 @@ export function StartPrivateCallButton({
             <DialogTitle>Llamar a {stageName}</DialogTitle>
             <DialogDescription>
               Se cobran{' '}
-              <strong className="text-token">{formatRate(rateCentitokens)}</strong>,
-              minimo {minMinutes} min. El cobro se detiene en cuanto cuelgas.
+              <strong className="text-token">{formatRate(rateCentitokens)}</strong>
+              , con un <strong>minimo de {minMinutes} minutos</strong> (
+              {tokensForMinutes(rateCentitokens, minMinutes)} tokens) que se
+              facturan aunque cuelgues antes. A partir de ese minimo solo pagas
+              los minutos que uses.
             </DialogDescription>
           </DialogHeader>
 
