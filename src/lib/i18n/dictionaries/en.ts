@@ -179,6 +179,25 @@ export const en: Dictionary = {
     countriesDescription:
       'Your profile, your posts and your streams are hidden from the countries you pick.',
   },
+  footer: {
+    tagline:
+      'Meet new people and your favourite creators, in a private, verified space.',
+    platform: 'Platform',
+    forCreators: 'For creators',
+    legal: 'Legal',
+    discoverCreators: 'Discover creators',
+    randomCalls: 'Random calls',
+    workWithUs: 'Work with us',
+    creatorDashboard: 'Creator dashboard',
+    kyc: 'KYC verification',
+    payouts: 'Payouts',
+    terms: 'Terms of service',
+    privacy: 'Privacy',
+    compliance2257: '18 USC 2257 compliance',
+    rights: 'All rights reserved.',
+    ratingNotice:
+      'RTA labelled site · 18+ only · 18 U.S.C. 2257 compliant',
+  },
   payouts: {
     fee: 'Withdrawal fee ({percent}%)',
     net: 'You will receive {amount}',

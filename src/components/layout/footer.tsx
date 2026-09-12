@@ -1,38 +1,46 @@
 import Link from 'next/link';
 
 import { Logo } from '@/components/brand/logo';
+import { getT } from '@/lib/i18n/server';
 
-const COLUMNS = [
-  {
-    title: 'Plataforma',
-    links: [
-      { href: '/models', label: 'Descubrir creadores' },
-      { href: '/random', label: 'Llamadas aleatorias' },
-      { href: '/vip', label: 'Sala VIP' },
-      { href: '/wallet', label: 'Comprar tokens' },
-    ],
-  },
-  {
-    title: 'Para creadores',
-    links: [
-      { href: '/register?role=model', label: 'Trabaja con nosotros' },
-      { href: '/dashboard/model', label: 'Panel de creador' },
-      { href: '/dashboard/model/kyc', label: 'Verificacion KYC' },
-      { href: '/dashboard/model/payouts', label: 'Retiros' },
-    ],
-  },
-  {
-    title: 'Legal',
-    links: [
-      { href: '/legal/terms', label: 'Terminos de servicio' },
-      { href: '/legal/privacy', label: 'Privacidad' },
-      { href: '/legal/2257', label: 'Cumplimiento 18 USC 2257' },
-      { href: '/legal/dmca', label: 'DMCA' },
-    ],
-  },
-];
+export async function Footer() {
+  const t = await getT();
 
-export function Footer() {
+  // Las columnas se construyen dentro del componente, no en un const de
+  // modulo: los textos dependen del idioma resuelto en cada peticion.
+  const columns = [
+    {
+      title: t('footer.platform'),
+      links: [
+        { href: '/feed', label: t('feed.discover') },
+        { href: '/live', label: t('live.title') },
+        { href: '/models', label: t('footer.discoverCreators') },
+        { href: '/random', label: t('footer.randomCalls') },
+        { href: '/vip', label: t('nav.vip') },
+        { href: '/wallet', label: t('common.buyTokens') },
+      ],
+    },
+    {
+      title: t('footer.forCreators'),
+      links: [
+        { href: '/register?role=model', label: t('footer.workWithUs') },
+        { href: '/dashboard/model', label: t('footer.creatorDashboard') },
+        { href: '/dashboard/model/live', label: t('live.startStream') },
+        { href: '/dashboard/model/kyc', label: t('footer.kyc') },
+        { href: '/dashboard/model/payouts', label: t('footer.payouts') },
+      ],
+    },
+    {
+      title: t('footer.legal'),
+      links: [
+        { href: '/legal/terms', label: t('footer.terms') },
+        { href: '/legal/privacy', label: t('footer.privacy') },
+        { href: '/legal/2257', label: t('footer.compliance2257') },
+        { href: '/legal/dmca', label: 'DMCA' },
+      ],
+    },
+  ];
+
   return (
     <footer className="border-t border-border/60 bg-card/30">
       <div className="container py-12">
@@ -40,12 +48,11 @@ export function Footer() {
           <div>
             <Logo />
             <p className="mt-4 text-sm text-muted-foreground">
-              Conoce gente nueva y a tus creadores de contenido favoritos, en
-              un espacio privado y verificado.
+              {t('footer.tagline')}
             </p>
           </div>
 
-          {COLUMNS.map((col) => (
+          {columns.map((col) => (
             <div key={col.title}>
               <h4 className="text-sm font-semibold">{col.title}</h4>
               <ul className="mt-4 space-y-2.5">
@@ -66,13 +73,9 @@ export function Footer() {
 
         <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-border/60 pt-6 text-xs text-muted-foreground sm:flex-row">
           <p>
-            &copy; {new Date().getFullYear()} FantasyLive. Todos los derechos
-            reservados.
+            &copy; {new Date().getFullYear()} FantasyLive. {t('footer.rights')}
           </p>
-          <p>
-            Sitio etiquetado RTA &middot; Solo mayores de 18 años &middot;
-            Cumplimiento 18 U.S.C. 2257
-          </p>
+          <p>{t('footer.ratingNotice')}</p>
         </div>
       </div>
     </footer>
