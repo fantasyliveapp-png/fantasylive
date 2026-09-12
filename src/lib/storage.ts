@@ -56,6 +56,39 @@ export function buildMessageAttachmentKey(params: {
   return `messages/${params.conversationId}/${id}.${ext}`;
 }
 
+/**
+ * Claves de una publicacion del feed.
+ *
+ * El original y su miniatura difuminada van a claves distintas porque tienen
+ * permisos distintos: la miniatura se sirve a cualquiera (es lo que se ve
+ * borroso sin pagar) y el original solo a quien haya desbloqueado.
+ * Ej: models/<modelId>/posts/<postId>/<uuid>.jpg
+ *     models/<modelId>/posts/<postId>/<uuid>-preview.jpg
+ */
+export function buildPostKey(params: {
+  modelId: string;
+  postId: string;
+  filename: string;
+  isPreview?: boolean;
+}): string {
+  const ext = params.filename.split('.').pop()?.toLowerCase() || 'bin';
+  const id = crypto.randomUUID();
+  const suffix = params.isPreview ? '-preview' : '';
+  return `models/${params.modelId}/posts/${params.postId}/${id}${suffix}.${ext}`;
+}
+
+/** Ej: models/<modelId>/greeting/<uuid>.jpg */
+export function buildGreetingKey(params: {
+  modelId: string;
+  filename: string;
+  isPreview?: boolean;
+}): string {
+  const ext = params.filename.split('.').pop()?.toLowerCase() || 'bin';
+  const id = crypto.randomUUID();
+  const suffix = params.isPreview ? '-preview' : '';
+  return `models/${params.modelId}/greeting/${id}${suffix}.${ext}`;
+}
+
 export function buildKycKey(params: {
   modelId: string;
   kind: 'front' | 'back' | 'selfie' | 'note';

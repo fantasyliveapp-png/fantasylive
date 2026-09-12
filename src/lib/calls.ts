@@ -5,6 +5,11 @@ import type { CallEndReason } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { config } from '@/lib/config';
 import { closeRoom, countRoomParticipants } from '@/lib/livekit';
+import {
+  MIN_BILLED_CALL_MINUTES,
+  MIN_BILLED_CALL_SECONDS,
+  tokensForSeconds,
+} from '@/lib/rates';
 import { applyLedgerEntry, splitEarnings, InsufficientTokensError } from '@/lib/tokens';
 
 export interface BillingTickResult {
@@ -19,6 +24,12 @@ export interface BillingTickResult {
   isFreeTrial: boolean;
   /** Segundos gratis que quedan (null si la llamada es de pago o sin limite) */
   freeSecondsRemaining: number | null;
+  /**
+   * Segundos ya facturados por el minimo de 5 minutos que todavia no se han
+   * consumido. 0 en cuanto la llamada supera ese minimo. La interfaz lo usa
+   * para explicar por que el primer cobro es mas alto que el tiempo en pantalla.
+   */
+  minimumPaddingSeconds: number;
   /** El otro participante aun no esta en la sala: no se cobra */
   waitingForPartner: boolean;
 }
@@ -40,6 +51,16 @@ export interface BillingTickResult {
  *    cobraban 48). Ahora: total = ceil(tarifa * segundos / 60) y se cobra la
  *    diferencia con lo ya cobrado.
  *
+ *  - La tarifa viaja en CENTITOKENS por minuto (1 token = 100), porque el
+ *    minimo que puede pedir una creadora (1,75 tokens/min) tiene decimales.
+ *    Ver src/lib/rates.ts.
+ *
+ *  - DURACION MINIMA FACTURABLE: 5 minutos. En cuanto hay dos personas en la
+ *    sala se factura como si hubieran pasado 5 minutos, aunque quien llama
+ *    cuelgue antes. Cobrarlo desde el primer tick (y no al colgar) es lo unico
+ *    que impide esquivarlo cerrando la pestana de golpe, y encaja con el saldo
+ *    que ya se exige para poder iniciar la llamada.
+ *
  *  - Las llamadas sin tarifa son la prueba gratuita y se cortan al llegar a
  *    config.economy.freeCallSeconds.
  */
@@ -55,7 +76,7 @@ export async function processBillingTick(
       type: true,
       callerId: true,
       calleeId: true,
-      ratePerMinute: true,
+      rateCentitokens: true,
       startedAt: true,
       lastBilledAt: true,
       billedSeconds: true,
@@ -73,7 +94,7 @@ export async function processBillingTick(
     (await prisma.wallet.findUnique({ where: { userId }, select: { balance: true } }))
       ?.balance ?? 0;
 
-  const isFreeTrial = session.ratePerMinute <= 0 || !session.calleeId;
+  const isFreeTrial = session.rateCentitokens <= 0 || !session.calleeId;
   const freeLimit = config.economy.freeCallSeconds;
 
   if (session.status !== 'ACTIVE' || !session.startedAt) {
@@ -86,6 +107,7 @@ export async function processBillingTick(
       reason: 'DISCONNECTED',
       isFreeTrial,
       freeSecondsRemaining: null,
+      minimumPaddingSeconds: 0,
       waitingForPartner: false,
     };
   }
@@ -118,6 +140,7 @@ export async function processBillingTick(
       freeSecondsRemaining: isFreeTrial && freeLimit > 0
         ? Math.max(0, freeLimit - session.billedSeconds)
         : null,
+      minimumPaddingSeconds: 0,
       waitingForPartner: true,
     };
   }
@@ -148,6 +171,7 @@ export async function processBillingTick(
       reason: exhausted ? 'FREE_LIMIT_REACHED' : undefined,
       isFreeTrial: true,
       freeSecondsRemaining: freeLimit > 0 ? Math.max(0, freeLimit - capped) : null,
+      minimumPaddingSeconds: 0,
       waitingForPartner: false,
     };
   }
@@ -155,6 +179,14 @@ export async function processBillingTick(
   // --- Llamada de pago ------------------------------------------------------
   const payerId = session.callerId;
   const earnerId = session.calleeId!;
+
+  // Minimo de 5 minutos: se factura sobre el maximo entre lo consumido y ese
+  // suelo, de modo que el primer cobro ya lo cubre entero.
+  const chargeableSeconds = Math.max(newBilledSeconds, MIN_BILLED_CALL_SECONDS);
+  const minimumPaddingSeconds = Math.max(
+    0,
+    MIN_BILLED_CALL_SECONDS - newBilledSeconds,
+  );
 
   // Aun no toca cobrar (protege contra ticks duplicados o agresivos)
   if (deltaSeconds < 5) {
@@ -166,12 +198,13 @@ export async function processBillingTick(
       shouldTerminate: false,
       isFreeTrial: false,
       freeSecondsRemaining: null,
+      minimumPaddingSeconds,
       waitingForPartner: false,
     };
   }
 
   // Redondeo unico sobre el acumulado, no por tick.
-  const dueTotal = Math.ceil((session.ratePerMinute * newBilledSeconds) / 60);
+  const dueTotal = tokensForSeconds(session.rateCentitokens, chargeableSeconds);
   const tokensDue = Math.max(0, dueTotal - session.tokensSpent);
 
   if (tokensDue === 0) {
@@ -187,6 +220,7 @@ export async function processBillingTick(
       shouldTerminate: false,
       isFreeTrial: false,
       freeSecondsRemaining: null,
+      minimumPaddingSeconds,
       waitingForPartner: false,
     };
   }
@@ -199,7 +233,10 @@ export async function processBillingTick(
         userId: payerId,
         type: 'CALL_CHARGE',
         tokens: tokensDue,
-        description: `Llamada ${session.type} - ${deltaSeconds}s`,
+        description:
+          minimumPaddingSeconds > 0
+            ? `Llamada ${session.type} - minimo de ${MIN_BILLED_CALL_MINUTES} min`
+            : `Llamada ${session.type} - ${deltaSeconds}s`,
         callSessionId: session.id,
         platformFeeTokens,
       });
@@ -240,8 +277,9 @@ export async function processBillingTick(
     });
 
     // Corta si ya no le da para el siguiente intervalo
-    const nextIntervalCost = Math.ceil(
-      (session.ratePerMinute * config.economy.callBillingIntervalSeconds) / 60,
+    const nextIntervalCost = tokensForSeconds(
+      session.rateCentitokens,
+      config.economy.callBillingIntervalSeconds,
     );
     const shouldTerminate = result.balance < nextIntervalCost;
 
@@ -258,6 +296,7 @@ export async function processBillingTick(
       reason: shouldTerminate ? 'INSUFFICIENT_TOKENS' : undefined,
       isFreeTrial: false,
       freeSecondsRemaining: null,
+      minimumPaddingSeconds,
       waitingForPartner: false,
     };
   } catch (error) {
@@ -272,6 +311,7 @@ export async function processBillingTick(
         reason: 'INSUFFICIENT_TOKENS',
         isFreeTrial: false,
         freeSecondsRemaining: null,
+        minimumPaddingSeconds: 0,
         waitingForPartner: false,
       };
     }
@@ -299,7 +339,7 @@ export async function sweepStaleCalls(): Promise<{
     select: {
       id: true,
       callerId: true,
-      ratePerMinute: true,
+      rateCentitokens: true,
       calleeId: true,
       startedAt: true,
       lastBilledAt: true,
@@ -323,7 +363,7 @@ export async function sweepStaleCalls(): Promise<{
       continue;
     }
 
-    const isFree = session.ratePerMinute <= 0 || !session.calleeId;
+    const isFree = session.rateCentitokens <= 0 || !session.calleeId;
     if (isFree && freeLimit > 0 && session.billedSeconds >= freeLimit) {
       await endCall(session.id, session.callerId, 'FREE_LIMIT_REACHED');
       freeExpired++;
@@ -435,7 +475,7 @@ export async function getCallState(sessionId: string, userId: string) {
       callerId: true,
       calleeId: true,
       roomName: true,
-      ratePerMinute: true,
+      rateCentitokens: true,
       startedAt: true,
       billedSeconds: true,
       tokensSpent: true,

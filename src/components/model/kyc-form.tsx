@@ -298,7 +298,7 @@ export function KycForm({
         </div>
 
         <div className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
-          Al enviar declaras que eres mayor de 18 anos, que la documentacion es
+          Al enviar declaras que eres mayor de 18 años, que la documentacion es
           autentica y que consientes su verificacion y conservacion conforme a
           18 U.S.C. 2257 y la normativa de proteccion de datos aplicable.
         </div>

@@ -160,7 +160,7 @@ export function KycReviewList({ items }: { items: KycItem[] }) {
                     </span>
                     <span className="flex items-center gap-1.5">
                       <Calendar className="h-3.5 w-3.5" />
-                      {formatDate(new Date(item.birthDate))} ({age} anos)
+                      {formatDate(new Date(item.birthDate))} ({age} años)
                     </span>
                     <span className="flex items-center gap-1.5">
                       <FileText className="h-3.5 w-3.5" />

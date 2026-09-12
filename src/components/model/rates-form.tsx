@@ -17,14 +17,31 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { updateRatesAction } from '@/server/actions/model';
+import {
+  MAX_RATE_CENTITOKENS,
+  MIN_BILLED_CALL_MINUTES,
+  MIN_RATE_CENTITOKENS,
+  applyDiscountToRate,
+  centitokensToTokens,
+  clampRateCentitokens,
+  formatRateNumber,
+  tokensForMinutes,
+  tokensToCentitokens,
+} from '@/lib/rates';
 import { formatMoney } from '@/lib/utils';
 
-/** Centavos que cobra la modelo por token (mitad del precio de venta por defecto). */
-const PAYOUT_CENTS_PER_TOKEN = 5;
+/**
+ * Las tarifas se editan en TOKENS con decimales (1,75 - 25) y se guardan en
+ * centitokens. El paso de 0,05 evita que el navegador rechace 1,75 por no ser
+ * multiplo del step, que es lo que pasaria con step=1.
+ */
+const RATE_STEP_TOKENS = 0.05;
+const MIN_RATE_TOKENS = centitokensToTokens(MIN_RATE_CENTITOKENS);
+const MAX_RATE_TOKENS = centitokensToTokens(MAX_RATE_CENTITOKENS);
 
 export function RatesForm({
-  vipRatePerMinute: initialVip,
-  privateRatePerMinute: initialPrivate,
+  vipRateCentitokens: initialVip,
+  privateRateCentitokens: initialPrivate,
   minPrivateMinutes: initialMin,
   isVipEnabled: initialVipEnabled,
   acceptsBookings: initialBookings,
@@ -34,9 +51,11 @@ export function RatesForm({
   messagingEnabled: initialMsgEnabled,
   messagePriceTokens: initialMsgPrice,
   kycApproved,
+  modelSharePercent,
+  payoutCentsPerToken,
 }: {
-  vipRatePerMinute: number;
-  privateRatePerMinute: number;
+  vipRateCentitokens: number;
+  privateRateCentitokens: number;
   minPrivateMinutes: number;
   isVipEnabled: boolean;
   acceptsBookings: boolean;
@@ -46,12 +65,26 @@ export function RatesForm({
   messagingEnabled: boolean;
   messagePriceTokens: number;
   kycApproved: boolean;
+  /** % de los tokens gastados que se queda la creadora (60 por defecto). */
+  modelSharePercent: number;
+  /** Centavos que vale cada token ganado al retirarlo. */
+  payoutCentsPerToken: number;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  const [vipRate, setVipRate] = useState(initialVip);
-  const [privateRate, setPrivateRate] = useState(initialPrivate);
+  // Texto libre mientras se teclea, para poder escribir "1," sin que el
+  // campo salte a 1 en cuanto se pulsa la coma.
+  const [vipRateText, setVipRateText] = useState(() =>
+    formatRateNumber(initialVip).replace(',', '.'),
+  );
+  const [privateRateText, setPrivateRateText] = useState(() =>
+    formatRateNumber(initialPrivate).replace(',', '.'),
+  );
+
+  const vipRate = clampRateCentitokens(tokensToCentitokens(vipRateText));
+  const privateRate = clampRateCentitokens(tokensToCentitokens(privateRateText));
+
   const [minMinutes, setMinMinutes] = useState(initialMin);
   const [vipEnabled, setVipEnabled] = useState(initialVipEnabled);
   const [bookings, setBookings] = useState(initialBookings);
@@ -61,11 +94,22 @@ export function RatesForm({
   const [msgEnabled, setMsgEnabled] = useState(initialMsgEnabled);
   const [msgPrice, setMsgPrice] = useState(initialMsgPrice);
 
+  /** Ganancia neta en centavos por minuto a esa tarifa. */
+  const earnPerMinuteCents = (rateCentitokens: number) =>
+    Math.round(
+      (centitokensToTokens(rateCentitokens) *
+        modelSharePercent *
+        payoutCentsPerToken) /
+        100,
+    );
+  const earnCents = (tokens: number) =>
+    Math.round((tokens * modelSharePercent * payoutCentsPerToken) / 100);
+
   function save() {
     startTransition(async () => {
       const result = await updateRatesAction({
-        vipRatePerMinute: vipRate,
-        privateRatePerMinute: privateRate,
+        vipRateCentitokens: vipRate,
+        privateRateCentitokens: privateRate,
         minPrivateMinutes: minMinutes,
         isVipEnabled: vipEnabled,
         acceptsBookings: bookings,
@@ -90,8 +134,12 @@ export function RatesForm({
       <CardHeader>
         <CardTitle>Tarifas por minuto</CardTitle>
         <CardDescription>
-          Tu ganancia neta es del 70% de los tokens consumidos. Los importes en
-          dolares son estimados sobre {PAYOUT_CENTS_PER_TOKEN} centavos por token.
+          Te quedas con el {modelSharePercent}% de los tokens consumidos. Los
+          importes en dolares son estimados sobre{' '}
+          {formatMoney(payoutCentsPerToken)} por token, antes de la comision de
+          retiro. Puedes cobrar entre{' '}
+          {formatRateNumber(MIN_RATE_CENTITOKENS)} y{' '}
+          {formatRateNumber(MAX_RATE_CENTITOKENS)} tokens por minuto.
         </CardDescription>
       </CardHeader>
 
@@ -104,19 +152,18 @@ export function RatesForm({
               <Input
                 id="vipRate"
                 type="number"
-                min={1}
-                max={1000}
-                value={vipRate}
-                onChange={(e) => setVipRate(Number(e.target.value))}
+                inputMode="decimal"
+                min={MIN_RATE_TOKENS}
+                max={MAX_RATE_TOKENS}
+                step={RATE_STEP_TOKENS}
+                value={vipRateText}
+                onChange={(e) => setVipRateText(e.target.value)}
                 className="pl-9"
               />
             </div>
             <p className="text-xs text-muted-foreground">
-              Ganas ~
-              {formatMoney(
-                Math.round(vipRate * 0.7 * PAYOUT_CENTS_PER_TOKEN),
-              )}{' '}
-              por minuto en directo.
+              {formatRateNumber(vipRate)} tokens/min &middot; ganas ~
+              {formatMoney(earnPerMinuteCents(vipRate))} por minuto en directo.
             </p>
           </div>
 
@@ -127,19 +174,19 @@ export function RatesForm({
               <Input
                 id="privateRate"
                 type="number"
-                min={1}
-                max={2000}
-                value={privateRate}
-                onChange={(e) => setPrivateRate(Number(e.target.value))}
+                inputMode="decimal"
+                min={MIN_RATE_TOKENS}
+                max={MAX_RATE_TOKENS}
+                step={RATE_STEP_TOKENS}
+                value={privateRateText}
+                onChange={(e) => setPrivateRateText(e.target.value)}
                 className="pl-9"
               />
             </div>
             <p className="text-xs text-muted-foreground">
-              Ganas ~
-              {formatMoney(
-                Math.round(privateRate * 0.7 * PAYOUT_CENTS_PER_TOKEN),
-              )}{' '}
-              por minuto reservado.
+              {formatRateNumber(privateRate)} tokens/min &middot; ganas ~
+              {formatMoney(earnPerMinuteCents(privateRate))} por minuto
+              reservado.
             </p>
           </div>
         </div>
@@ -149,13 +196,16 @@ export function RatesForm({
           <Input
             id="minMinutes"
             type="number"
-            min={5}
+            min={MIN_BILLED_CALL_MINUTES}
             max={120}
             value={minMinutes}
             onChange={(e) => setMinMinutes(Number(e.target.value))}
           />
           <p className="text-xs text-muted-foreground">
-            Reserva minima: {minMinutes * privateRate} tokens.
+            Se facturan {minMinutes} minutos como minimo (
+            {tokensForMinutes(privateRate, minMinutes)} tokens) aunque la
+            llamada se corte antes. El minimo de la plataforma es de{' '}
+            {MIN_BILLED_CALL_MINUTES} min.
           </p>
         </div>
 
@@ -231,11 +281,8 @@ export function RatesForm({
                   />
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Ganas ~
-                  {formatMoney(
-                    Math.round(subPrice * 0.7 * PAYOUT_CENTS_PER_TOKEN),
-                  )}{' '}
-                  por suscriptor cada mes.
+                  Ganas ~{formatMoney(earnCents(subPrice))} por suscriptor cada
+                  mes.
                 </p>
               </div>
 
@@ -253,9 +300,8 @@ export function RatesForm({
                 />
                 <p className="text-xs text-muted-foreground">
                   Tu tarifa de privado les queda en{' '}
-                  {Math.max(
-                    1,
-                    Math.round(privateRate * (1 - subDiscount / 100)),
+                  {formatRateNumber(
+                    applyDiscountToRate(privateRate, subDiscount),
                   )}{' '}
                   tokens/min.
                 </p>
@@ -297,9 +343,8 @@ export function RatesForm({
                 />
               </div>
               <p className="text-xs text-muted-foreground">
-                Ganas ~
-                {formatMoney(Math.round(msgPrice * 0.7 * PAYOUT_CENTS_PER_TOKEN))}{' '}
-                por cada conversacion nueva.
+                Ganas ~{formatMoney(earnCents(msgPrice))} por cada conversacion
+                nueva.
               </p>
             </div>
           )}

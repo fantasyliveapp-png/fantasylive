@@ -49,7 +49,7 @@ export default async function SettingsPage() {
               label="Fecha de nacimiento"
               value={
                 user.birthDate
-                  ? `${formatDate(user.birthDate)} (${calculateAge(user.birthDate)} anos)`
+                  ? `${formatDate(user.birthDate)} (${calculateAge(user.birthDate)} años)`
                   : 'No indicada'
               }
             />

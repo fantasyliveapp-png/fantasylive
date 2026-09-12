@@ -1,5 +1,8 @@
 import type {
   BookingStatus,
+  LiveStreamSource,
+  LiveStreamStatus,
+  PostVisibility,
   CallType,
   ContentRequestStatus,
   Gender,
@@ -137,6 +140,9 @@ export const TRANSACTION_TYPE_LABELS: Record<TransactionType, string> = {
   MESSAGE_UNLOCK_EARNING: 'Ganancia por conversacion',
   MESSAGE_ATTACHMENT_UNLOCK: 'Desbloqueo de archivo adjunto',
   MESSAGE_ATTACHMENT_EARNING: 'Ganancia por archivo adjunto',
+  POST_UNLOCK: 'Desbloqueo de publicacion',
+  POST_EARNING: 'Ganancia por publicacion',
+  PAYOUT_FEE: 'Comision de retiro',
 };
 
 /** Cantidades rapidas del boton de regalo durante una llamada */
@@ -189,4 +195,30 @@ export const LANGUAGES = [
   'Ruso',
 ] as const;
 
-export const BOOKING_DURATIONS = [10, 15, 20, 30, 45, 60] as const;
+export const BOOKING_DURATIONS = [5, 10, 15, 20, 30, 45, 60] as const;
+
+/** Cantidades rapidas del boton de regalo en un directo. */
+export const STREAM_GIFT_PRESETS = [
+  { tokens: 10, emoji: '✨', label: 'Brillo' },
+  { tokens: 25, emoji: '🎁', label: 'Regalo' },
+  { tokens: 75, emoji: '🚀', label: 'Cohete' },
+  { tokens: 200, emoji: '💎', label: 'Diamante' },
+  { tokens: 1000, emoji: '👑', label: 'Corona' },
+] as const;
+
+export const POST_VISIBILITY_LABELS: Record<PostVisibility, string> = {
+  PUBLIC: 'Publica',
+  LOCKED: 'De pago (borrosa)',
+  SUBSCRIBERS: 'Solo suscriptores',
+};
+
+export const LIVE_STATUS_LABELS: Record<LiveStreamStatus, string> = {
+  PREPARING: 'Preparando',
+  LIVE: 'En directo',
+  ENDED: 'Finalizado',
+};
+
+export const LIVE_SOURCE_LABELS: Record<LiveStreamSource, string> = {
+  BROWSER: 'Camara del navegador',
+  OBS_RTMP: 'OBS / RTMP',
+};

@@ -276,6 +276,14 @@ function toMessage(error: unknown): string {
       return 'El paquete seleccionado no esta disponible.';
     if (error.message === 'STRIPE_NOT_CONFIGURED')
       return 'La pasarela de pago no esta configurada. Usa PAYMENT_PROVIDER=mock en local.';
+    if (error.message === 'PAYPAL_NOT_CONFIGURED')
+      return 'PayPal no esta configurado. Revisa PAYPAL_CLIENT_ID y PAYPAL_CLIENT_SECRET.';
+    if (
+      error.message === 'PAYPAL_ORDER_FAILED' ||
+      error.message === 'PAYPAL_NO_APPROVAL_URL' ||
+      error.message.startsWith('PAYPAL_AUTH_FAILED')
+    )
+      return 'No se pudo iniciar el pago con PayPal. Intentalo de nuevo.';
     return error.message;
   }
   return 'Error inesperado.';

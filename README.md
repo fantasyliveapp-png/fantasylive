@@ -391,6 +391,29 @@ Las claves de S3 nunca llegan al navegador. `GET /api/content/:id/assets` compru
 
 Al reservar se **retienen** los tokens (`BOOKING_HOLD`). La cancelación por parte de la modelo devuelve el 100%; la del usuario con menos de 2 h de antelación penaliza el 50%. La sala se abre 10 minutos antes y se cierra 15 minutos después del final previsto. Al liquidar, el importe retenido se libera a la modelo menos comisión.
 
+### Perfiles atendidos por IA
+
+Un perfil con `isAi = true` responde los mensajes con un modelo de Anthropic en vez de con una persona. Se crean con `npm run db:seed-ai` (idempotente, no toca los perfiles reales) y hacen falta `ANTHROPIC_API_KEY` y `PAYMENT_PROVIDER` aparte.
+
+| Pieza | Qué hace |
+|---|---|
+| `src/lib/ai.ts` | Cliente de Anthropic y prompt del sistema |
+| `src/lib/ai-responder.ts` | Carga el historial, genera la respuesta y la guarda |
+| `scripts/seed-ai-models.mts` | Crea los perfiles de IA |
+
+**Estos perfiles se declaran como IA en toda la interfaz, y no es opcional.** La mensajería se cobra en tokens (`messagePriceTokens`), así que un usuario que pagase creyendo que le contesta una persona estaría siendo engañado — es publicidad engañosa, y en el sector del chat para adultos ya ha costado sanciones. La divulgación está en cuatro sitios, tres de ellos antes del cobro:
+
+- etiqueta **IA** en la tarjeta del catálogo;
+- etiqueta **Perfil con IA** junto al nombre en la ficha;
+- aviso explícito sobre el botón de mensaje: responde un asistente y no habrá videollamadas ni contenido propio;
+- etiqueta **IA** en cada burbuja de mensaje generado (`Message.isAiGenerated`).
+
+El quinto flanco lo cierra el propio prompt: entre las reglas inquebrantables de `src/lib/ai.ts` está declararse IA si se lo preguntan, no prometer videollamadas ni contenido, y no pedir dinero ni empujar al gasto. Si cambias el `aiPersona` de un perfil, esas reglas se mantienen: la personalidad no las puede sobrescribir.
+
+Los perfiles de IA nacen con **videollamadas y reservas desactivadas** (`isVipEnabled`, `acceptsBookings` en `false`). No hay nadie al otro lado de la cámara, así que cobrar una llamada sería vender algo inexistente.
+
+Si falta `ANTHROPIC_API_KEY`, los perfiles existen pero no contestan. Nunca se degrada a que responda una persona sin avisar, ni al revés.
+
 ### Roles y protección
 
 `src/middleware.ts` corre en Edge Runtime con una instancia de Auth.js **sin adaptador Prisma** (por eso la configuración está partida en `auth.config.ts` / `index.ts`). Redirige a `/login` conservando el destino, bloquea `/admin` a no administradores y expulsa a las cuentas baneadas a `/banned`. Cada Server Action revalida el rol por su cuenta: el middleware es la primera barrera, no la única.
@@ -490,6 +513,53 @@ DATABASE_URL="tu-url-directa" npm run db:seed
 
 Si usas Stripe, añade el endpoint `https://tu-dominio.vercel.app/api/webhooks/stripe` en el dashboard, suscribe el evento `checkout.session.completed` y copia el signing secret a `STRIPE_WEBHOOK_SECRET`.
 
+### 6. PayPal (sandbox)
+
+La integración está completa; solo hay que darla de alta. Todo esto se hace en modo sandbox, sin dinero real.
+
+**1. Credenciales.** En [developer.paypal.com/dashboard/applications](https://developer.paypal.com/dashboard/applications), pestaña **Sandbox**, crea una app REST y copia sus claves:
+
+```bash
+PAYMENT_PROVIDER="paypal"
+PAYPAL_CLIENT_ID="..."
+PAYPAL_CLIENT_SECRET="..."
+PAYPAL_MODE="sandbox"
+```
+
+Las credenciales de sandbox y las de live son distintas y no se mezclan. `PAYPAL_MODE` decide contra qué API se habla (`api-m.sandbox.paypal.com` o `api-m.paypal.com`).
+
+**2. Webhook.** En la misma app, sección **Webhooks**, añade `https://tu-dominio/api/webhooks/paypal` y suscribe estos eventos:
+
+| Evento | Para qué |
+|---|---|
+| `CHECKOUT.ORDER.APPROVED` | El usuario aprobó el pago |
+| `PAYMENT.CAPTURE.COMPLETED` | El cobro se completó (acredita los tokens) |
+| `PAYMENT.CAPTURE.DENIED` | Cobro rechazado |
+| `PAYMENT.CAPTURE.REFUNDED` | Reembolso |
+| `CUSTOMER.DISPUTE.CREATED` | Contracargo |
+
+Copia el **Webhook ID** que aparece al guardarlo a `PAYPAL_WEBHOOK_ID`. No es un secreto, pero sin él **el webhook rechaza todos los eventos**: PayPal no firma con un HMAC compartido como Stripe, sino que hay que preguntarle a su API si la transmisión es auténtica, y esa llamada necesita el ID.
+
+**3. Comprador de prueba.** En **Testing Tools → Sandbox accounts** tienes una cuenta *Personal* con saldo ficticio. Es la que se usa para pagar en el checkout de sandbox, no tu cuenta real.
+
+**4. Probar.** Compra un paquete desde `/wallet`. El flujo es:
+
+```
+/wallet  ->  POST /v2/checkout/orders  ->  checkout de PayPal
+                                                  |
+                    GET /api/payments/paypal/capture  <-  vuelve aquí
+                                                  |
+                                    POST /v2/.../capture  ->  tokens acreditados
+```
+
+**Doble vía de acreditación, a propósito.** La captura ocurre tanto cuando el usuario vuelve como cuando llega el webhook, porque un usuario que cierra el navegador tras pagar no vuelve nunca. Las dos usan el **ID de la orden** como `providerRef`, que tiene índice único, así que la acreditación es idempotente: quien llegue segundo no duplica los tokens.
+
+Lo que se acredita **no se lee de la respuesta de PayPal** sino de la transacción `PENDING` creada al abrir la orden. Lo que vuelve por el navegador no decide cuántos tokens entran.
+
+Para probar el webhook en local hace falta exponer el puerto (`ngrok http 3000`) y usar esa URL pública al darlo de alta, porque PayPal tiene que poder llegar.
+
+**Al pasar a producción**: cambia `PAYPAL_MODE` a `live`, sustituye las credenciales por las de la pestaña Live y da de alta el webhook otra vez (el ID de sandbox no vale).
+
 ### Notas de producción
 
 - El SSE de matchmaking corta a los ~55 s y el cliente reconecta solo. En el plan Hobby las funciones tienen un límite de 60 s; `vercel.json` ya lo configura.
@@ -565,6 +635,28 @@ ufw allow 22/tcp && ufw allow 80/tcp && ufw allow 443/tcp && ufw --force enable
 
 > **`prisma/seed.ts` no se usa en producción**: empieza borrando todas las tablas y crea usuarios de prueba con una contraseña conocida. Para producción está `scripts/bootstrap-production.mts`, que es idempotente, no borra nada y exige una `ADMIN_PASSWORD` fuerte.
 
+### DNS
+
+Hacen falta **los dos nombres**, no solo el apex:
+
+| Registro | Nombre | Valor |
+|---|---|---|
+| `A` / `AAAA` | `tudominio.com` | IP del servidor (o proxy del CDN) |
+| `CNAME` | `www` | `tudominio.com` |
+
+Si falta el `CNAME` de `www`, quien escriba `www.tudominio.com` recibe **NXDOMAIN**, que Safari muestra como *«no se encuentra el servidor»* y Chrome como *«DNS_PROBE_FINISHED_NXDOMAIN»*. `deploy/nginx.conf` ya trae el bloque que redirige `www` al apex, pero necesita que el registro exista.
+
+El host canónico importa: las cookies de sesión son `__Host-*`, ligadas al host exacto, así que `www` y el apex tendrían sesiones distintas. Por eso se redirige en vez de servir en ambos.
+
+> **Aviso para España si usas el proxy de Cloudflare.** Con el proxy activo (nube naranja) el dominio resuelve a IPs compartidas de Cloudflare (`104.21.x.x`, `172.67.x.x`). Los operadores españoles bloquean por orden judicial rangos completos de esas IPs, lo que tumba sitios ajenos al motivo del bloqueo: el dominio funciona desde el resto del mundo y falla solo desde España. Si te afecta, la salida es **desactivar el proxy** (nube gris, «DNS only») para que el registro apunte directo al VPS.
+>
+> Antes de hacerlo, dos requisitos:
+>
+> - **Certificado válido en el origen.** Es obligatorio, no opcional: sin Cloudflare delante, el TLS lo termina tu nginx. Y si el dominio es `.app`, ese TLD está en la lista HSTS precargada de los navegadores, así que HTTPS no se puede omitir ni aceptando una advertencia. Ejecuta `certbot` (más abajo) *antes* de quitar el proxy.
+> - **Expones la IP de origen**, pero en esta app ya estaba expuesta: el media de WebRTC viaja directo a los puertos 7882/udp y 7881/tcp del servidor porque Cloudflare no proxia UDP.
+>
+> El bloqueo geográfico no se rompe: `src/lib/geo.ts` cae a `geoip-lite` (base MaxMind local) cuando no llega la cabecera `cf-ipcountry`. Sí conviene regenerar `/etc/nginx/conf.d/cloudflare.conf` con `deploy/cloudflare-realip.sh`, porque sin Cloudflare `$remote_addr` ya es la IP real del visitante.
+
 ### HTTPS
 
 Una autoridad pública no emite certificados para direcciones IP, así que el TLS necesita un dominio:
@@ -613,6 +705,7 @@ curl -H "x-health-token: $HEALTH_CHECK_TOKEN" http://127.0.0.1/api/health
 | `npm run db:seed` | Puebla con datos ficticios. **Borra todas las tablas primero: nunca en produccion** |
 | `npm run db:reset` | Borra, migra y siembra de nuevo |
 | `npm run db:bootstrap` | Alta idempotente para **produccion**: ajustes, packs de tokens y admin, sin datos ficticios. Requiere `ADMIN_EMAIL` y `ADMIN_PASSWORD` |
+| `npm run db:seed-ai` | Crea o actualiza los perfiles atendidos por IA. Idempotente; no toca los perfiles reales |
 | `npm run db:studio` | GUI de Prisma en el navegador |
 | `npm run setup:local` | Todo lo anterior encadenado |
 

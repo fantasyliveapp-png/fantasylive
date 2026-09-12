@@ -8,8 +8,10 @@ import {
   Crown,
   Gift,
   MessageCircle,
+  ImageIcon,
   Paperclip,
   PhoneCall,
+  Radio,
   Star,
   UserPlus,
 } from 'lucide-react';
@@ -47,6 +49,9 @@ const TYPE_ICON: Record<NotificationType, typeof Bell> = {
   NEW_MESSAGE: MessageCircle,
   MESSAGE_ATTACHMENT_UNLOCKED: Paperclip,
   INCOMING_CALL: PhoneCall,
+  LIVE_STARTED: Radio,
+  NEW_POST: ImageIcon,
+  GIFT_RECEIVED: Gift,
 };
 
 export function NotificationBell() {

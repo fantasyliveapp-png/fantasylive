@@ -30,6 +30,10 @@ export interface MessageRow {
   body: string | null;
   createdAt: string;
   isMine: boolean;
+  /// Generado por el asistente de un perfil de IA. Se etiqueta siempre: la
+  /// mensajeria se cobra y el usuario tiene que saber que no le responde una
+  /// persona.
+  isAiGenerated: boolean;
   attachment: MessageAttachmentView | null;
 }
 
@@ -177,10 +181,15 @@ export function MessageThread({
                 {m.body && <p className="whitespace-pre-line">{m.body}</p>}
                 <p
                   className={cn(
-                    'text-[10px] opacity-70',
-                    m.isMine ? 'text-right' : 'text-left',
+                    'flex items-center gap-1.5 text-[10px] opacity-70',
+                    m.isMine ? 'justify-end' : 'justify-start',
                   )}
                 >
+                  {m.isAiGenerated && (
+                    <span className="rounded bg-foreground/15 px-1 py-px font-semibold uppercase tracking-wide">
+                      IA
+                    </span>
+                  )}
                   {relativeTime(m.createdAt)}
                 </p>
               </div>

@@ -24,6 +24,11 @@ import {
   pollQueueAction,
 } from '@/server/actions/calls';
 import { formatDuration, formatTokens } from '@/lib/utils';
+import {
+  affordableMinutesAtRate,
+  formatRate,
+  tokensForMinutes,
+} from '@/lib/rates';
 
 interface MatchmakingLobbyProps {
   mode: 'RANDOM' | 'VIP';
@@ -33,16 +38,18 @@ interface MatchmakingLobbyProps {
     onlineModels: number;
     vipModels: number;
   };
-  /** Tarifa mas barata disponible ahora mismo (solo modo VIP) */
-  minRate?: number;
+  /** Tarifa mas barata disponible ahora mismo, en centitokens/min (solo VIP) */
+  minRateCentitokens?: number;
 }
 
 export function MatchmakingLobby({
   mode,
   balance,
   stats,
-  minRate = 0,
+  minRateCentitokens = 0,
 }: MatchmakingLobbyProps) {
+  // Tokens enteros que hay que tener para sostener el primer minuto.
+  const minTokens = tokensForMinutes(minRateCentitokens, 1);
   const router = useRouter();
 
   const [isSearching, setIsSearching] = useState(false);
@@ -129,8 +136,8 @@ export function MatchmakingLobby({
   );
 
   async function startSearching() {
-    if (mode === 'VIP' && balance < minRate) {
-      toast.error(`Necesitas al menos ${minRate} tokens para entrar en VIP.`);
+    if (mode === 'VIP' && balance < minTokens) {
+      toast.error(`Necesitas al menos ${minTokens} tokens para entrar en VIP.`);
       router.push('/wallet');
       return;
     }
@@ -264,14 +271,17 @@ export function MatchmakingLobby({
             <div className="rounded-lg border border-token/30 bg-token/10 p-3">
               <p className="flex items-center gap-2 text-sm font-medium">
                 <Coins className="h-4 w-4 text-token" />
-                Desde {minRate} tokens/min
+                Desde {formatRate(minRateCentitokens)}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
                 El cobro empieza al conectar y se detiene al instante cuando
                 cuelgas o pasas a la siguiente. Con tu saldo actual tienes
                 aproximadamente{' '}
                 <strong>
-                  {minRate > 0 ? Math.floor(balance / minRate) : '-'} minutos
+                  {minRateCentitokens > 0
+                    ? affordableMinutesAtRate(balance, minRateCentitokens)
+                    : '-'}{' '}
+                  minutos
                 </strong>
                 .
               </p>

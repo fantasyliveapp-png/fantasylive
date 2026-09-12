@@ -46,7 +46,7 @@ export function RegisterForm({ defaultRole }: { defaultRole: 'USER' | 'MODEL' })
     if (state.error) toast.error(state.error);
   }, [state, role, router]);
 
-  // Fecha maxima permitida: hoy menos 18 anos
+  // Fecha maxima permitida: hoy menos 18 años
   const maxBirthDate = new Date();
   maxBirthDate.setFullYear(maxBirthDate.getFullYear() - 18);
 
@@ -189,8 +189,8 @@ export function RegisterForm({ defaultRole }: { defaultRole: 'USER' | 'MODEL' })
               className="mt-0.5 h-4 w-4 rounded border-border accent-[hsl(var(--primary))]"
             />
             <span>
-              Confirmo que tengo 18 anos o mas y acepto los terminos de servicio
-              y la politica de privacidad.
+              Confirmo que tengo 18 años o más y acepto los términos de servicio
+              y la política de privacidad.
             </span>
           </label>
 

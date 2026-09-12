@@ -16,12 +16,13 @@ import {
 } from '@/components/ui/dialog';
 import { startPrivateCallAction } from '@/server/actions/calls';
 import { cn } from '@/lib/utils';
+import { formatRate, formatRateNumber } from '@/lib/rates';
 
 export function StartPrivateCallButton({
   slug,
   stageName,
   isOnline,
-  ratePerMinute,
+  rateCentitokens,
   minMinutes,
   isAuthenticated,
   size = 'lg',
@@ -30,7 +31,7 @@ export function StartPrivateCallButton({
   slug: string;
   stageName: string;
   isOnline: boolean;
-  ratePerMinute: number;
+  rateCentitokens: number;
   minMinutes: number;
   isAuthenticated: boolean;
   size?: ButtonProps['size'];
@@ -75,7 +76,7 @@ export function StartPrivateCallButton({
           <Video className="h-5 w-5" />
         )}
         {isOnline
-          ? `Llamar ahora · ${ratePerMinute}/min`
+          ? `Llamar ahora · ${formatRateNumber(rateCentitokens)}/min`
           : 'Offline · reserva mas abajo'}
       </Button>
 
@@ -85,7 +86,7 @@ export function StartPrivateCallButton({
             <DialogTitle>Llamar a {stageName}</DialogTitle>
             <DialogDescription>
               Se cobran{' '}
-              <strong className="text-token">{ratePerMinute} tokens/min</strong>,
+              <strong className="text-token">{formatRate(rateCentitokens)}</strong>,
               minimo {minMinutes} min. El cobro se detiene en cuanto cuelgas.
             </DialogDescription>
           </DialogHeader>
