@@ -195,7 +195,7 @@ CREATE TABLE "live_streams" (
     "streamKey" TEXT,
     "viewerCount" INTEGER NOT NULL DEFAULT 0,
     "viewerPeak" INTEGER NOT NULL DEFAULT 0,
-    "uniqueViewers" INTEGER NOT NULL DEFAULT 0,
+    "totalJoins" INTEGER NOT NULL DEFAULT 0,
     "giftsCount" INTEGER NOT NULL DEFAULT 0,
     "tokensEarned" INTEGER NOT NULL DEFAULT 0,
     "startedAt" TIMESTAMP(3),

@@ -1428,8 +1428,9 @@ model LiveStream {
 
   viewerCount   Int @default(0)
   viewerPeak    Int @default(0)
-  /// Espectadores distintos que han entrado
-  uniqueViewers Int @default(0)
+  /// Entradas acumuladas a la sala (no personas distintas: quien recarga
+  /// la pagina cuenta otra vez). Las personas distintas salen de ProfileVisit.
+  totalJoins Int @default(0)
   giftsCount    Int @default(0)
   tokensEarned  Int @default(0)
 

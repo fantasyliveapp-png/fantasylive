@@ -130,7 +130,6 @@ export async function getCreatorAnalytics(params: {
         subscription: { select: { userId: true } },
         contentRequest: { select: { userId: true } },
         post: { select: { id: true } },
-        metadata: true,
       },
     }),
     prisma.profileVisit.findMany({
