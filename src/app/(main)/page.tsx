@@ -2,66 +2,41 @@ import Link from 'next/link';
 import {
   ArrowRight,
   Coins,
+  Compass,
   Crown,
   Lock,
+  Radio,
   Shuffle,
   Sparkles,
   Users,
   Video,
 } from 'lucide-react';
 
+import { LiveCard } from '@/components/live/live-card';
 import { ModelCard } from '@/components/models/model-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { getVisibilityContext } from '@/lib/geo';
+import { getI18n } from '@/lib/i18n/server';
+import { getLiveStreams } from '@/lib/live';
 import { getQueueStats } from '@/lib/matchmaking';
 import { prisma } from '@/lib/prisma';
 import { formatTokens } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
-const FEATURES = [
-  {
-    icon: Shuffle,
-    title: 'Llamadas aleatorias',
-    description:
-      'Conecta al instante con gente nueva de todo el mundo. Filtra por genero y salta a la siguiente cuando quieras.',
-    href: '/random',
-    cta: 'Empezar gratis',
-  },
-  {
-    icon: Crown,
-    title: 'Sala VIP',
-    description:
-      'Conexion aleatoria exclusivamente con creadores VIP verificados y en linea. Pagas solo por los minutos que usas.',
-    href: '/vip',
-    cta: 'Entrar en VIP',
-  },
-  {
-    icon: Video,
-    title: 'Privados reservados',
-    description:
-      'Agenda una videollamada 1 a 1 con tu creador favorito en el horario que mejor te venga.',
-    href: '/models',
-    cta: 'Ver creadores',
-  },
-  {
-    icon: Lock,
-    title: 'Contenido exclusivo',
-    description:
-      'Packs de fotos y videos que desbloqueas con tokens. Acceso permanente una vez comprado.',
-    href: '/models',
-    cta: 'Explorar',
-  },
-];
-
 export default async function HomePage() {
-  // Los perfiles que bloquean el pais del visitante no salen ni en destacados.
-  const { filter: geoFilter } = await getVisibilityContext();
+  // Los perfiles que bloquean el pais del visitante no salen ni en destacados
+  // ni en los directos de portada.
+  const [{ t }, { filter: geoFilter }] = await Promise.all([
+    getI18n(),
+    getVisibilityContext(),
+  ]);
 
-  const [stats, featured, packages] = await Promise.all([
+  const [stats, liveStreams, featured, packages] = await Promise.all([
     getQueueStats(),
+    getLiveStreams({ geoFilter, take: 6 }),
     prisma.modelProfile.findMany({
       where: { kycStatus: 'APPROVED', ...geoFilter },
       orderBy: [{ isOnline: 'desc' }, { ratingAvg: 'desc' }],
@@ -95,39 +70,71 @@ export default async function HomePage() {
     }),
   ]);
 
+  const features = [
+    {
+      icon: Compass,
+      title: t('feed.discover'),
+      description:
+        'Un feed con lo ultimo de todas las creadoras, y otro solo con las que sigues. Publicaciones publicas, de pago y exclusivas para suscriptores.',
+      href: '/feed',
+      cta: t('home.exploreFeed'),
+    },
+    {
+      icon: Radio,
+      title: t('live.title'),
+      description:
+        'Directos de creadoras verificadas. Entra gratis, comenta en el chat y envia regalos en tokens.',
+      href: '/live',
+      cta: t('live.liveNow'),
+    },
+    {
+      icon: Shuffle,
+      title: 'Llamadas aleatorias',
+      description:
+        'Conecta al instante con gente nueva de todo el mundo. Filtra por genero y salta a la siguiente cuando quieras.',
+      href: '/random',
+      cta: 'Empezar gratis',
+    },
+    {
+      icon: Video,
+      title: 'Privados 1 a 1',
+      description:
+        'Videollamada privada con tu creadora favorita, al instante o reservada. Pagas solo los minutos que usas.',
+      href: '/models',
+      cta: t('nav.creators'),
+    },
+  ];
+
   return (
     <>
       {/* HERO */}
       <section className="relative overflow-hidden border-b border-border/60">
-        <div className="container py-20 md:py-28">
+        <div className="container py-16 md:py-24">
           <div className="mx-auto max-w-3xl text-center">
             <Badge variant="vip" className="mb-6 px-4 py-1.5 text-sm">
               <Sparkles className="h-3.5 w-3.5" />
-              {stats.onlineModels} creadores en linea ahora mismo
+              {t('home.creatorsOnline', { count: stats.onlineModels })}
             </Badge>
 
             <h1 className="text-balance text-4xl font-bold leading-tight tracking-tight md:text-6xl">
-              Conoce gente real,{' '}
-              <span className="text-gradient">sin guiones</span>
+              {t('home.heroTitle')}
             </h1>
 
             <p className="mx-auto mt-6 max-w-2xl text-balance text-lg text-muted-foreground">
-              Videollamadas para conocer gente nueva, sesiones privadas con
-              tus creadores favoritos y contenido exclusivo. Todo con un
-              unico monedero de tokens.
+              {t('home.heroSubtitle')}
             </p>
 
             <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
-              <Link href="/random">
+              <Link href="/feed">
                 <Button variant="brand" size="lg">
-                  <Shuffle className="h-5 w-5" />
-                  Llamada aleatoria gratis
+                  <Compass className="h-5 w-5" />
+                  {t('home.exploreFeed')}
                 </Button>
               </Link>
-              <Link href="/vip">
+              <Link href="/random">
                 <Button variant="outline" size="lg">
-                  <Crown className="h-5 w-5" />
-                  Sala VIP
+                  <Shuffle className="h-5 w-5" />
+                  {t('home.startFree')}
                 </Button>
               </Link>
             </div>
@@ -135,14 +142,14 @@ export default async function HomePage() {
             {/* Metricas en vivo */}
             <div className="mx-auto mt-14 grid max-w-2xl grid-cols-2 gap-4 md:grid-cols-4">
               {[
+                {
+                  label: 'En directo',
+                  value: liveStreams.length,
+                  icon: Radio,
+                },
                 { label: 'Creadores en linea', value: stats.onlineModels, icon: Users },
                 { label: 'Creadores VIP', value: stats.vipModels, icon: Crown },
                 { label: 'Llamadas activas', value: stats.activeCalls, icon: Video },
-                {
-                  label: 'En cola',
-                  value: stats.waitingRandom + stats.waitingVip,
-                  icon: Shuffle,
-                },
               ].map((stat) => (
                 <div
                   key={stat.label}
@@ -158,10 +165,45 @@ export default async function HomePage() {
         </div>
       </section>
 
+      {/* EN DIRECTO AHORA */}
+      <section className="border-b border-border/60 bg-card/20 py-14">
+        <div className="container">
+          <div className="mb-8 flex items-end justify-between gap-4">
+            <div>
+              <h2 className="flex items-center gap-2 text-2xl font-bold tracking-tight md:text-3xl">
+                <span className="live-dot" />
+                {t('home.liveNow')}
+              </h2>
+              <p className="mt-2 text-muted-foreground">
+                Solo creadoras con KYC aprobado pueden emitir.
+              </p>
+            </div>
+            <Link href="/live">
+              <Button variant="outline">
+                {t('common.seeAll')}
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+          </div>
+
+          {liveStreams.length === 0 ? (
+            <p className="rounded-xl border border-border/60 bg-card/40 p-8 text-center text-sm text-muted-foreground">
+              {t('home.liveNowEmpty')}
+            </p>
+          ) : (
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {liveStreams.map((stream) => (
+                <LiveCard key={stream.id} stream={stream} />
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
       {/* MODOS */}
-      <section className="container py-20">
-        <div className="mb-12 text-center">
-          <h2 className="text-3xl font-bold tracking-tight">
+      <section className="container py-16">
+        <div className="mb-10 text-center">
+          <h2 className="text-2xl font-bold tracking-tight md:text-3xl">
             Cuatro formas de conectar
           </h2>
           <p className="mt-3 text-muted-foreground">
@@ -170,7 +212,7 @@ export default async function HomePage() {
         </div>
 
         <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
-          {FEATURES.map((feature) => (
+          {features.map((feature) => (
             <Card
               key={feature.title}
               className="group relative overflow-hidden transition-colors hover:border-primary/50"
@@ -180,7 +222,7 @@ export default async function HomePage() {
                   <feature.icon className="h-5 w-5 text-primary" />
                 </div>
                 <h3 className="font-semibold">{feature.title}</h3>
-                <p className="mt-2 min-h-[72px] text-sm text-muted-foreground">
+                <p className="mt-2 min-h-[96px] text-sm text-muted-foreground">
                   {feature.description}
                 </p>
                 <Link href={feature.href}>
@@ -196,20 +238,20 @@ export default async function HomePage() {
       </section>
 
       {/* CREADORES DESTACADOS */}
-      <section className="border-y border-border/60 bg-card/20 py-20">
+      <section className="border-y border-border/60 bg-card/20 py-16">
         <div className="container">
-          <div className="mb-10 flex items-end justify-between gap-4">
+          <div className="mb-8 flex items-end justify-between gap-4">
             <div>
-              <h2 className="text-3xl font-bold tracking-tight">
-                Creadores destacados
+              <h2 className="text-2xl font-bold tracking-tight md:text-3xl">
+                {t('home.featured')}
               </h2>
               <p className="mt-2 text-muted-foreground">
-                Todos los perfiles estan verificados con KYC.
+                {t('home.featuredSubtitle')}
               </p>
             </div>
             <Link href="/models">
               <Button variant="outline">
-                Ver todas
+                {t('common.seeAll')}
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
@@ -224,18 +266,18 @@ export default async function HomePage() {
       </section>
 
       {/* TOKENS */}
-      <section className="container py-20">
-        <div className="mb-12 text-center">
+      <section className="container py-16">
+        <div className="mb-10 text-center">
           <Badge variant="token" className="mb-4">
             <Coins className="h-3.5 w-3.5" />
             Monedero unico
           </Badge>
-          <h2 className="text-3xl font-bold tracking-tight">
+          <h2 className="text-2xl font-bold tracking-tight md:text-3xl">
             Un solo saldo para todo
           </h2>
           <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
-            Los tokens sirven para llamadas VIP, privados reservados, contenido
-            exclusivo y propinas. Sin suscripciones ocultas.
+            Los tokens sirven para llamadas, regalos en directo, publicaciones
+            de pago, contenido exclusivo y suscripciones.
           </p>
         </div>
 
@@ -243,9 +285,7 @@ export default async function HomePage() {
           {packages.map((pkg) => (
             <Card
               key={pkg.id}
-              className={
-                pkg.isPopular ? 'relative border-primary' : ''
-              }
+              className={pkg.isPopular ? 'relative border-primary' : ''}
             >
               {pkg.isPopular && (
                 <Badge
@@ -287,13 +327,18 @@ export default async function HomePage() {
 
       {/* CTA CREADORES */}
       <section className="border-t border-border/60 bg-card/20">
-        <div className="container py-20 text-center">
-          <h2 className="text-3xl font-bold tracking-tight">
-            Gana dinero como creador
+        <div className="container py-16 text-center">
+          <Badge variant="muted" className="mb-4">
+            <Lock className="h-3.5 w-3.5" />
+            Verificacion en 24-48 h
+          </Badge>
+          <h2 className="text-2xl font-bold tracking-tight md:text-3xl">
+            Gana dinero como creadora
           </h2>
           <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
-            Fija tus propias tarifas por minuto, vende contenido exclusivo y
-            cobra tus ganancias cuando quieras. Verificacion en 24-48 h.
+            Emite en directo desde OBS o desde el navegador, publica contenido
+            de pago, fija tu tarifa por minuto y cobra por PayPal, transferencia
+            o USDT.
           </p>
           <Link href="/register?role=model">
             <Button variant="brand" size="lg" className="mt-8">

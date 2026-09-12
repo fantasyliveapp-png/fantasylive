@@ -17,6 +17,11 @@ export interface BillingState {
   freeSecondsRemaining: number | null;
   /** El servidor confirma que aun no hay nadie al otro lado */
   waitingForPartner: boolean;
+  /**
+   * Segundos del minimo facturable que ya se han cobrado pero todavia no se
+   * han consumido. > 0 solo durante los primeros minutos de la llamada.
+   */
+  minimumPaddingSeconds: number;
 }
 
 /**
@@ -58,6 +63,7 @@ export function useCallBilling({
     isFreeTrial: false,
     freeSecondsRemaining: null,
     waitingForPartner: false,
+    minimumPaddingSeconds: 0,
   });
 
   const startedAtRef = useRef<number | null>(null);
@@ -97,6 +103,7 @@ export function useCallBilling({
         isFreeTrial: Boolean(data.isFreeTrial),
         freeSecondsRemaining: data.freeSecondsRemaining ?? null,
         waitingForPartner: Boolean(data.waitingForPartner),
+        minimumPaddingSeconds: data.minimumPaddingSeconds ?? 0,
       }));
 
       if (data.shouldTerminate && !terminatedRef.current) {
@@ -107,7 +114,7 @@ export function useCallBilling({
       // Aviso cuando quedan menos de 3 minutos de saldo
       const rate = rateRef.current;
       if (rate > 0 && !lowBalanceWarnedRef.current) {
-        const remaining = Math.floor((data.balance ?? 0) / rate);
+        const remaining = affordableMinutesAtRate(data.balance ?? 0, rate);
         if (remaining <= 3) {
           lowBalanceWarnedRef.current = true;
           onLowBalanceRef.current?.(remaining);

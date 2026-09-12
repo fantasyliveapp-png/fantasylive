@@ -27,6 +27,7 @@ export const es = {
     somethingWentWrong: 'Algo ha fallado. Intentalo de nuevo.',
     language: 'Idioma',
     empty: 'Nada por aqui todavia.',
+    loginRequired: 'Crea una cuenta para poder hacer esto.',
   },
   nav: {
     discover: 'Descubrir',
