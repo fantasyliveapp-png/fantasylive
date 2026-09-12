@@ -820,6 +820,14 @@ Después hay que cambiar `NEXT_PUBLIC_APP_URL`, `NEXTAUTH_URL` y `AUTH_URL` a `h
 ### Actualizar
 
 ```bash
+bash /var/www/fantasylive/deploy/update.sh
+```
+
+El script trae los cambios, instala dependencias, aplica las migraciones pendientes (`prisma migrate deploy` **no borra datos**), compila y reinicia. Si algo falla se detiene en ese punto y **no reinicia el servicio**, así que la versión que ya estaba sirviendo sigue en pie. Al final espera a que `/api/health` responda: un `systemctl restart` que devuelve 0 no garantiza que la aplicación haya arrancado.
+
+A mano, si prefieres verlo paso a paso:
+
+```bash
 cd /var/www/fantasylive
 git pull
 sudo -u fantasylive npm ci
@@ -827,6 +835,8 @@ sudo -u fantasylive npx prisma migrate deploy
 sudo -u fantasylive npm run build
 systemctl restart fantasylive
 ```
+
+> **Esta actualización cambia el esquema.** `prisma migrate deploy` renombra las columnas de tarifas a centitokens y **multiplica los valores existentes por 100**, recortándolos al nuevo rango 1,75–25 tokens/min. Los perfiles del seed estaban a 40 tokens/min en privado, así que bajan al tope de 25. Si alguna creadora tenía una tarifa por encima del tope y quieres conservarla, súbela del tope antes de migrar (`MAX_RATE_CENTITOKENS` en `src/lib/rates.ts`).
 
 ### Diagnóstico
 
