@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { ArrowDownRight, ArrowUpRight, Coins, TrendingUp } from 'lucide-react';
 
@@ -29,16 +30,14 @@ export default async function WalletPage({
   const params = await searchParams;
   const user = await requireUser('/wallet');
 
-  const [wallet, packages, transactions] = await Promise.all([
+  // Solo lo que se ve arriba del todo. El historial va por su cuenta dentro de
+  // un Suspense: es la consulta mas pesada y no tiene sentido que retrase el
+  // saldo y los paquetes, que es a lo que viene la gente a esta pagina.
+  const [wallet, packages] = await Promise.all([
     getWalletSummary(user.id),
     prisma.tokenPackage.findMany({
       where: { isActive: true },
       orderBy: { sortOrder: 'asc' },
-    }),
-    prisma.transaction.findMany({
-      where: { userId: user.id },
-      orderBy: { createdAt: 'desc' },
-      take: 40,
     }),
   ]);
 
@@ -103,68 +102,114 @@ export default async function WalletPage({
           Pago seguro. Los tokens no caducan.
         </p>
         <div className="mt-6">
-          <TokenPackages packages={packages} />
+          <TokenPackages packages={packages} balance={wallet.balance} />
         </div>
       </section>
 
       {/* Historial */}
       <section className="mt-14">
-        <Card>
-          <CardHeader>
-            <CardTitle>Historial de movimientos</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {transactions.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">
-                Todavia no tienes movimientos.
-              </p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead>Concepto</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead className="text-right">Tokens</TableHead>
-                    <TableHead className="text-right">Saldo</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {transactions.map((tx) => (
-                    <TableRow key={tx.id}>
-                      <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                        {formatDateTime(tx.createdAt)}
-                      </TableCell>
-                      <TableCell className="max-w-[280px] truncate text-sm">
-                        {tx.description ?? '-'}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="muted" className="whitespace-nowrap">
-                          {TRANSACTION_TYPE_LABELS[tx.type]}
-                        </Badge>
-                      </TableCell>
-                      <TableCell
-                        className={`text-right font-semibold ${
-                          tx.tokens >= 0 ? 'text-emerald-400' : 'text-rose-400'
-                        }`}
-                      >
-                        {tx.tokens >= 0 ? '+' : ''}
-                        {formatTokens(tx.tokens)}
-                      </TableCell>
-                      <TableCell className="text-right text-sm text-muted-foreground">
-                        {tx.balanceAfter !== null
-                          ? formatTokens(tx.balanceAfter)
-                          : '-'}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+        <Suspense fallback={<HistorySkeleton />}>
+          <TransactionHistory userId={user.id} />
+        </Suspense>
       </section>
     </div>
+  );
+}
+
+/** Historial de movimientos. Se renderiza en streaming, aparte del resto. */
+async function TransactionHistory({ userId }: { userId: string }) {
+  const transactions = await prisma.transaction.findMany({
+    where: { userId },
+    orderBy: { createdAt: 'desc' },
+    take: 40,
+    // Solo las columnas que pinta la tabla: el modelo Transaction tiene
+    // bastantes mas y no hay por que traerlas por la red.
+    select: {
+      id: true,
+      createdAt: true,
+      description: true,
+      type: true,
+      tokens: true,
+      balanceAfter: true,
+    },
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Historial de movimientos</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {transactions.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            Todavia no tienes movimientos.
+          </p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Fecha</TableHead>
+                <TableHead>Concepto</TableHead>
+                <TableHead>Tipo</TableHead>
+                <TableHead className="text-right">Tokens</TableHead>
+                <TableHead className="text-right">Saldo</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {transactions.map((tx) => (
+                <TableRow key={tx.id}>
+                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                    {formatDateTime(tx.createdAt)}
+                  </TableCell>
+                  <TableCell className="max-w-[280px] truncate text-sm">
+                    {tx.description ?? '-'}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="muted" className="whitespace-nowrap">
+                      {TRANSACTION_TYPE_LABELS[tx.type]}
+                    </Badge>
+                  </TableCell>
+                  <TableCell
+                    className={`text-right font-semibold ${
+                      tx.tokens >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                    }`}
+                  >
+                    {tx.tokens >= 0 ? '+' : ''}
+                    {formatTokens(tx.tokens)}
+                  </TableCell>
+                  <TableCell className="text-right text-sm text-muted-foreground">
+                    {tx.balanceAfter !== null
+                      ? formatTokens(tx.balanceAfter)
+                      : '-'}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Marcador del historial mientras llega su consulta. */
+function HistorySkeleton() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Historial de movimientos</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 pb-6">
+        {Array.from({ length: 6 }).map((_, row) => (
+          <div
+            key={row}
+            className="relative h-9 overflow-hidden rounded-md bg-muted/40"
+          >
+            <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-foreground/5 to-transparent" />
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   );
 }
 

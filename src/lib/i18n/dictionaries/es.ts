@@ -202,6 +202,22 @@ export const es = {
     net: 'Recibiras {amount}',
     minimum: 'Minimo {tokens} tokens por solicitud.',
   },
+  wallet: {
+    buy: 'Comprar',
+    mostPopular: 'Mas popular',
+    bonus: '+{tokens} de regalo',
+    perToken: '{amount} $/token',
+    opening: 'Abriendo PayPal...',
+    checkoutTitle: 'Completa el pago en PayPal',
+    checkoutBody:
+      'Hemos abierto PayPal en una pestana nueva. No cierres esta: en cuanto pagues, tus tokens apareceran aqui solos.',
+    checkoutBlocked:
+      'Tu navegador ha bloqueado la pestana nueva. Abre PayPal con el boton de abajo.',
+    checkoutWaiting: 'Esperando la confirmacion de PayPal...',
+    reopen: 'Abrir PayPal',
+    credited: 'Se han acreditado {tokens} tokens.',
+    purchaseFailed: 'No se pudo iniciar la compra',
+  },
 };
 
 /**

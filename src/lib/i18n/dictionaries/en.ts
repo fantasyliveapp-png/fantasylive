@@ -203,4 +203,20 @@ export const en: Dictionary = {
     net: 'You will receive {amount}',
     minimum: 'Minimum {tokens} tokens per request.',
   },
+  wallet: {
+    buy: 'Buy',
+    mostPopular: 'Most popular',
+    bonus: '+{tokens} free',
+    perToken: '{amount} $/token',
+    opening: 'Opening PayPal...',
+    checkoutTitle: 'Finish your payment on PayPal',
+    checkoutBody:
+      'We opened PayPal in a new tab. Keep this one open: your tokens will show up here as soon as you pay.',
+    checkoutBlocked:
+      'Your browser blocked the new tab. Use the button below to open PayPal.',
+    checkoutWaiting: 'Waiting for PayPal to confirm...',
+    reopen: 'Open PayPal',
+    credited: '{tokens} tokens added to your wallet.',
+    purchaseFailed: 'Could not start the purchase',
+  },
 };
