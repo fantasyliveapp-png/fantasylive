@@ -66,7 +66,7 @@ function ChatHeader({
     </>
   );
   return (
-    <header className="sticky top-16 z-20 -mx-6 lg:top-0 flex items-center gap-3 border-b border-border/60 bg-background/90 px-6 py-3 backdrop-blur-xl">
+    <header className="sticky top-16 z-20 -mx-6 md:top-0 flex items-center gap-3 border-b border-border/60 bg-background/90 px-6 py-3 backdrop-blur-xl">
       <Link href="/mensajes" className="rounded-full p-1.5 hover:bg-muted" aria-label="Volver">
         <ArrowLeft className="h-5 w-5" />
       </Link>

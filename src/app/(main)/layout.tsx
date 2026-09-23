@@ -19,7 +19,7 @@ export default async function MainLayout({
   return (
     // En escritorio grande la navegacion es la barra lateral (SideNav): el
     // contenido deja su ancho a la izquierda y la barra de arriba se oculta.
-    <div className="flex min-h-screen flex-col lg:pl-60">
+    <div className="flex min-h-screen flex-col md:pl-[72px] lg:pl-60">
       <SideNavServer />
       <Navbar />
       {/* pb-16 en movil deja sitio a la barra inferior fija. */}

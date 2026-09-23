@@ -668,7 +668,7 @@ export default async function ModelProfilePage({
                   packs antiguos que ya existian. */}
               <TabsList
                 className={cn(
-                  'sticky top-16 lg:top-0 z-20 grid h-auto w-full rounded-none border-b border-border/60 bg-background/90 p-0 backdrop-blur',
+                  'sticky top-16 md:top-0 z-20 grid h-auto w-full rounded-none border-b border-border/60 bg-background/90 p-0 backdrop-blur',
                   hasPacks ? 'grid-cols-3' : 'grid-cols-2',
                 )}
               >

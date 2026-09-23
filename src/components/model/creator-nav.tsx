@@ -172,7 +172,7 @@ export function CreatorMobileTabs({ groups }: { groups: CreatorNavGroup[] }) {
   }, [pathname]);
 
   return (
-    <div className="sticky top-16 z-30 -mx-6 mb-5 border-b border-border/60 bg-background/90 backdrop-blur-xl lg:hidden">
+    <div className="sticky top-16 z-30 -mx-6 mb-5 md:top-0 border-b border-border/60 bg-background/90 backdrop-blur-xl lg:hidden">
       <div
         ref={track}
         className="flex gap-1.5 overflow-x-auto px-6 py-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"

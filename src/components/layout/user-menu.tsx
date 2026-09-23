@@ -19,7 +19,7 @@ import {
 import type { Role } from '@prisma/client';
 
 import { LanguageSubMenu } from '@/components/layout/language-switcher';
-import { SIDEBAR_ROW } from '@/components/layout/sidebar-row';
+import { SIDEBAR_LABEL, SIDEBAR_ROW } from '@/components/layout/sidebar-row';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -75,7 +75,7 @@ export function UserMenu({
         {trigger === 'sidebar' ? (
           <>
             <Menu className="h-6 w-6" />
-            <span>Mas</span>
+            <span className={SIDEBAR_LABEL}>Mas</span>
           </>
         ) : trigger === 'menu' ? (
           <Menu className="h-5 w-5" />

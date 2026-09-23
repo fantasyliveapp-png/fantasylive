@@ -16,7 +16,7 @@ export default async function DashboardGroupLayout({
   ]);
 
   return (
-    <div className="flex min-h-screen flex-col lg:pl-60">
+    <div className="flex min-h-screen flex-col md:pl-[72px] lg:pl-60">
       <SideNavServer />
       <Navbar />
       {/* Misma barra inferior que el resto de la app: en movil el panel no

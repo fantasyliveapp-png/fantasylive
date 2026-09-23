@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import type { NotificationType } from '@prisma/client';
 
-import { SIDEBAR_ROW } from '@/components/layout/sidebar-row';
+import { SIDEBAR_LABEL, SIDEBAR_ROW } from '@/components/layout/sidebar-row';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -124,7 +124,7 @@ export function NotificationBell({ label }: { label?: string } = {}) {
                 </span>
               )}
             </span>
-            <span>{label}</span>
+            <span className={SIDEBAR_LABEL}>{label}</span>
           </button>
         ) : (
           <Button variant="ghost" size="icon" className="relative h-9 w-9" aria-label="Notificaciones">

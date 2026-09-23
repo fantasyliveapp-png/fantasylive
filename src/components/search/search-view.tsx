@@ -66,7 +66,7 @@ export function SearchView({
   return (
     <div className="space-y-6">
       {/* Caja de busqueda, fija bajo la barra superior */}
-      <div className="sticky top-16 z-20 -mx-6 lg:top-0 bg-background/90 px-6 py-3 backdrop-blur-xl">
+      <div className="sticky top-16 z-20 -mx-6 md:top-0 bg-background/90 px-6 py-3 backdrop-blur-xl">
         <label className="flex h-12 items-center gap-3 rounded-2xl border border-border/60 bg-muted/50 px-4 transition-colors focus-within:border-primary focus-within:bg-background">
           {loading ? (
             <Loader2 className="h-5 w-5 shrink-0 animate-spin text-muted-foreground" />
