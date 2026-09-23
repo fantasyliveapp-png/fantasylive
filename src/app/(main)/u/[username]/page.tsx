@@ -110,7 +110,7 @@ export default async function PersonProfilePage({
         where: { userId_modelId: { userId: person.id, modelId: viewer.modelProfileId } },
         select: { id: true },
       });
-      if (c) existingChatHref = `/dashboard/model/messages/${c.id}`;
+      if (c) existingChatHref = `/mensajes/${c.id}`;
     } else {
       const c = await prisma.peerChat.findUnique({
         where: { userAId_userBId: peerPair(viewer.id, person.id) },

@@ -191,7 +191,7 @@ export async function getInbox(userId: string, modelProfileId: string | null): P
       const pending = c.acceptedAt === null;
       return {
         key: `f-${c.id}`,
-        href: `/dashboard/messages/${c.model.slug}`,
+        href: `/mensajes/${c.id}`,
         name: c.model.stageName,
         image: c.model.avatarUrl,
         profileHref: `/models/${c.model.slug}`,
@@ -208,7 +208,7 @@ export async function getInbox(userId: string, modelProfileId: string | null): P
       const mine = last?.senderId === userId;
       return {
         key: `c-${c.id}`,
-        href: `/dashboard/model/messages/${c.id}`,
+        href: `/mensajes/${c.id}`,
         name: c.user.name ?? c.user.username ?? 'Fan',
         image: c.user.image,
         profileHref: c.user.username ? `/u/${c.user.username}` : null,

@@ -81,7 +81,12 @@ export async function messageUserAction(input: {
         modelId: target.modelProfile.id,
         body: valid.body,
       });
-      return { ...result, href: `/dashboard/messages/${target.modelProfile.slug}` };
+      return {
+        ...result,
+        href: result.conversationId
+          ? `/mensajes/${result.conversationId}`
+          : `/dashboard/messages/${target.modelProfile.slug}`,
+      };
     }
 
     // 2) Creadora -> fan: mismo tipo de chat, gratis y abierto por ella.
@@ -92,7 +97,7 @@ export async function messageUserAction(input: {
       });
       if (existing) {
         const result = await sendMessageAction({ conversationId: existing.id, body: valid.body });
-        return { ...result, href: `/dashboard/model/messages/${existing.id}` };
+        return { ...result, href: `/mensajes/${existing.id}` };
       }
 
       const can = await checkCanStartChat(me.id, target);
@@ -126,7 +131,7 @@ export async function messageUserAction(input: {
       revalidatePath('/mensajes');
       return {
         ok: true,
-        href: `/dashboard/model/messages/${conversation.id}`,
+        href: `/mensajes/${conversation.id}`,
         message: can.asRequest ? 'Enviado como solicitud: le llegara cuando la acepte.' : undefined,
       };
     }

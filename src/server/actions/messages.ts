@@ -118,7 +118,7 @@ export async function startConversationAction(input: {
         userId: model.userId,
         type: 'NEW_MESSAGE',
         title: `${user.name ?? 'Alguien'} te escribio un mensaje`,
-        link: `/dashboard/model/messages/${conversation.id}`,
+        link: `/mensajes/${conversation.id}`,
       });
 
       return conversation.id;
@@ -223,17 +223,15 @@ export async function sendMessageAction(input: {
       type: 'NEW_MESSAGE',
       title: `${user.name ?? 'Alguien'} te escribio un mensaje`,
       // Directo al hilo, desde el lado de quien lo recibe.
-      link: isCustomer
-        ? `/dashboard/model/messages/${conversation.id}`
-        : `/dashboard/messages/${conversation.model.slug}`,
+      link: `/mensajes/${conversation.id}`,
     });
 
     // Solo contesta a lo que escribe el cliente. Si el que escribe es el dueno
     // del perfil, no hay nada que responder.
     if (isCustomer) await maybeReplyAsAi(conversation.id);
 
-    revalidatePath(`/dashboard/messages/${conversation.model.slug}`);
-    revalidatePath(`/dashboard/model/messages/${conversation.id}`);
+    revalidatePath(`/mensajes/${conversation.id}`);
+    revalidatePath(`/mensajes/${conversation.id}`);
     return { ok: true, conversationId: conversation.id };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
@@ -340,12 +338,12 @@ export async function sendMessageAttachmentAction(input: {
           input.priceTokens > 0
             ? `${user.name ?? 'Alguien'} te envio un archivo de pago`
             : `${user.name ?? 'Alguien'} te envio un archivo`,
-        link: `/dashboard/messages/${conversation.model.slug}`,
+        link: `/mensajes/${conversation.id}`,
       });
     });
 
-    revalidatePath(`/dashboard/messages/${conversation.model.slug}`);
-    revalidatePath(`/dashboard/model/messages/${conversation.id}`);
+    revalidatePath(`/mensajes/${conversation.id}`);
+    revalidatePath(`/mensajes/${conversation.id}`);
     return { ok: true, message: 'Archivo enviado.' };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
@@ -422,7 +420,7 @@ export async function unlockMessageAttachmentAction(
       });
     });
 
-    revalidatePath(`/dashboard/messages/${conversation.model.slug}`);
+    revalidatePath(`/mensajes/${conversation.id}`);
     return { ok: true, message: 'Archivo desbloqueado.' };
   } catch (error) {
     return { ok: false, error: toMessage(error) };

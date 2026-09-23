@@ -88,7 +88,7 @@ export async function maybeReplyAsAi(conversationId: string): Promise<boolean> {
         userId: conversation.userId,
         type: 'NEW_MESSAGE',
         title: `${conversation.model.stageName} te respondio`,
-        link: `/dashboard/messages/${conversation.model.slug}`,
+        link: `/mensajes/${conversationId}`,
       });
     });
 

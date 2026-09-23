@@ -126,7 +126,7 @@ export async function maybeSendAutoGreeting(params: {
         type: 'NEW_MESSAGE',
         title: `${model.stageName} te ha escrito`,
         body: model.autoGreetingText?.slice(0, 120) ?? undefined,
-        link: `/dashboard/messages/${model.slug}`,
+        link: `/mensajes/${conversation.id}`,
       });
     });
 

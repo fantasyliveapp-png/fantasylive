@@ -67,7 +67,11 @@ export function MessageButton({
       if (result.ok) {
         toast.success(result.message ?? 'Conversacion desbloqueada');
         setOpen(false);
-        router.push(`/dashboard/messages/${slug}`);
+        router.push(
+          result.conversationId
+            ? `/mensajes/${result.conversationId}`
+            : `/dashboard/messages/${slug}`,
+        );
       } else {
         toast.error(result.error ?? 'No se pudo enviar');
       }
