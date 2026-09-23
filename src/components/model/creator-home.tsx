@@ -310,13 +310,15 @@ export async function CreatorHome({
       {/* Crear */}
       <section className="grid grid-cols-2 gap-2">
         <Link href="/dashboard/model/posts?nuevo=1">
-          <Button variant="brand" size="lg" className="h-14 w-full">
+          {/* En movil cada boton ocupa media pantalla: menos margen y el texto
+              puede partirse, para que no se salga del boton. */}
+          <Button variant="brand" size="lg" className="h-14 w-full whitespace-normal px-3 text-sm leading-tight sm:px-8 sm:text-base">
             <Plus className="h-5 w-5" />
             Nueva publicacion
           </Button>
         </Link>
         <Link href="/dashboard/model/live">
-          <Button variant="outline" size="lg" className="h-14 w-full">
+          <Button variant="outline" size="lg" className="h-14 w-full whitespace-normal px-3 text-sm leading-tight sm:px-8 sm:text-base">
             <Radio className="h-5 w-5 text-rose-500" />
             Ir en directo
           </Button>
