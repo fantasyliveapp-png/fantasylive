@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Coins, ImagePlus, Loader2, Trash2 } from 'lucide-react';
+import { Coins, ImagePlus, Loader2, Lock, Send, Trash2, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,8 @@ import {
   updateAutoGreetingAction,
 } from '@/server/actions/greeting';
 import { createBlurredPreview, putToSignedUrl } from '@/lib/blur-preview';
+import { estimateEarnings, type EconomyParams } from '@/lib/earnings';
+import { formatMoney } from '@/lib/utils';
 
 export function AutoGreetingForm({
   enabled: initialEnabled,
@@ -33,6 +35,8 @@ export function AutoGreetingForm({
   hasPhoto,
   photoPreviewUrl,
   sentToday,
+  economy,
+  stats,
 }: {
   enabled: boolean;
   text: string;
@@ -42,6 +46,10 @@ export function AutoGreetingForm({
   /** Miniatura difuminada de la foto ya guardada, si hay. */
   photoPreviewUrl: string | null;
   sentToday: number;
+  /** Para calcular en dolares lo que gana por cada desbloqueo. */
+  economy: EconomyParams;
+  /** Lo que ya ha dado de si: enviados, desbloqueos y dinero ganado. */
+  stats: { sent: number; unlocks: number; earnedCents: number };
 }) {
   const router = useRouter();
   const { t } = useI18n();
@@ -142,6 +150,22 @@ export function AutoGreetingForm({
       </CardHeader>
 
       <CardContent className="space-y-5">
+        {/* Lo que ya ha dado de si */}
+        <div className="grid grid-cols-3 gap-2">
+          <GreetingStat icon={Send} label="Enviados" value={stats.sent.toLocaleString('es')} />
+          <GreetingStat
+            icon={Lock}
+            label="Desbloqueos"
+            value={stats.unlocks.toLocaleString('es')}
+          />
+          <GreetingStat
+            icon={TrendingUp}
+            label="Ganado"
+            value={formatMoney(stats.earnedCents)}
+            highlight
+          />
+        </div>
+
         <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-4">
           <div>
             <Label htmlFor="greetingEnabled">{t('greeting.enable')}</Label>
@@ -229,9 +253,30 @@ export function AutoGreetingForm({
                 className="pl-9"
               />
             </div>
-            <p className="text-xs text-muted-foreground">
-              {t('greeting.freePhoto')}
-            </p>
+            {/* Se recalcula al escribir: lo que gana por cada fan que la abre. */}
+            {priceTokens > 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Ganas{' '}
+                <strong className="text-state-connected">
+                  {formatMoney(estimateEarnings(priceTokens, economy).grossCents)}
+                </strong>{' '}
+                por cada fan que la desbloquee
+                {dailyLimit > 0 && (
+                  <>
+                    {' '}
+                    · hasta{' '}
+                    <strong className="text-state-connected">
+                      {formatMoney(
+                        estimateEarnings(priceTokens, economy).grossCents * dailyLimit,
+                      )}
+                    </strong>{' '}
+                    al dia si la abren todos
+                  </>
+                )}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">{t('greeting.freePhoto')}</p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -259,5 +304,35 @@ export function AutoGreetingForm({
         </Button>
       </CardContent>
     </Card>
+  );
+}
+
+function GreetingStat({
+  icon: Icon,
+  label,
+  value,
+  highlight,
+}: {
+  icon: typeof Send;
+  label: string;
+  value: string;
+  highlight?: boolean;
+}) {
+  return (
+    <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
+      <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+        <Icon className="h-3.5 w-3.5" />
+        {label}
+      </p>
+      <p
+        className={
+          highlight
+            ? 'mt-1 text-lg font-bold text-state-connected'
+            : 'mt-1 text-lg font-bold'
+        }
+      >
+        {value}
+      </p>
+    </div>
   );
 }
