@@ -517,7 +517,7 @@ export default async function ModelProfilePage({
                 <Link href="/dashboard/model/posts?nuevo=1" className="col-span-2">
                   <Button variant="brand" className="w-full">
                     <Plus className="h-4 w-4" />
-                    Crear publicacion
+                    Nueva publicacion
                   </Button>
                 </Link>
               </div>

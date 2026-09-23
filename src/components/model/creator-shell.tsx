@@ -161,10 +161,10 @@ export async function CreatorShell({
 
           {/* En escritorio no hay "+" abajo: crear queda aqui, a la vista. */}
           <div className={kycPending ? 'hidden' : 'space-y-2'}>
-            <Link href="/dashboard/model/posts?nuevo=fotos" className="block">
+            <Link href="/dashboard/model/posts?nuevo=1" className="block">
               <Button variant="brand" className="w-full">
                 <Plus className="h-4 w-4" />
-                Crear publicacion
+                Nueva publicacion
               </Button>
             </Link>
             <Link href="/dashboard/model/live" className="block">

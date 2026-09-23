@@ -97,7 +97,7 @@ export function ReachView({ reach }: { reach: CreatorReach }) {
         {reach.posts.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border/60 p-8 text-center text-sm text-muted-foreground">
             Aun no has publicado nada.{' '}
-            <Link href="/dashboard/model/posts?nuevo=fotos" className="font-medium text-primary">
+            <Link href="/dashboard/model/posts?nuevo=1" className="font-medium text-primary">
               Haz tu primera publicacion
             </Link>
           </div>

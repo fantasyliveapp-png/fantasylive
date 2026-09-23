@@ -68,7 +68,7 @@ export function ProfilePostGrid({
             <Link href="/dashboard/model/posts?nuevo=1">
               <Button variant="brand" size="sm">
                 <Plus className="h-4 w-4" />
-                Crear publicacion
+                Nueva publicacion
               </Button>
             </Link>
           </>

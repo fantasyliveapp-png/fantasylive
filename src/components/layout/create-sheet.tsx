@@ -1,29 +1,19 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import {
-  BarChart3,
-  Camera,
-  ChevronRight,
-  ImagePlus,
-  Radio,
-  Type,
-  X,
-  type LucideIcon,
-} from 'lucide-react';
+import { ChevronRight, ImagePlus, Radio, X } from 'lucide-react';
 
-import { setPendingStudioFiles } from '@/lib/pending-studio-files';
 import { cn } from '@/lib/utils';
 
 const STUDIO = '/dashboard/model/posts';
 
 /**
- * Menu "Crear" del boton + de la barra inferior (como TikTok/Instagram): todas
- * las formas de publicar y el directo, a un toque. "Fotos y videos" abre el
- * estudio de publicacion; "Camara" abre la camara aqui mismo y lleva lo que se
- * grabe al estudio.
+ * Menu "Crear" del boton + de la barra inferior: UNA forma de publicar (el
+ * estudio, donde se eligen fotos/videos, texto o encuesta; en el movil el
+ * selector de archivos ya ofrece la camara) y el directo. Las mismas dos
+ * opciones que en el panel, el perfil y "Hoy".
  */
 export function CreateSheet({
   open,
@@ -33,7 +23,6 @@ export function CreateSheet({
   onClose: () => void;
 }) {
   const router = useRouter();
-  const cameraInput = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -50,36 +39,16 @@ export function CreateSheet({
   }, [open, onClose]);
 
   /**
-   * Abre el estudio en un modo. `t` hace unica cada apertura: si ya se esta en
-   * la pagina del estudio, el cambio de clave lo vuelve a montar desde cero.
+   * Abre el estudio. `t` hace unica cada apertura: si ya se esta en la
+   * pagina del estudio, el cambio de clave lo vuelve a montar desde cero.
    */
-  function openStudio(mode: 'fotos' | 'archivos' | 'texto' | 'encuesta') {
+  function openStudio() {
     onClose();
-    router.push(`${STUDIO}?nuevo=${mode}&t=${Date.now()}`);
-  }
-
-  function withFiles(list: FileList | null) {
-    const files = Array.from(list ?? []);
-    if (files.length === 0) return;
-    setPendingStudioFiles(files);
-    openStudio('archivos');
+    router.push(`${STUDIO}?nuevo=1&t=${Date.now()}`);
   }
 
   return (
     <>
-      {/* Fuera del panel: siguen montados aunque el menu se cierre. */}
-      <input
-        ref={cameraInput}
-        type="file"
-        accept="image/*,video/*"
-        capture="environment"
-        hidden
-        onChange={(e) => {
-          withFiles(e.target.files);
-          e.target.value = '';
-        }}
-      />
-
       <div
         className={cn(
           'fixed inset-0 z-[55] transition-opacity duration-200 md:hidden',
@@ -119,11 +88,12 @@ export function CreateSheet({
             </button>
           </div>
 
-          {/* Lo principal, grande: el estudio de siempre, con el formato y el
-              boton para anadir fotos o videos dentro. */}
+          {/* Solo dos opciones, las mismas en todas partes: una publicacion
+              (fotos, videos, texto o encuesta, todo dentro del estudio) o un
+              directo. */}
           <button
             type="button"
-            onClick={() => openStudio('fotos')}
+            onClick={() => openStudio()}
             tabIndex={open ? 0 : -1}
             className="flex w-full items-center gap-4 rounded-2xl bg-gradient-to-r from-primary via-fantazy-red to-champagne-gold p-4 text-left text-white shadow-[0_10px_30px_-10px_hsl(var(--primary))] active:scale-[0.99]"
           >
@@ -131,34 +101,13 @@ export function CreateSheet({
               <ImagePlus className="h-6 w-6" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block font-semibold">Fotos y videos</span>
+              <span className="block font-semibold">Nueva publicacion</span>
               <span className="block text-xs text-white/80">
-                Formato, fotos, filtros y precio. Hasta 20, gratis o de pago.
+                Fotos, videos, texto o encuesta. Gratis o de pago.
               </span>
             </span>
             <ChevronRight className="h-5 w-5 shrink-0 opacity-80" />
           </button>
-
-          <div className="mt-2 grid grid-cols-3 gap-2">
-            <SheetTile
-              icon={Camera}
-              label="Camara"
-              onClick={() => cameraInput.current?.click()}
-              tabIndex={open ? 0 : -1}
-            />
-            <SheetTile
-              icon={Type}
-              label="Texto"
-              onClick={() => openStudio('texto')}
-              tabIndex={open ? 0 : -1}
-            />
-            <SheetTile
-              icon={BarChart3}
-              label="Encuesta"
-              onClick={() => openStudio('encuesta')}
-              tabIndex={open ? 0 : -1}
-            />
-          </div>
 
           <Link
             href="/dashboard/model/live"
@@ -171,7 +120,7 @@ export function CreateSheet({
               <span className="absolute -right-0.5 -top-0.5 h-3 w-3 animate-pulse rounded-full border-2 border-background bg-white" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block font-semibold">Transmitir en directo</span>
+              <span className="block font-semibold">Ir en directo</span>
               <span className="block text-xs text-muted-foreground">
                 Desde el movil o con OBS. Tus seguidores reciben un aviso.
               </span>
@@ -181,31 +130,5 @@ export function CreateSheet({
         </div>
       </div>
     </>
-  );
-}
-
-function SheetTile({
-  icon: Icon,
-  label,
-  onClick,
-  tabIndex,
-}: {
-  icon: LucideIcon;
-  label: string;
-  onClick: () => void;
-  tabIndex?: number;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      tabIndex={tabIndex}
-      className="flex flex-col items-center gap-2 rounded-2xl border border-border/60 bg-card p-3.5 text-center transition-colors hover:border-primary/50 active:scale-[0.98]"
-    >
-      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-        <Icon className="h-5 w-5" />
-      </span>
-      <span className="text-xs font-semibold">{label}</span>
-    </button>
   );
 }

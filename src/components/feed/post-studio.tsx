@@ -21,6 +21,7 @@ import {
   Plus,
   RotateCcw,
   Sparkles,
+  Type,
   Video,
   X,
   ZoomIn,
@@ -136,18 +137,12 @@ export interface StudioModel {
  */
 export function PostStudio({
   initialFiles,
-  startWithMedia = false,
-  startWithPoll = false,
   economy,
   subscriptionEnabled,
   model,
   onClose,
 }: {
   initialFiles: File[];
-  /** Empezar en el paso de encuadre aunque aun no haya archivos. */
-  startWithMedia?: boolean;
-  /** Abrir con una encuesta ya empezada (boton "Encuesta" de la entrada). */
-  startWithPoll?: boolean;
   /** Parametros de la economia para mostrar lo que se gana en dolares. */
   economy: EconomyParams;
   subscriptionEnabled: boolean;
@@ -158,9 +153,8 @@ export function PostStudio({
   const { t } = useI18n();
   const fileInput = useRef<HTMLInputElement | null>(null);
 
-  const [step, setStep] = useState<Step>(
-    initialFiles.length > 0 || startWithMedia ? 'edit' : 'share',
-  );
+  // Siempre empieza eligiendo que publicar: fotos/videos, texto o encuesta.
+  const [step, setStep] = useState<Step>('edit');
   const [format, setFormat] = useState<PostFormatId>(DEFAULT_POST_FORMAT);
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -168,7 +162,7 @@ export function PostStudio({
   const [body, setBody] = useState('');
   const [visibility, setVisibility] = useState<Visibility>('PUBLIC');
   const [priceTokens, setPriceTokens] = useState(50);
-  const [poll, setPoll] = useState<PollDraft | null>(startWithPoll ? EMPTY_POLL : null);
+  const [poll, setPoll] = useState<PollDraft | null>(null);
   /** Valor de datetime-local si se programa; null = publicar ya. */
   const [scheduleAt, setScheduleAt] = useState<string | null>(null);
 
@@ -188,7 +182,8 @@ export function PostStudio({
   const flow: Step[] =
     media.length > 0 || step === 'edit'
       ? ['edit', 'filter', 'audience', 'share']
-      : ['share'];
+      : // Solo texto o encuesta: se puede volver a la pantalla de inicio.
+        ['edit', 'share'];
 
   // ---------------------------------------------------------------------------
   // Recursos del navegador: object URLs y bitmaps decodificados
@@ -495,6 +490,7 @@ export function PostStudio({
     if (step === 'filter') setStep('edit');
     else if (step === 'audience') setStep('filter');
     else if (step === 'share' && media.length > 0) setStep('audience');
+    else if (step === 'share') setStep('edit');
     else close();
   }
 
@@ -877,7 +873,18 @@ export function PostStudio({
                     ) : selected ? (
                       <VideoFrame src={selected.url} aspectRatio={aspectRatio} />
                     ) : (
-                      <EmptyStage onPick={() => fileInput.current?.click()} />
+                      <EmptyStage
+                        onPick={() => fileInput.current?.click()}
+                        onTextOnly={() => {
+                          setProcessed([]);
+                          setStep('share');
+                        }}
+                        onPoll={() => {
+                          setPoll((p) => p ?? EMPTY_POLL);
+                          setProcessed([]);
+                          setStep('share');
+                        }}
+                      />
                     )}
                   </Fit>
                 )}
@@ -1729,16 +1736,52 @@ function VideoFrame({ src, aspectRatio }: { src: string; aspectRatio: number }) 
   );
 }
 
-function EmptyStage({ onPick }: { onPick: () => void }) {
+/**
+ * Punto de partida del estudio: TODO se crea desde aqui. Lo principal son
+ * las fotos y videos (en el movil el selector ya ofrece la camara); debajo,
+ * publicar solo texto o una encuesta.
+ */
+function EmptyStage({
+  onPick,
+  onTextOnly,
+  onPoll,
+}: {
+  onPick: () => void;
+  onTextOnly: () => void;
+  onPoll: () => void;
+}) {
   return (
-    <button
-      type="button"
-      onClick={onPick}
-      className="flex aspect-[4/5] w-full flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-white/20 text-sm text-white/70 hover:border-primary/60"
-    >
-      <ImagePlus className="h-8 w-8" />
-      Anadir fotos o video
-    </button>
+    <div className="flex aspect-[4/5] w-full flex-col gap-2">
+      <button
+        type="button"
+        onClick={onPick}
+        className="flex flex-1 flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-white/20 text-white/80 transition-colors hover:border-primary/60"
+      >
+        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-white">
+          <ImagePlus className="h-7 w-7" />
+        </span>
+        <span className="text-sm font-semibold">Anadir fotos o videos</span>
+        <span className="text-xs text-white/50">Hasta 20 · de la galeria o la camara</span>
+      </button>
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={onTextOnly}
+          className="flex items-center justify-center gap-2 rounded-xl border border-white/15 py-3 text-sm text-white/80 transition-colors hover:border-primary/60"
+        >
+          <Type className="h-4 w-4" />
+          Solo texto
+        </button>
+        <button
+          type="button"
+          onClick={onPoll}
+          className="flex items-center justify-center gap-2 rounded-xl border border-white/15 py-3 text-sm text-white/80 transition-colors hover:border-primary/60"
+        >
+          <BarChart3 className="h-4 w-4" />
+          Encuesta
+        </button>
+      </div>
+    </div>
   );
 }
 

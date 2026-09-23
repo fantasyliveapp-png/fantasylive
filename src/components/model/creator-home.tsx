@@ -85,7 +85,7 @@ export async function CreatorHome({
       done: profile.postsCount > 0,
       title: 'Haz tu primera publicacion',
       hint: 'Fotos, videos, texto o una encuesta',
-      href: '/dashboard/model/posts?nuevo=fotos',
+      href: '/dashboard/model/posts?nuevo=1',
     },
   ];
   const stepsDone = steps.filter((s) => s.done).length;
@@ -309,10 +309,10 @@ export async function CreatorHome({
 
       {/* Crear */}
       <section className="grid grid-cols-2 gap-2">
-        <Link href="/dashboard/model/posts?nuevo=fotos">
+        <Link href="/dashboard/model/posts?nuevo=1">
           <Button variant="brand" size="lg" className="h-14 w-full">
             <Plus className="h-5 w-5" />
-            Publicar
+            Nueva publicacion
           </Button>
         </Link>
         <Link href="/dashboard/model/live">

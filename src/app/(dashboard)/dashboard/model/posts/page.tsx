@@ -17,16 +17,9 @@ export default async function ModelPostsPage({
   const { user, profile } = await requireModel();
   // ?nuevo=1 (boton "+" de la barra inferior, perfil) abre el estudio directamente.
   const { nuevo, t } = await searchParams;
-  const autoOpen =
-    nuevo === 'archivos'
-      ? 'files'
-      : nuevo === 'texto'
-        ? 'text'
-        : nuevo === 'encuesta'
-          ? 'poll'
-          : nuevo
-            ? 'media'
-            : undefined;
+  // Cualquier ?nuevo=... (el + de abajo, "Crear", el perfil, Hoy) abre el
+  // mismo estudio: dentro se elige fotos/videos, texto o encuesta.
+  const autoOpen = nuevo ? ('media' as const) : undefined;
 
   const posts = await getModelPosts({
     modelId: profile.id,
