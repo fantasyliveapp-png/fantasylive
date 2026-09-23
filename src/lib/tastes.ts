@@ -5,36 +5,36 @@ import type { Gender } from '@prisma/client';
  * asistente (cliente) y el recomendador (servidor).
  */
 
-export const GENDER_CHOICES: { id: string; label: string; emoji: string; genders: Gender[] }[] = [
-  { id: 'women', label: 'Mujeres', emoji: '👩', genders: ['FEMALE'] },
-  { id: 'men', label: 'Hombres', emoji: '👨', genders: ['MALE'] },
-  { id: 'trans', label: 'Personas trans', emoji: '🏳️‍⚧️', genders: ['TRANS_FEMALE', 'TRANS_MALE', 'NON_BINARY'] },
-  { id: 'couples', label: 'Parejas', emoji: '💑', genders: ['COUPLE'] },
+export const GENDER_CHOICES: { id: string; label: string; genders: Gender[] }[] = [
+  { id: 'women', label: 'Mujeres', genders: ['FEMALE'] },
+  { id: 'men', label: 'Hombres', genders: ['MALE'] },
+  { id: 'trans', label: 'Personas trans', genders: ['TRANS_FEMALE', 'TRANS_MALE', 'NON_BINARY'] },
+  { id: 'couples', label: 'Parejas', genders: ['COUPLE'] },
 ];
 
-/** Etiquetas que se pueden elegir (las publicas del catalogo), con su emoji. */
-export const TASTE_TAGS: { id: string; label: string; emoji: string }[] = [
-  { id: 'latina', label: 'Latina', emoji: '💃' },
-  { id: 'europea', label: 'Europea', emoji: '🇪🇺' },
-  { id: 'asiatica', label: 'Asiatica', emoji: '🌸' },
-  { id: 'fitness', label: 'Fitness', emoji: '💪' },
-  { id: 'tatuajes', label: 'Tatuajes', emoji: '🖋️' },
-  { id: 'piercing', label: 'Piercing', emoji: '💍' },
-  { id: 'rubia', label: 'Rubia', emoji: '👱‍♀️' },
-  { id: 'morena', label: 'Morena', emoji: '🤎' },
-  { id: 'pelirroja', label: 'Pelirroja', emoji: '🦊' },
-  { id: 'curvy', label: 'Curvy', emoji: '🍑' },
-  { id: 'roleplay', label: 'Roleplay', emoji: '🎭' },
-  { id: 'gamer', label: 'Gamer', emoji: '🎮' },
-  { id: 'cosplay', label: 'Cosplay', emoji: '🦸‍♀️' },
-  { id: 'pareja', label: 'En pareja', emoji: '💞' },
+/** Etiquetas que se pueden elegir (las publicas del catalogo). Sus iconos van en el asistente. */
+export const TASTE_TAGS: { id: string; label: string }[] = [
+  { id: 'latina', label: 'Latina' },
+  { id: 'europea', label: 'Europea' },
+  { id: 'asiatica', label: 'Asiatica' },
+  { id: 'fitness', label: 'Fitness' },
+  { id: 'tatuajes', label: 'Tatuajes' },
+  { id: 'piercing', label: 'Piercing' },
+  { id: 'rubia', label: 'Rubia' },
+  { id: 'morena', label: 'Morena' },
+  { id: 'pelirroja', label: 'Pelirroja' },
+  { id: 'curvy', label: 'Curvy' },
+  { id: 'roleplay', label: 'Roleplay' },
+  { id: 'gamer', label: 'Gamer' },
+  { id: 'cosplay', label: 'Cosplay' },
+  { id: 'pareja', label: 'En pareja' },
 ];
 
-export const LOOKING_FOR_CHOICES: { id: string; label: string; hint: string; emoji: string }[] = [
-  { id: 'fotos', label: 'Fotos y videos', hint: 'Ver sus publicaciones', emoji: '📸' },
-  { id: 'directos', label: 'Directos', hint: 'Verlas en vivo', emoji: '🔴' },
-  { id: 'chatear', label: 'Chatear', hint: 'Hablar por mensajes', emoji: '💬' },
-  { id: 'videollamadas', label: 'Videollamadas', hint: 'Llamadas 1 a 1', emoji: '📹' },
+export const LOOKING_FOR_CHOICES: { id: string; label: string; hint: string }[] = [
+  { id: 'fotos', label: 'Fotos y videos', hint: 'Ver sus publicaciones' },
+  { id: 'directos', label: 'Directos', hint: 'Verlas en vivo' },
+  { id: 'chatear', label: 'Chatear', hint: 'Hablar por mensajes' },
+  { id: 'videollamadas', label: 'Videollamadas', hint: 'Llamadas 1 a 1' },
 ];
 
 export const TASTE_TAG_IDS = TASTE_TAGS.map((t) => t.id);

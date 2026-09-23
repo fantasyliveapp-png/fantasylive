@@ -2,7 +2,33 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Check, Loader2, Radio, Sparkles, UserPlus } from 'lucide-react';
+import {
+  ArrowLeft,
+  Camera,
+  Check,
+  Cherry,
+  Drama,
+  Dumbbell,
+  Flame,
+  Flower2,
+  Gamepad2,
+  Gem,
+  HeartHandshake,
+  Landmark,
+  Loader2,
+  MessageCircle,
+  Moon,
+  Music,
+  PenTool,
+  Radio,
+  Sparkles,
+  Sun,
+  UserPlus,
+  Users,
+  Video,
+  WandSparkles,
+  type LucideIcon,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -14,6 +40,75 @@ import { toggleFollowAction } from '@/server/actions/follows';
 import { saveTastesAction, skipTastesAction } from '@/server/actions/tastes';
 
 type Step = 'who' | 'likes' | 'looking' | 'follow';
+
+type IconComponent = LucideIcon | ((props: { className?: string }) => React.ReactElement);
+
+// Simbolos de genero (lucide no los trae): mismo trazo que el resto de iconos.
+function SvgIcon({ className, children }: { className?: string; children: React.ReactNode }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      {children}
+    </svg>
+  );
+}
+const VenusIcon = ({ className }: { className?: string }) => (
+  <SvgIcon className={className}>
+    <circle cx="12" cy="9" r="6" />
+    <path d="M12 15v7M9 19h6" />
+  </SvgIcon>
+);
+const MarsIcon = ({ className }: { className?: string }) => (
+  <SvgIcon className={className}>
+    <circle cx="10" cy="14" r="6" />
+    <path d="M14.5 9.5 21 3M16 3h5v5" />
+  </SvgIcon>
+);
+const TransIcon = ({ className }: { className?: string }) => (
+  <SvgIcon className={className}>
+    <circle cx="12" cy="12" r="4.5" />
+    <path d="M15.2 8.8 20 4M16.5 4H20v3.5M12 16.5V22M9.5 19.5h5M8.8 8.8 4 4M4 7.5V4h3.5M5 6l2-2" />
+  </SvgIcon>
+);
+
+const GENDER_ICONS: Record<string, IconComponent> = {
+  women: VenusIcon,
+  men: MarsIcon,
+  trans: TransIcon,
+  couples: HeartHandshake,
+};
+
+const TAG_ICONS: Record<string, LucideIcon> = {
+  latina: Music,
+  europea: Landmark,
+  asiatica: Flower2,
+  fitness: Dumbbell,
+  tatuajes: PenTool,
+  piercing: Gem,
+  rubia: Sun,
+  morena: Moon,
+  pelirroja: Flame,
+  curvy: Cherry,
+  roleplay: Drama,
+  gamer: Gamepad2,
+  cosplay: WandSparkles,
+  pareja: Users,
+};
+
+const LOOKING_ICONS: Record<string, LucideIcon> = {
+  fotos: Camera,
+  directos: Radio,
+  chatear: MessageCircle,
+  videollamadas: Video,
+};
 const QUESTION_STEPS: Step[] = ['who', 'likes', 'looking'];
 
 /**
@@ -211,6 +306,7 @@ export function TastesWizard({
           <div className="mt-6 grid grid-cols-2 gap-3">
             {GENDER_CHOICES.map((g) => {
               const on = groups.includes(g.id);
+              const Icon = GENDER_ICONS[g.id] ?? Users;
               return (
                 <button
                   key={g.id}
@@ -224,7 +320,14 @@ export function TastesWizard({
                       : 'border-border/60 bg-card hover:border-muted-foreground/50',
                   )}
                 >
-                  <span className="text-4xl">{g.emoji}</span>
+                  <span
+                    className={cn(
+                      'flex h-12 w-12 items-center justify-center rounded-2xl transition-colors',
+                      on ? 'bg-primary text-white' : 'bg-primary/10 text-primary',
+                    )}
+                  >
+                    <Icon className="h-6 w-6" />
+                  </span>
                   <span className="font-semibold">{g.label}</span>
                   {on && <CheckBadge />}
                 </button>
@@ -238,6 +341,7 @@ export function TastesWizard({
             <div className="mt-6 flex flex-wrap gap-2">
               {TASTE_TAGS.map((tag) => {
                 const on = interests.includes(tag.id);
+                const Icon = TAG_ICONS[tag.id] ?? Sparkles;
                 return (
                   <button
                     key={tag.id}
@@ -251,7 +355,7 @@ export function TastesWizard({
                         : 'border-border/60 bg-card hover:border-muted-foreground/50',
                     )}
                   >
-                    <span className="text-base">{tag.emoji}</span>
+                    <Icon className={cn('h-4 w-4', !on && 'text-primary')} />
                     {tag.label}
                   </button>
                 );
@@ -274,6 +378,7 @@ export function TastesWizard({
           <div className="mt-6 space-y-3">
             {LOOKING_FOR_CHOICES.map((c) => {
               const on = lookingFor.includes(c.id);
+              const Icon = LOOKING_ICONS[c.id] ?? Sparkles;
               return (
                 <button
                   key={c.id}
@@ -287,8 +392,13 @@ export function TastesWizard({
                       : 'border-border/60 bg-card hover:border-muted-foreground/50',
                   )}
                 >
-                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-muted text-2xl">
-                    {c.emoji}
+                  <span
+                    className={cn(
+                      'flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl transition-colors',
+                      on ? 'bg-primary text-white' : 'bg-primary/10 text-primary',
+                    )}
+                  >
+                    <Icon className="h-6 w-6" />
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block font-semibold">{c.label}</span>
@@ -344,7 +454,7 @@ export function TastesWizard({
                         ? c.tags
                             .map((t) => TASTE_TAGS.find((x) => x.id === t))
                             .filter(Boolean)
-                            .map((t) => `${t!.emoji} ${t!.label}`)
+                            .map((t) => t!.label)
                             .join(' · ')
                         : (c.headline ??
                           `${c.followersCount} ${c.followersCount === 1 ? 'seguidor' : 'seguidores'}`)}
