@@ -19,7 +19,7 @@ import { Button } from '@/components/ui/button';
 import { requireModel } from '@/lib/auth/guards';
 import { config } from '@/lib/config';
 import { getCreatorEarnings, type EarningType } from '@/lib/creator-dashboard';
-import { getWalletSummary, tokensToPayoutCents } from '@/lib/tokens';
+import { getWalletSummary, tokensToPayoutCents, withdrawableTokens } from '@/lib/tokens';
 import { cn, formatMoney, formatTokens, relativeTime } from '@/lib/utils';
 
 export const metadata: Metadata = { title: 'Dinero' };
@@ -51,7 +51,10 @@ export default async function MoneyPage() {
   ]);
 
   const usd = (tokens: number) => formatMoney(tokensToPayoutCents(tokens));
-  const canWithdraw = wallet.balance >= config.economy.minPayoutTokens;
+  // Solo lo GANADO se puede retirar; lo comprado es para gastar aqui.
+  const withdrawable = withdrawableTokens(wallet);
+  const purchased = wallet.balance - withdrawable;
+  const canWithdraw = withdrawable >= config.economy.minPayoutTokens;
   const feePercent = config.economy.payoutFeePercent;
 
   return (
@@ -70,13 +73,19 @@ export default async function MoneyPage() {
               Disponible para retirar
             </p>
             <p className="mt-1 font-heading text-5xl leading-none text-state-connected">
-              {usd(wallet.balance)}
+              {usd(withdrawable)}
             </p>
             <p className="mt-1.5 text-xs text-muted-foreground">
-              {formatTokens(wallet.balance)} tokens
+              {formatTokens(withdrawable)} tokens ganados
               {feePercent > 0 && ` · al retirar se descuenta un ${feePercent}%`}
               {!canWithdraw && ` · minimo ${usd(config.economy.minPayoutTokens)}`}
             </p>
+            {purchased > 0 && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Ademas tienes {formatTokens(purchased)} tokens comprados: solo sirven para
+                gastar dentro de FantasyLive, no se pueden retirar.
+              </p>
+            )}
           </div>
           <Link href="/dashboard/model/payouts">
             <Button variant={canWithdraw ? 'brand' : 'outline'} size="lg" className="w-full sm:w-auto">

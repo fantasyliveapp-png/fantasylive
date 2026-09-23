@@ -7,7 +7,12 @@ import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { prisma } from '@/lib/prisma';
 import { checkNoContactInfo } from '@/lib/content-filter';
 import { config } from '@/lib/config';
-import { applyLedgerEntry, splitPayoutFee, tokensToPayoutCents } from '@/lib/tokens';
+import {
+  applyLedgerEntry,
+  splitPayoutFee,
+  tokensToPayoutCents,
+  withdrawableTokens,
+} from '@/lib/tokens';
 import { encryptSecret, maskDestination } from '@/lib/crypto';
 import { normalizeCountryCode } from '@/lib/countries';
 import {
@@ -705,6 +710,22 @@ export async function requestPayoutAction(input: {
       };
     }
 
+    // Solo se retira lo GANADO: los tokens comprados son para gastar aqui.
+    const wallet = await prisma.wallet.findUnique({
+      where: { userId: user.id },
+      select: { balance: true, pendingEarnings: true },
+    });
+    const withdrawable = wallet ? withdrawableTokens(wallet) : 0;
+    if (tokens > withdrawable) {
+      return {
+        ok: false,
+        error:
+          withdrawable > 0
+            ? `Solo puedes retirar tokens ganados: tienes ${withdrawable} para retirar. Los tokens comprados solo sirven para gastar dentro de FantasyLive.`
+            : 'Aun no tienes tokens ganados para retirar. Los tokens comprados solo sirven para gastar dentro de FantasyLive.',
+      };
+    }
+
     // Una solicitud abierta a la vez: evita que se encadenen retiros mientras
     // finanzas todavia no ha procesado el anterior.
     const openRequest = await prisma.payoutRequest.findFirst({
@@ -749,7 +770,7 @@ export async function requestPayoutAction(input: {
         select: { id: true },
       });
 
-      // Debito atomico: lanza InsufficientTokensError y revierte la
+      // Debito atomico (solo de lo ganado): lanza NotWithdrawableError y revierte la
       // transaccion completa si el saldo no alcanza.
       await applyLedgerEntry(tx, {
         userId: user.id,
@@ -761,20 +782,6 @@ export async function requestPayoutAction(input: {
         payoutRequestId: payout.id,
         platformFeeTokens: feeTokens,
       });
-
-      // pendingEarnings nunca debe quedar negativo: se relee dentro de la
-      // transaccion y se descuenta solo lo que realmente hay acumulado.
-      const wallet = await tx.wallet.findUniqueOrThrow({
-        where: { userId: user.id },
-        select: { pendingEarnings: true },
-      });
-      const consumed = Math.min(tokens, Math.max(0, wallet.pendingEarnings));
-      if (consumed > 0) {
-        await tx.wallet.update({
-          where: { userId: user.id },
-          data: { pendingEarnings: { decrement: consumed } },
-        });
-      }
 
       await tx.auditLog.create({
         data: {

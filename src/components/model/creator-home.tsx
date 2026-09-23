@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/button';
 import { getCreatorEarnings, getCreatorPending } from '@/lib/creator-dashboard';
 import { TEST_AUDIENCE } from '@/lib/post-insights';
 import { prisma } from '@/lib/prisma';
-import { getWalletSummary, tokensToPayoutCents } from '@/lib/tokens';
+import { getWalletSummary, tokensToPayoutCents, withdrawableTokens } from '@/lib/tokens';
 import { cn, formatMoney, initials } from '@/lib/utils';
 
 /**
@@ -166,7 +166,7 @@ export async function CreatorHome({
               Tu dinero
             </span>
             <span className="mt-1 block font-heading text-5xl leading-none text-state-connected">
-              {usd(wallet.balance)}
+              {usd(withdrawableTokens(wallet))}
             </span>
             <span className="mt-1.5 block text-xs text-muted-foreground">
               {usd(earnings.weekTokens)} esta semana

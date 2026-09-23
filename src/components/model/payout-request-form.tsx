@@ -62,6 +62,7 @@ export function PayoutRequestForm({
   kycApproved,
   hasOpenRequest,
 }: {
+  /** Tokens que se pueden retirar: solo los ganados (no los comprados). */
   balance: number;
   minTokens: number;
   centsPerToken: number;
@@ -144,11 +145,11 @@ export function PayoutRequestForm({
           Solicitar retiro
         </CardTitle>
         <CardDescription>
-          Tienes {formatTokens(balance)} tokens disponibles, equivalentes a{' '}
+          Tienes {formatTokens(balance)} tokens ganados para retirar, equivalentes a{' '}
           <strong className="text-emerald-400">
             {formatMoney(balance * centsPerToken)}
           </strong>
-          .
+          . Los tokens comprados no se pueden retirar.
         </CardDescription>
       </CardHeader>
 
