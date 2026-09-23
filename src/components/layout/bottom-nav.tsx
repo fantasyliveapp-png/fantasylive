@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 
 import { CreateSheet } from '@/components/layout/create-sheet';
+import { UnreadBadge } from '@/components/layout/unread-badge';
+import { useUnreadMessages } from '@/lib/use-unread-messages';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useI18n } from '@/components/providers/i18n-provider';
 import type { ProfileShortcut } from '@/lib/profile-shortcut';
@@ -48,6 +50,7 @@ export function BottomNav({
   const pathname = usePathname();
   const router = useRouter();
   const { t } = useI18n();
+  const unreadMessages = useUnreadMessages(isAuthenticated);
   const [createOpen, setCreateOpen] = useState(false);
   const closeCreate = useCallback(() => setCreateOpen(false), []);
 
@@ -221,7 +224,10 @@ export function BottomNav({
                       </AvatarFallback>
                     </Avatar>
                   ) : item.icon ? (
-                    <item.icon className="h-5 w-5" />
+                    <span className="relative">
+                      <item.icon className="h-5 w-5" />
+                      {item.href === '/mensajes' && <UnreadBadge count={unreadMessages} />}
+                    </span>
                   ) : null}
                   <span className="truncate px-1">{item.label}</span>
                 </Link>

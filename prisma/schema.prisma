@@ -836,6 +836,9 @@ model Conversation {
   /// null = solicitud pendiente: la abrio la creadora y el fan aun no la
   /// acepto ni respondio. Las que abre y paga el fan nacen aceptadas.
   acceptedAt        DateTime?
+  /// Hasta cuando ha leido cada lado (para el contador de no leidos).
+  userReadAt        DateTime?
+  modelReadAt       DateTime?
 
   createdAt DateTime @default(now())
 
@@ -860,6 +863,9 @@ model PeerChat {
   /// null = solicitud: quien la recibio aun no la acepto ni respondio.
   acceptedAt    DateTime?
   lastMessageAt DateTime  @default(now())
+  /// Hasta cuando ha leido cada persona (para el contador de no leidos).
+  readAtA       DateTime?
+  readAtB       DateTime?
   createdAt     DateTime  @default(now())
 
   userA    User          @relation("PeerChatA", fields: [userAId], references: [id], onDelete: Cascade)

@@ -155,6 +155,11 @@ async function PeerView({
   const [blocked, blockedByMe] = await Promise.all([
     isBlockedBetween(viewerId, other.id),
     iBlocked(viewerId, other.id),
+    // Abrirlo (o que se recargue mientras lo tienes abierto) es leerlo.
+    prisma.peerChat.update({
+      where: { id: chat.id },
+      data: chat.userAId === viewerId ? { readAtA: new Date() } : { readAtB: new Date() },
+    }),
   ]);
 
   return (
@@ -248,6 +253,11 @@ async function ConversationView({
     iAmCreator
       ? null
       : prisma.wallet.findUnique({ where: { userId: viewerId }, select: { balance: true } }),
+    // Abrirlo (o que se recargue mientras lo tienes abierto) es leerlo.
+    prisma.conversation.update({
+      where: { id: conversation.id },
+      data: iAmCreator ? { modelReadAt: new Date() } : { userReadAt: new Date() },
+    }),
   ]);
 
   // Quien puede escribir ahora mismo, y si no, por que.

@@ -24,6 +24,8 @@ import { Logo } from '@/components/brand/logo';
 import { CreateSheet } from '@/components/layout/create-sheet';
 import { NotificationBell } from '@/components/layout/notification-bell';
 import { SIDEBAR_LABEL, SIDEBAR_ROW } from '@/components/layout/sidebar-row';
+import { UnreadBadge } from '@/components/layout/unread-badge';
+import { useUnreadMessages } from '@/lib/use-unread-messages';
 import { UserMenu } from '@/components/layout/user-menu';
 import { useI18n } from '@/components/providers/i18n-provider';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -58,6 +60,7 @@ export function SideNav({ account }: { account: SideNavAccount | null }) {
   const { t } = useI18n();
   const [createOpen, setCreateOpen] = useState(false);
   const closeCreate = useCallback(() => setCreateOpen(false), []);
+  const unreadMessages = useUnreadMessages(Boolean(account));
 
   // En una llamada o viendo un directo la barra estorbaria.
   if (pathname.startsWith('/call/') || /^\/live\/[^/]+/.test(pathname)) return null;
@@ -109,7 +112,10 @@ export function SideNav({ account }: { account: SideNavAccount | null }) {
           {account && (
             <>
               <Link href="/mensajes" className={row(active('/mensajes'))} title={t('nav.messages')}>
-                <MessageCircle className={cn('h-6 w-6', active('/mensajes') && 'text-primary')} />
+                <span className="relative">
+                  <MessageCircle className={cn('h-6 w-6', active('/mensajes') && 'text-primary')} />
+                  <UnreadBadge count={unreadMessages} />
+                </span>
                 <span className={SIDEBAR_LABEL}>{t('nav.messages')}</span>
               </Link>
               <NotificationBell label="Notificaciones" />

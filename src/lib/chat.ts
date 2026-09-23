@@ -1,6 +1,6 @@
 import 'server-only';
 
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
 
@@ -106,6 +106,40 @@ function preview(text: string | null | undefined, mine: boolean, hasFile = false
   return mine && t ? `Tu: ${t}` : t;
 }
 
+/** Hay algo nuevo: el ultimo mensaje es de la otra persona y posterior a tu lectura. */
+function isUnread(
+  last: { createdAt: Date } | undefined,
+  mine: boolean,
+  readAt: Date | null,
+) {
+  return Boolean(last) && !mine && (!readAt || last!.createdAt > readAt);
+}
+
+/**
+ * Cuantos chats tienen mensajes sin leer (el numerito del icono de
+ * Mensajes). Cuenta chats, no mensajes sueltos, como Instagram. Incluye las
+ * solicitudes.
+ */
+export async function getUnreadChatCount(
+  userId: string,
+  modelProfileId: string | null,
+): Promise<number> {
+  const rows = await prisma.$queryRaw<{ n: bigint }[]>(Prisma.sql`
+    SELECT
+      (SELECT COUNT(DISTINCT m."chatId") FROM peer_messages m
+         JOIN peer_chats c ON c.id = m."chatId"
+        WHERE m."senderId" <> ${userId}
+          AND ((c."userAId" = ${userId} AND m."createdAt" > COALESCE(c."readAtA", 'epoch'))
+            OR (c."userBId" = ${userId} AND m."createdAt" > COALESCE(c."readAtB", 'epoch'))))
+    + (SELECT COUNT(DISTINCT m."conversationId") FROM messages m
+         JOIN conversations c ON c.id = m."conversationId"
+        WHERE m."senderId" <> ${userId}
+          AND ((c."userId" = ${userId} AND m."createdAt" > COALESCE(c."userReadAt", 'epoch'))
+            OR (c."modelId" = ${modelProfileId ?? ''} AND m."createdAt" > COALESCE(c."modelReadAt", 'epoch'))))
+    AS n`);
+  return Number(rows[0]?.n ?? 0);
+}
+
 /** Todos los chats de una cuenta, de los dos tipos, en una sola lista. */
 export async function getInbox(userId: string, modelProfileId: string | null): Promise<InboxThread[]> {
   const lastMessage = {
@@ -124,9 +158,11 @@ export async function getInbox(userId: string, modelProfileId: string | null): P
         createdById: true,
         acceptedAt: true,
         lastMessageAt: true,
+        readAtA: true,
+        readAtB: true,
         userA: { select: { name: true, username: true, image: true, modelProfile: { select: { slug: true, stageName: true, avatarUrl: true } } } },
         userB: { select: { name: true, username: true, image: true, modelProfile: { select: { slug: true, stageName: true, avatarUrl: true } } } },
-        messages: { ...lastMessage, select: { body: true, senderId: true } },
+        messages: { ...lastMessage, select: { body: true, senderId: true, createdAt: true } },
       },
     }),
     prisma.conversation.findMany({
@@ -139,8 +175,9 @@ export async function getInbox(userId: string, modelProfileId: string | null): P
         acceptedAt: true,
         unlockPriceTokens: true,
         lastMessageAt: true,
+        userReadAt: true,
         model: { select: { slug: true, stageName: true, avatarUrl: true } },
-        messages: { ...lastMessage, select: { body: true, senderId: true, attachment: { select: { id: true } } } },
+        messages: { ...lastMessage, select: { body: true, senderId: true, createdAt: true, attachment: { select: { id: true } } } },
       },
     }),
     modelProfileId
@@ -154,8 +191,9 @@ export async function getInbox(userId: string, modelProfileId: string | null): P
             acceptedAt: true,
             unlockPriceTokens: true,
             lastMessageAt: true,
+            modelReadAt: true,
             user: { select: { name: true, username: true, image: true } },
-            messages: { ...lastMessage, select: { body: true, senderId: true, attachment: { select: { id: true } } } },
+            messages: { ...lastMessage, select: { body: true, senderId: true, createdAt: true, attachment: { select: { id: true } } } },
           },
         })
       : Promise.resolve([]),
@@ -167,6 +205,7 @@ export async function getInbox(userId: string, modelProfileId: string | null): P
       const last = c.messages[0];
       const mine = last?.senderId === userId;
       const pending = c.acceptedAt === null;
+      const readAt = c.userAId === userId ? c.readAtA : c.readAtB;
       return {
         key: `p-${c.id}`,
         href: `/mensajes/${c.id}`,
@@ -179,7 +218,7 @@ export async function getInbox(userId: string, modelProfileId: string | null): P
             : null,
         preview: preview(last?.body, mine),
         lastAt: c.lastMessageAt,
-        unread: Boolean(last) && !mine,
+        unread: isUnread(last, mine, readAt),
         isRequest: pending && c.createdById !== userId,
         pendingOut: pending && c.createdById === userId,
         paid: false,
@@ -197,7 +236,7 @@ export async function getInbox(userId: string, modelProfileId: string | null): P
         profileHref: `/models/${c.model.slug}`,
         preview: preview(last?.body, mine, Boolean(last?.attachment)),
         lastAt: c.lastMessageAt,
-        unread: Boolean(last) && !mine,
+        unread: isUnread(last, mine, c.userReadAt),
         isRequest: pending && c.startedByModel,
         pendingOut: false,
         paid: c.unlockPriceTokens > 0,
@@ -214,7 +253,7 @@ export async function getInbox(userId: string, modelProfileId: string | null): P
         profileHref: c.user.username ? `/u/${c.user.username}` : null,
         preview: preview(last?.body, mine, Boolean(last?.attachment)),
         lastAt: c.lastMessageAt,
-        unread: Boolean(last) && !mine,
+        unread: isUnread(last, mine, c.modelReadAt),
         isRequest: false,
         pendingOut: c.acceptedAt === null && c.startedByModel,
         paid: c.unlockPriceTokens > 0,
