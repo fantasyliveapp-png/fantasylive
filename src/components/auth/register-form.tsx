@@ -9,11 +9,14 @@ import {
   Dices,
   Eye,
   EyeOff,
+  Gift,
   Loader2,
   Lock,
   ShieldAlert,
   Sparkles,
+  VenetianMask,
   X,
+  type LucideIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -211,14 +214,18 @@ export function RegisterForm({
           </p>
 
           <div className="relative mt-4 grid grid-cols-3 gap-2 text-center">
-            <Pill emoji="🎭" title="Anonimato" text="Nadie sabe quien eres" />
             <Pill
-              emoji="🔞"
+              icon={VenetianMask}
+              title="Anonimato"
+              text="Nadie sabe quien eres"
+            />
+            <Pill
+              icon={ShieldAlert}
               title="Solo +18"
               text="Obligatorio"
               tone="danger"
             />
-            <Pill emoji="🎁" title="25 tokens" text="De regalo" />
+            <Pill icon={Gift} title="25 tokens" text="De regalo" />
           </div>
         </div>
 
@@ -498,7 +505,7 @@ export function RegisterForm({
             disabled={isPending || isMinor || usernameStatus === 'taken'}
           >
             {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-            Crear cuenta anonima
+            Crear cuenta
           </Button>
 
           <p className="text-center text-sm text-muted-foreground">
@@ -517,12 +524,12 @@ export function RegisterForm({
 }
 
 function Pill({
-  emoji,
+  icon: Icon,
   title,
   text,
   tone,
 }: {
-  emoji: string;
+  icon: LucideIcon;
   title: string;
   text: string;
   tone?: 'danger';
@@ -530,13 +537,18 @@ function Pill({
   return (
     <div
       className={cn(
-        'rounded-xl border px-2 py-2.5',
+        'flex flex-col items-center rounded-xl border px-2 py-2.5',
         tone === 'danger'
           ? 'border-destructive/40 bg-destructive/10'
           : 'border-border/60 bg-background/60',
       )}
     >
-      <span className="block text-xl leading-none">{emoji}</span>
+      <Icon
+        className={cn(
+          'h-5 w-5',
+          tone === 'danger' ? 'text-destructive' : 'text-primary',
+        )}
+      />
       <span className="mt-1.5 block text-xs font-semibold">{title}</span>
       <span className="block text-[10px] leading-tight text-muted-foreground">
         {text}
