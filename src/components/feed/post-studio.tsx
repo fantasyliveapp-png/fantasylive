@@ -141,13 +141,17 @@ export function PostStudio({
   subscriptionEnabled,
   model,
   onClose,
+  onDone,
 }: {
   initialFiles: File[];
   /** Parametros de la economia para mostrar lo que se gana en dolares. */
   economy: EconomyParams;
   subscriptionEnabled: boolean;
   model: StudioModel;
+  /** Cerrar sin publicar (X). */
   onClose: () => void;
+  /** Cerrar despues de publicar ("Listo"). Por defecto, como onClose. */
+  onDone?: () => void;
 }) {
   const router = useRouter();
   const { t } = useI18n();
@@ -764,7 +768,7 @@ export function PostStudio({
           <Button
             variant="ghost"
             size="icon"
-            onClick={step === 'done' ? onClose : flow[0] === step ? close : back}
+            onClick={step === 'done' ? (onDone ?? onClose) : flow[0] === step ? close : back}
             disabled={busy}
             aria-label={flow[0] === step || step === 'done' ? 'Cerrar' : 'Atras'}
           >
@@ -802,7 +806,7 @@ export function PostStudio({
           <DoneScreen
             glowSrc={glowSrc}
             scheduledFor={scheduleAt}
-            onClose={onClose}
+            onClose={onDone ?? onClose}
             onAnother={() => {
               media.forEach((m) => URL.revokeObjectURL(m.url));
               revokeProcessed(processed);
