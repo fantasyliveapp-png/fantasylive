@@ -41,6 +41,8 @@ export const es = {
     dashboard: 'Mi panel',
     login: 'Entrar',
     register: 'Crear cuenta',
+    /** Version corta del boton de registro (movil) */
+    join: 'Únete',
     logout: 'Salir',
     settings: 'Ajustes',
     profile: 'Perfil',

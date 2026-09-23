@@ -43,6 +43,8 @@ export const en: Dictionary = {
     dashboard: 'Dashboard',
     login: 'Log in',
     register: 'Sign up',
+    /** Version corta del boton de registro (movil) */
+    join: 'Join',
     logout: 'Log out',
     settings: 'Settings',
     profile: 'Profile',

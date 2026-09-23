@@ -44,11 +44,11 @@ export async function Navbar() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl">
-      <div className="container flex h-16 items-center justify-between gap-2 sm:gap-4">
-        <div className="flex items-center gap-8">
-          {/* En movil solo el icono: el nombre completo no deja sitio al
-              buscador y los botones (desbordaba la pantalla). */}
-          <Logo wordmarkClassName="hidden sm:inline" />
+      <div className="container flex h-16 items-center justify-between gap-2 px-4 sm:gap-4 sm:px-6">
+        <div className="flex min-w-0 items-center gap-8">
+          {/* El nombre siempre visible; en movil se ajusta al ancho de la
+              pantalla para que quepan los botones de la derecha. */}
+          <Logo wordmarkClassName="text-[clamp(0.8rem,4vw,1.125rem)]" />
 
           <nav className="hidden items-center gap-1 md:flex">
             {navLinks.map((link) => (
@@ -64,13 +64,15 @@ export async function Navbar() {
           </nav>
         </div>
 
-        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+        <div className="flex shrink-0 items-center gap-0.5 sm:gap-2">
           <Link href="/buscar" aria-label="Buscar">
             <Button variant="ghost" size="icon" className="h-9 w-9">
               <Search className="h-5 w-5" />
             </Button>
           </Link>
-          <LanguageSwitcher />
+          {/* En movil el idioma va en el menu de la cuenta, o en entrar /
+              crear cuenta si no hay sesion: aqui no cabe junto al nombre. */}
+          <LanguageSwitcher className="hidden sm:inline-flex" />
 
           {user ? (
             <>
@@ -133,7 +135,8 @@ export async function Navbar() {
               </Link>
               <Link href="/register">
                 <Button variant="brand" size="sm">
-                  {t('nav.register')}
+                  <span className="sm:hidden">{t('nav.join')}</span>
+                  <span className="hidden sm:inline">{t('nav.register')}</span>
                 </Button>
               </Link>
             </>

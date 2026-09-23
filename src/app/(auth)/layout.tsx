@@ -1,6 +1,7 @@
 import Link from 'next/link';
 
 import { Logo } from '@/components/brand/logo';
+import { LanguageSwitcher } from '@/components/layout/language-switcher';
 
 export default function AuthLayout({
   children,
@@ -9,6 +10,8 @@ export default function AuthLayout({
 }) {
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden p-6">
+      {/* En movil el idioma no cabe en la barra de arriba: se elige aqui. */}
+      <LanguageSwitcher className="absolute right-4 top-4" />
       <div className="w-full max-w-md">
         <Logo
           size="md"

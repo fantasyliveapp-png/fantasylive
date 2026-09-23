@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import type { Role } from '@prisma/client';
 
+import { LanguageSubMenu } from '@/components/layout/language-switcher';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -143,6 +144,8 @@ export function UserMenu({
             <Settings /> Ajustes
           </Link>
         </DropdownMenuItem>
+        {/* En el movil el globo no cabe arriba: el idioma va aqui. */}
+        <LanguageSubMenu className="sm:hidden" />
 
         <DropdownMenuSeparator />
 
