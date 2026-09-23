@@ -705,6 +705,8 @@ export async function getPostCommentsAction(postId: string): Promise<
       createdAt: string;
       author: string;
       image: string | null;
+      /** Enlace a su perfil: el de creadora o el de persona. */
+      profileHref: string | null;
       isMine: boolean;
     }>
   >
@@ -721,7 +723,15 @@ export async function getPostCommentsAction(postId: string): Promise<
         body: true,
         createdAt: true,
         userId: true,
-        user: { select: { name: true, email: true, image: true } },
+        user: {
+          select: {
+            name: true,
+            email: true,
+            image: true,
+            username: true,
+            modelProfile: { select: { slug: true } },
+          },
+        },
       },
     });
 
@@ -736,6 +746,11 @@ export async function getPostCommentsAction(postId: string): Promise<
         // personal a cualquiera que pase por el feed.
         author: c.user.name ?? c.user.email.split('@')[0] ?? 'Usuario',
         image: c.user.image,
+        profileHref: c.user.modelProfile
+          ? `/models/${c.user.modelProfile.slug}`
+          : c.user.username
+            ? `/u/${c.user.username}`
+            : null,
         isMine: Boolean(viewer) && c.userId === viewer?.id,
       })),
     };

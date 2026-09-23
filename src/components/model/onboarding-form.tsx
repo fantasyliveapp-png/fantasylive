@@ -59,8 +59,8 @@ export function OnboardingForm({
       });
 
       if (result.ok) {
-        toast.success('Perfil creado. Ahora completa tu verificacion KYC.');
-        router.push('/dashboard/model/kyc');
+        toast.success('¡Ya eres creadora! Sigue los primeros pasos de tu panel.');
+        router.push('/dashboard/model');
         router.refresh();
       } else {
         toast.error(result.error ?? 'No se pudo crear el perfil');

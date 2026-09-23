@@ -84,7 +84,10 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
  */
 const TOKEN_REFRESH_MS = 5 * 60 * 1000;
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+// `unstable_update` refresca el token desde el servidor (el callback jwt de
+// abajo relee rol y perfil de la BD, sin fiarse de lo que se le pase). Se usa
+// al activar el modo creadora para que el panel se abra sin volver a entrar.
+export const { handlers, auth, signIn, signOut, unstable_update: refreshSession } = NextAuth({
   ...authConfig,
   adapter: PrismaAdapter(prisma) as any,
   providers,

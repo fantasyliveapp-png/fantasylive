@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import type { Gender, Orientation } from '@prisma/client';
 
+import { refreshSession } from '@/lib/auth';
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { prisma } from '@/lib/prisma';
 import { slugify } from '@/lib/utils';
@@ -71,6 +72,10 @@ export async function createModelProfileAction(input: {
         },
       }),
     ]);
+
+    // El rol nuevo entra en la sesion ya: sin esto el panel quedaria
+    // bloqueado (rol viejo en el token) hasta volver a iniciar sesion.
+    await refreshSession({});
 
     revalidatePath('/dashboard/model');
     return { ok: true };

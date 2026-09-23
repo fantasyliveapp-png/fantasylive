@@ -19,15 +19,16 @@ import { NotificationBell } from '@/components/layout/notification-bell';
 import { UserMenu } from '@/components/layout/user-menu';
 import { getCurrentUser } from '@/lib/auth/guards';
 import { getT } from '@/lib/i18n/server';
-import { getProfileShortcut } from '@/lib/profile-shortcut';
+import { getOwnUsername, getProfileShortcut } from '@/lib/profile-shortcut';
 import { getWalletSummary } from '@/lib/tokens';
 import { formatTokens } from '@/lib/utils';
 
 export async function Navbar() {
   const [user, t] = await Promise.all([getCurrentUser(), getT()]);
-  const [wallet, profile] = await Promise.all([
+  const [wallet, profile, username] = await Promise.all([
     user ? getWalletSummary(user.id) : null,
     getProfileShortcut(user?.modelProfileId),
+    getOwnUsername(user?.id),
   ]);
 
   // El feed y los directos van primero: son el modo de descubrimiento
@@ -119,6 +120,7 @@ export async function Navbar() {
                 role={user.role}
                 isVip={user.isVip}
                 profileSlug={profile?.slug}
+                username={username}
               />
             </>
           ) : (

@@ -2,7 +2,7 @@ import { BottomNav } from '@/components/layout/bottom-nav';
 import { Footer } from '@/components/layout/footer';
 import { Navbar } from '@/components/layout/navbar';
 import { getCurrentUser } from '@/lib/auth/guards';
-import { getProfileShortcut } from '@/lib/profile-shortcut';
+import { getOwnUsername, getProfileShortcut } from '@/lib/profile-shortcut';
 
 export default async function MainLayout({
   children,
@@ -10,7 +10,10 @@ export default async function MainLayout({
   children: React.ReactNode;
 }) {
   const user = await getCurrentUser();
-  const profile = await getProfileShortcut(user?.modelProfileId);
+  const [profile, username] = await Promise.all([
+    getProfileShortcut(user?.modelProfileId),
+    getOwnUsername(user?.id),
+  ]);
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -24,6 +27,7 @@ export default async function MainLayout({
         userName={user?.name}
         userImage={user?.image}
         profile={profile}
+        username={username}
       />
     </div>
   );

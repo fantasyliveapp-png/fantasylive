@@ -30,7 +30,9 @@ const initialState: ActionState = {};
 
 export function RegisterForm({ defaultRole }: { defaultRole: 'USER' | 'MODEL' }) {
   const router = useRouter();
-  const [role, setRole] = useState<'USER' | 'MODEL'>(defaultRole);
+  // Una sola cuenta para todos. Si viene de "trabaja con nosotros"
+  // (?role=model), tras registrarse va directa a activar el modo creadora.
+  const wantsCreator = defaultRole === 'MODEL';
   const [gender, setGender] = useState<string>('');
   const [state, formAction, isPending] = useActionState(
     registerAction,
@@ -40,11 +42,11 @@ export function RegisterForm({ defaultRole }: { defaultRole: 'USER' | 'MODEL' })
   useEffect(() => {
     if (state.success) {
       toast.success(state.success);
-      router.push(role === 'MODEL' ? '/dashboard/model' : '/');
+      router.push(wantsCreator ? '/hazte-creadora' : '/');
       router.refresh();
     }
     if (state.error) toast.error(state.error);
-  }, [state, role, router]);
+  }, [state, wantsCreator, router]);
 
   // Fecha maxima permitida: hoy menos 18 años
   const maxBirthDate = new Date();
@@ -63,39 +65,18 @@ export function RegisterForm({ defaultRole }: { defaultRole: 'USER' | 'MODEL' })
 
       <CardContent>
         <form action={formAction} className="space-y-4">
-          {/* Selector de tipo de cuenta */}
-          <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted p-1">
-            {(['USER', 'MODEL'] as const).map((r) => (
-              <button
-                key={r}
-                type="button"
-                onClick={() => setRole(r)}
-                className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                  role === r
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {r === 'USER' ? 'Soy usuario' : 'Soy modelo'}
-              </button>
-            ))}
-          </div>
-          <input type="hidden" name="role" value={role} />
-
-          {role === 'MODEL' && (
+          {wantsCreator && (
             <div className="flex gap-2 rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs text-muted-foreground">
               <Sparkles className="h-4 w-4 shrink-0 text-primary" />
               <span>
-                Tras registrarte deberas completar la verificacion de identidad
-                (KYC) antes de poder emitir o cobrar.
+                Crea tu cuenta y despues activas el modo creadora en un minuto.
+                Para cobrar tendras que verificar tu identidad.
               </span>
             </div>
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="name">
-              {role === 'MODEL' ? 'Nombre artistico' : 'Nombre'}
-            </Label>
+            <Label htmlFor="name">Nombre</Label>
             <Input id="name" name="name" required placeholder="Como quieres que te llamen" />
             {fieldError('name') && (
               <p className="text-xs text-destructive">{fieldError('name')}</p>

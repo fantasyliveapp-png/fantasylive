@@ -11,6 +11,7 @@ import {
   LogOut,
   Settings,
   Shield,
+  Sparkles,
   UserRound,
 } from 'lucide-react';
 import type { Role } from '@prisma/client';
@@ -36,6 +37,8 @@ interface UserMenuProps {
   isVip: boolean;
   /** Slug del perfil publico si es modelo: activa "Ver/Editar mi perfil". */
   profileSlug?: string | null;
+  /** @usuario de la cuenta: su perfil de persona (/u/<usuario>). */
+  username?: string | null;
 }
 
 export function UserMenu({
@@ -45,6 +48,7 @@ export function UserMenu({
   role,
   isVip,
   profileSlug,
+  username,
 }: UserMenuProps) {
   return (
     <DropdownMenu>
@@ -75,64 +79,64 @@ export function UserMenu({
 
         <DropdownMenuSeparator />
 
-        {role === 'MODEL' && profileSlug ? (
-          // Creadora: solo lo suyo. Las opciones de fan (monedero, reservas,
-          // suscripciones) no aplican y saturaban el menu.
-          <>
-            <DropdownMenuItem asChild>
-              <Link href={`/models/${profileSlug}`}>
-                <UserRound /> Mi perfil
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href="/dashboard/model">
-                <LayoutDashboard /> Mi panel
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href="/dashboard/model/ajustes">
-                <Settings /> Ajustes
-              </Link>
-            </DropdownMenuItem>
-          </>
-        ) : (
-          <>
-            <DropdownMenuItem asChild>
-              <Link href="/wallet">
-                <Coins /> Monedero
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href="/bookings">
-                <Calendar /> Mis reservas
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href="/dashboard/subscriptions">
-                <Heart /> Mis suscripciones
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href="/dashboard">
-                <LayoutDashboard /> Mi cuenta
-              </Link>
-            </DropdownMenuItem>
-
-            {role === 'ADMIN' && (
-              <DropdownMenuItem asChild>
-                <Link href="/admin">
-                  <Shield /> Panel de admin
-                </Link>
-              </DropdownMenuItem>
-            )}
-
-            <DropdownMenuItem asChild>
-              <Link href="/dashboard/settings">
-                <Settings /> Ajustes
-              </Link>
-            </DropdownMenuItem>
-          </>
+        {/* Una sola cuenta: todos tienen su perfil y todos pueden usar la app
+            como fans. La creadora suma su panel; el resto ve "Hazte creadora". */}
+        {(profileSlug || username) && (
+          <DropdownMenuItem asChild>
+            <Link href={profileSlug ? `/models/${profileSlug}` : `/u/${username}`}>
+              <UserRound /> Mi perfil
+            </Link>
+          </DropdownMenuItem>
         )}
+        {profileSlug ? (
+          <DropdownMenuItem asChild>
+            <Link href="/dashboard/model">
+              <LayoutDashboard /> Mi panel
+            </Link>
+          </DropdownMenuItem>
+        ) : (
+          role !== 'ADMIN' && (
+            <DropdownMenuItem asChild>
+              <Link href="/hazte-creadora" className="font-medium text-primary">
+                <Sparkles /> Hazte creadora
+              </Link>
+            </DropdownMenuItem>
+          )
+        )}
+
+        <DropdownMenuSeparator />
+
+        <DropdownMenuItem asChild>
+          <Link href="/wallet">
+            <Coins /> Monedero
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/dashboard/subscriptions">
+            <Heart /> Mis suscripciones
+          </Link>
+        </DropdownMenuItem>
+        {!profileSlug && (
+          <DropdownMenuItem asChild>
+            <Link href="/bookings">
+              <Calendar /> Mis reservas
+            </Link>
+          </DropdownMenuItem>
+        )}
+
+        {role === 'ADMIN' && (
+          <DropdownMenuItem asChild>
+            <Link href="/admin">
+              <Shield /> Panel de admin
+            </Link>
+          </DropdownMenuItem>
+        )}
+
+        <DropdownMenuItem asChild>
+          <Link href={profileSlug ? '/dashboard/model/ajustes' : '/dashboard/settings'}>
+            <Settings /> Ajustes
+          </Link>
+        </DropdownMenuItem>
 
         <DropdownMenuSeparator />
 

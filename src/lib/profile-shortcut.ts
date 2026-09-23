@@ -25,3 +25,15 @@ export const getProfileShortcut = cache(
     });
   },
 );
+
+/** @usuario de la cuenta en sesion, para enlazar a su perfil (/u/<usuario>). */
+export const getOwnUsername = cache(
+  async (userId: string | null | undefined): Promise<string | null> => {
+    if (!userId) return null;
+    const row = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { username: true },
+    });
+    return row?.username ?? null;
+  },
+);

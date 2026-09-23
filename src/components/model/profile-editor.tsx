@@ -547,7 +547,7 @@ function SettingsLink({
 }
 
 /** Recorte de avatar (circulo) o portada (3:1) antes de subir. */
-function ImageCropDialog({
+export function ImageCropDialog({
   kind,
   src,
   naturalWidth,

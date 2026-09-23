@@ -51,11 +51,13 @@ export async function requireAdmin(): Promise<SessionUser> {
 
 /** Exige rol MODEL y devuelve tambien el perfil de modelo cargado. */
 export async function requireModel() {
-  const user = await requireRole(['MODEL', 'ADMIN'], '/dashboard');
+  // Una sola cuenta para todos: quien aun no tiene el modo creadora activo va
+  // a activarlo, en vez de chocar con un 403.
+  const user = await requireUser('/dashboard/model');
   const profile = await prisma.modelProfile.findUnique({
     where: { userId: user.id },
   });
-  if (!profile) redirect('/dashboard/model/onboarding');
+  if (!profile) redirect('/hazte-creadora');
   return { user, profile };
 }
 

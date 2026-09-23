@@ -34,6 +34,7 @@ export function BottomNav({
   userName,
   userImage,
   profile,
+  username,
 }: {
   isAuthenticated: boolean;
   isModel: boolean;
@@ -41,6 +42,8 @@ export function BottomNav({
   userImage?: string | null;
   /** Perfil publico de la modelo en sesion (para la pestana Perfil). */
   profile?: ProfileShortcut | null;
+  /** @usuario de la cuenta: la pestana Perfil de un fan lleva a /u/<usuario>. */
+  username?: string | null;
 }) {
   const pathname = usePathname();
   const { t } = useI18n();
@@ -59,7 +62,11 @@ export function BottomNav({
 
   // Perfil: la modelo va a su perfil publico (lo que ven sus fans, con los
   // botones de editar); el resto de usuarios, a su cuenta.
-  const profileHref = profile ? `/models/${profile.slug}` : '/dashboard';
+  const profileHref = profile
+    ? `/models/${profile.slug}`
+    : username
+      ? `/u/${username}`
+      : '/dashboard';
   const avatarSrc = profile?.avatarUrl ?? userImage ?? undefined;
   const avatarName = profile?.stageName ?? userName ?? '';
 
@@ -126,10 +133,9 @@ export function BottomNav({
             icon: MessageCircle,
           },
           {
-            href: '/dashboard',
+            href: profileHref,
             label: t('nav.profile'),
             kind: 'profile',
-            exact: true,
           },
         ];
 

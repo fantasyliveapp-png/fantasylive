@@ -105,9 +105,16 @@ export function buildProfileImageKey(params: {
 }
 
 const PROFILE_IMAGE_KEY = /^models\/[\w-]+\/profile\/(avatar|cover)-[\w-]+\.jpg$/;
+const USER_AVATAR_KEY = /^users\/[\w-]+\/avatar-[\w-]+\.jpg$/;
+
 /** La clave es una foto de perfil/portada (y por tanto publica). */
 export function isProfileImageKey(key: string): boolean {
-  return PROFILE_IMAGE_KEY.test(key);
+  return PROFILE_IMAGE_KEY.test(key) || USER_AVATAR_KEY.test(key);
+}
+
+/** Foto de perfil de una cuenta (fan). Ej: users/<userId>/avatar-<uuid>.jpg */
+export function buildUserAvatarKey(userId: string): string {
+  return `users/${userId}/avatar-${crypto.randomUUID()}.jpg`;
 }
 
 /**

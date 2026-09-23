@@ -42,6 +42,7 @@ interface CommentRow {
   createdAt: string;
   author: string;
   image: string | null;
+  profileHref: string | null;
   isMine: boolean;
 }
 
@@ -386,7 +387,16 @@ export function PostCard({
                 </AvatarFallback>
               </Avatar>
               <div className="min-w-0 flex-1 rounded-lg bg-muted/50 px-3 py-2">
-                <p className="text-xs font-medium">{comment.author}</p>
+                {comment.profileHref ? (
+                  <Link
+                    href={comment.profileHref}
+                    className="text-xs font-medium hover:underline"
+                  >
+                    {comment.author}
+                  </Link>
+                ) : (
+                  <p className="text-xs font-medium">{comment.author}</p>
+                )}
                 <p className="mt-0.5 break-words text-sm">{comment.body}</p>
               </div>
             </div>

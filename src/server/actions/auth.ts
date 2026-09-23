@@ -87,7 +87,10 @@ export async function registerAction(
       ageVerified: false, // se confirma con KYC / verificacion documental
       gender: (data.gender as any) || null,
       country: data.country || null,
-      role: data.role,
+      // Una sola cuenta para todos: el modo creadora se activa despues en
+      // /hazte-creadora (el campo "role" del formulario solo indica la
+      // intencion, para llevarla alli tras registrarse).
+      role: 'USER',
       status: 'ACTIVE',
       wallet: { create: { balance: bonus } },
     },
@@ -101,27 +104,6 @@ export async function registerAction(
         tokens: bonus,
         balanceAfter: bonus,
         description: 'Bono de bienvenida',
-      },
-    });
-  }
-
-  // Alta como modelo: crea perfil borrador pendiente de KYC
-  if (data.role === 'MODEL') {
-    let slug = slugify(data.name);
-    if (await prisma.modelProfile.findUnique({ where: { slug } })) {
-      slug = `${slug}-${Math.random().toString(36).slice(2, 6)}`;
-    }
-    await prisma.modelProfile.create({
-      data: {
-        userId: user.id,
-        stageName: data.name.trim(),
-        slug,
-        gender: (data.gender as any) || 'FEMALE',
-        orientation: 'STRAIGHT',
-        country: data.country || null,
-        kycStatus: 'NOT_SUBMITTED',
-        acceptsBookings: false,
-        isVipEnabled: false,
       },
     });
   }
