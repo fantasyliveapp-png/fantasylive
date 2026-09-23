@@ -1,0 +1,44 @@
+##############################################################################
+# LiveKit Ingress - unidad systemd
+# Instalar en /etc/systemd/system/livekit-ingress.service
+#
+# Requiere:
+#   - El binario en /usr/local/bin/livekit-ingress
+#       curl -sSL https://get.livekit.io/ingress | bash
+#   - El usuario de servicio (el mismo que el SFU):
+#       useradd --system --no-create-home --shell /usr/sbin/nologin livekit
+#   - Redis corriendo en localhost (paquete redis-server).
+#   - ffmpeg, que es lo que usa el ingress para transcodificar:
+#       apt install ffmpeg
+##############################################################################
+
+[Unit]
+Description=LiveKit Ingress (RTMP para OBS)
+Documentation=https://docs.livekit.io/home/self-hosting/ingress/
+# El ingress se registra en Redis y habla con el SFU: si arranca antes que
+# ellos se queda reintentando y el primer directo del dia falla.
+After=network-online.target redis-server.service livekit.service
+Wants=network-online.target redis-server.service livekit.service
+
+[Service]
+Type=simple
+User=livekit
+Group=livekit
+ExecStart=/usr/local/bin/livekit-ingress --config /etc/livekit/ingress.yaml
+
+Restart=always
+RestartSec=5
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+
+# La transcodificacion es intensiva en CPU: sin este limite un solo directo
+# en 1080p puede dejar sin CPU a la aplicacion web en un VPS pequeno.
+CPUQuota=200%
+
+[Install]
+WantedBy=multi-user.target

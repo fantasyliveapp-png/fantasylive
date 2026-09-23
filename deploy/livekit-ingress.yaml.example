@@ -1,0 +1,58 @@
+##############################################################################
+# LiveKit Ingress - entrada RTMP para OBS
+#
+# Instalar en /etc/livekit/ingress.yaml (chmod 640, root:livekit).
+#
+# QUE HACE
+#   Recibe el video que OBS publica por RTMP y lo reenvia a una sala de
+#   LiveKit como si fuera un participante mas. Sin este servicio, la app solo
+#   puede ofrecer emision desde el navegador: la interfaz lo detecta por
+#   LIVEKIT_RTMP_URL y esconde la opcion de OBS en vez de dar unas
+#   credenciales que no funcionarian.
+#
+# REQUISITOS
+#   - Redis. El ingress y el SFU se coordinan a traves de el; no es opcional.
+#       apt install redis-server
+#     Redis debe escuchar SOLO en localhost (es el valor por defecto de
+#     Debian/Ubuntu): comprueba `bind 127.0.0.1 ::1` en /etc/redis/redis.conf.
+#   - El SFU (livekit-server) tambien tiene que tener configurado el MISMO
+#     Redis, o cada uno vera un mundo distinto y las salas no se encontraran.
+#     Ver el bloque `redis:` de deploy/livekit.yaml.example.
+#
+# PUERTOS
+#   1935/tcp -> ABRIR en el firewall. Es el puerto donde OBS publica.
+#               No pasa por nginx: RTMP no es HTTP.
+#   8080/tcp -> healthcheck local, NO se abre al exterior.
+#
+# Las claves tienen que ser las MISMAS que las del SFU y las del .env de la
+# aplicacion (LIVEKIT_API_KEY / LIVEKIT_API_SECRET).
+##############################################################################
+
+# WebSocket interno del SFU. Va por localhost: el ingress vive en la misma
+# maquina y no necesita salir a Internet ni pasar por Cloudflare.
+ws_url: ws://127.0.0.1:7880
+
+api_key: REEMPLAZA_API_KEY
+api_secret: REEMPLAZA_API_SECRET
+
+redis:
+  address: 127.0.0.1:6379
+
+# Puerto en el que escucha el servidor RTMP.
+rtmp_port: 1935
+
+# WHIP (WebRTC-HTTP ingest) es la alternativa moderna a RTMP. Se deja
+# desactivado porque OBS lo soporta desde hace poco y RTMP funciona en
+# cualquier version; activalo si tus creadoras usan OBS 30 o superior.
+# whip_port: 8085
+
+health_port: 8080
+log_level: info
+
+# Perfil de transcodificacion por defecto. El ingress recodifica a H.264 en
+# tres capas para que el SFU pueda servir calidad adaptativa: sin
+# transcodificacion, quien tenga mala conexion se queda sin video en vez de
+# bajar de calidad.
+video:
+  source: 1
+  preset: H264_720P_30FPS_3_LAYERS

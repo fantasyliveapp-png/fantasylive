@@ -1,0 +1,27 @@
+##############################################################################
+# Cierre de llamadas colgadas - se dispara desde fantasylive-sweep.timer
+# Instalar en /etc/systemd/system/fantasylive-sweep.service
+##############################################################################
+
+[Unit]
+Description=FantasyLive - cierra llamadas colgadas
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+User=fantasylive
+Group=fantasylive
+WorkingDirectory=/var/www/fantasylive
+EnvironmentFile=/var/www/fantasylive/.env
+Environment=NODE_ENV=production
+
+# --conditions=react-server permite importar modulos marcados "server-only".
+ExecStart=/usr/bin/npx tsx --conditions=react-server scripts/sweep-calls.mts
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+# npx y tsx necesitan escribir cache
+ReadWritePaths=/var/www/fantasylive/.next /var/www/fantasylive/node_modules /home/fantasylive

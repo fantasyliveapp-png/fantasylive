@@ -1,0 +1,285 @@
+import Link from 'next/link';
+import type { ModelProfile } from '@prisma/client';
+import {
+  AlertTriangle,
+  CalendarDays,
+  Check,
+  ChevronRight,
+  Gift,
+  MessageCircle,
+  PartyPopper,
+  Plus,
+  Radio,
+  type LucideIcon,
+} from 'lucide-react';
+
+import { OnlineToggle } from '@/components/model/online-toggle';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { getCreatorEarnings, getCreatorPending } from '@/lib/creator-dashboard';
+import { getWalletSummary, tokensToPayoutCents } from '@/lib/tokens';
+import { cn, formatMoney, initials } from '@/lib/utils';
+
+/**
+ * HOY
+ *
+ * La primera pantalla del panel, a proposito corta: como estoy (conectada o
+ * no), cuanto dinero tengo, que me esta esperando y un boton para crear. Las
+ * graficas y el detalle viven en Dinero; lo que piden los fans, en Bandeja.
+ * A las creadoras nuevas les guia con una lista de primeros pasos.
+ */
+export async function CreatorHome({
+  userId,
+  profile,
+}: {
+  userId: string;
+  profile: ModelProfile;
+}) {
+  const [wallet, pending, earnings] = await Promise.all([
+    getWalletSummary(userId),
+    getCreatorPending(profile.id, userId),
+    getCreatorEarnings(userId),
+  ]);
+
+  const usd = (tokens: number) => formatMoney(tokensToPayoutCents(tokens));
+  const firstName = profile.stageName.split(' ')[0];
+
+  // Primeros pasos: desaparecen en cuanto estan todos hechos.
+  const steps = [
+    {
+      done: profile.kycStatus === 'APPROVED',
+      title: 'Verifica tu identidad',
+      hint: profile.kycStatus === 'PENDING' ? 'En revision, te avisamos en 24-48 h' : 'Sin esto no puedes cobrar',
+      href: '/dashboard/model/kyc',
+    },
+    {
+      done: Boolean(profile.avatarUrl && profile.bio),
+      title: 'Pon tu foto y tu bio',
+      hint: 'Es lo primero que ven tus fans',
+      href: `/models/${profile.slug}?editar=1`,
+    },
+    {
+      done: profile.subscriptionEnabled || profile.messagingEnabled,
+      title: 'Elige como cobrar',
+      hint: 'Suscripcion, mensajes de pago o citas',
+      href: '/dashboard/model/rates',
+    },
+    {
+      done: profile.postsCount > 0,
+      title: 'Haz tu primera publicacion',
+      hint: 'Fotos, videos, texto o una encuesta',
+      href: '/dashboard/model/posts?nuevo=fotos',
+    },
+  ];
+  const stepsDone = steps.filter((s) => s.done).length;
+
+  // Lo que espera respuesta, cada cosa a su filtro de la Bandeja.
+  const todo: { href: string; icon: LucideIcon; title: string; warning?: boolean }[] = [];
+  if (profile.kycStatus === 'REJECTED') {
+    todo.push({
+      href: '/dashboard/model/kyc',
+      icon: AlertTriangle,
+      title: 'Tu verificacion fue rechazada: revisala',
+      warning: true,
+    });
+  }
+  if (pending.unansweredMessages > 0) {
+    todo.push({
+      href: '/dashboard/model/bandeja?tipo=mensajes',
+      icon: MessageCircle,
+      title: `${pending.unansweredMessages} ${pending.unansweredMessages === 1 ? 'fan espera' : 'fans esperan'} tu respuesta`,
+    });
+  }
+  if (pending.pendingBookings > 0) {
+    todo.push({
+      href: '/dashboard/model/bandeja?tipo=citas',
+      icon: CalendarDays,
+      title: `${pending.pendingBookings} ${pending.pendingBookings === 1 ? 'cita' : 'citas'} por confirmar`,
+    });
+  }
+  if (pending.pendingRequests > 0) {
+    todo.push({
+      href: '/dashboard/model/bandeja?tipo=pedidos',
+      icon: Gift,
+      title: `${pending.pendingRequests} ${pending.pendingRequests === 1 ? 'pedido a medida' : 'pedidos a medida'}`,
+    });
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Saludo, estado y dinero */}
+      <section className="relative overflow-hidden rounded-3xl border border-border/60 bg-card p-5 sm:p-6">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-primary/20 blur-3xl"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -bottom-28 -left-16 h-64 w-64 rounded-full bg-state-connected/10 blur-3xl"
+        />
+
+        <div className="relative flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className="rounded-full bg-gradient-to-tr from-primary via-fantazy-red to-champagne-gold p-[2px] lg:hidden">
+              <Avatar className="h-12 w-12 border-2 border-card">
+                {profile.avatarUrl && <AvatarImage src={profile.avatarUrl} alt="" />}
+                <AvatarFallback>{initials(profile.stageName)}</AvatarFallback>
+              </Avatar>
+            </span>
+            <h1 className="font-heading text-2xl uppercase tracking-wide sm:text-3xl">
+              Hola, {firstName}
+            </h1>
+          </div>
+
+          <OnlineToggle
+            variant="hero"
+            isOnline={profile.isOnline}
+            isAvailableForVip={profile.isAvailableForVip}
+            isVipEnabled={profile.isVipEnabled}
+            canStream={profile.kycStatus === 'APPROVED'}
+          />
+        </div>
+
+        <Link
+          href="/dashboard/model/dinero"
+          className="group relative mt-6 flex items-end justify-between gap-4"
+        >
+          <span>
+            <span className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Tu dinero
+            </span>
+            <span className="mt-1 block font-heading text-5xl leading-none text-state-connected">
+              {usd(wallet.balance)}
+            </span>
+            <span className="mt-1.5 block text-xs text-muted-foreground">
+              {usd(earnings.weekTokens)} esta semana
+            </span>
+          </span>
+          <span className="flex items-center gap-1 text-xs font-semibold text-primary">
+            Ver y retirar
+            <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+          </span>
+        </Link>
+      </section>
+
+      {/* Primeros pasos (solo hasta completarlos) */}
+      {stepsDone < steps.length && (
+        <section className="rounded-2xl border border-primary/30 bg-primary/5 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold">Primeros pasos</h2>
+            <span className="text-xs text-muted-foreground">
+              {stepsDone} de {steps.length}
+            </span>
+          </div>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-primary transition-all"
+              style={{ width: `${(stepsDone / steps.length) * 100}%` }}
+            />
+          </div>
+          <ol className="mt-3 space-y-1">
+            {steps.map((step) => (
+              <li key={step.title}>
+                <Link
+                  href={step.href}
+                  className={cn(
+                    'flex items-center gap-3 rounded-xl px-2 py-2 transition-colors',
+                    !step.done && 'hover:bg-primary/10',
+                  )}
+                  aria-disabled={step.done}
+                >
+                  <span
+                    className={cn(
+                      'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border',
+                      step.done
+                        ? 'border-state-connected bg-state-connected text-black'
+                        : 'border-border',
+                    )}
+                  >
+                    {step.done && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span
+                      className={cn(
+                        'block text-sm',
+                        step.done ? 'text-muted-foreground line-through' : 'font-medium',
+                      )}
+                    >
+                      {step.title}
+                    </span>
+                    {!step.done && (
+                      <span className="block text-xs text-muted-foreground">{step.hint}</span>
+                    )}
+                  </span>
+                  {!step.done && <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
+                </Link>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
+
+      {/* Lo que espera */}
+      <section>
+        <h2 className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          Te esperan
+        </h2>
+        {todo.length === 0 ? (
+          <div className="flex items-center gap-3 rounded-2xl border border-state-connected/30 bg-state-connected/5 p-4">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-state-connected/15 text-state-connected">
+              <PartyPopper className="h-5 w-5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold">Todo al dia</span>
+              <span className="block text-xs text-muted-foreground">
+                Nadie te espera. Buen momento para publicar algo.
+              </span>
+            </span>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {todo.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  'group flex items-center gap-3 rounded-2xl border p-4 transition-colors',
+                  item.warning
+                    ? 'border-amber-500/40 bg-amber-500/5'
+                    : 'border-border/60 bg-card hover:border-primary/50',
+                )}
+              >
+                <span
+                  className={cn(
+                    'flex h-10 w-10 shrink-0 items-center justify-center rounded-full',
+                    item.warning ? 'bg-amber-500/15 text-amber-500' : 'bg-primary/15 text-primary',
+                  )}
+                >
+                  <item.icon className="h-5 w-5" />
+                </span>
+                <span className="min-w-0 flex-1 text-sm font-semibold">{item.title}</span>
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Crear */}
+      <section className="grid grid-cols-2 gap-2">
+        <Link href="/dashboard/model/posts?nuevo=fotos">
+          <Button variant="brand" size="lg" className="h-14 w-full">
+            <Plus className="h-5 w-5" />
+            Publicar
+          </Button>
+        </Link>
+        <Link href="/dashboard/model/live">
+          <Button variant="outline" size="lg" className="h-14 w-full">
+            <Radio className="h-5 w-5 text-rose-500" />
+            Ir en directo
+          </Button>
+        </Link>
+      </section>
+    </div>
+  );
+}
