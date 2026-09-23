@@ -248,6 +248,8 @@ enum NotificationType {
   NEW_POST
   /// Has recibido un regalo en tokens
   GIFT_RECEIVED
+  /// Como va una publicacion propia (fase de prueba superada, hitos de vistas)
+  POST_INSIGHT
 }
 
 enum LiveStreamStatus {
@@ -1400,12 +1402,18 @@ model Post {
   priceTokens Int     @default(0)
   isPublished Boolean @default(true)
 
-  likeCount    Int @default(0)
-  commentCount Int @default(0)
-  unlockCount  Int @default(0)
+  likeCount    Int    @default(0)
+  commentCount Int    @default(0)
+  unlockCount  Int    @default(0)
   /// Personas distintas que la han visto en el feed (ver PostImpression).
-  viewCount    Int @default(0)
-  tokensEarned Int @default(0)
+  viewCount    Int    @default(0)
+  tokensEarned Int    @default(0)
+  /// Tiempo total que la han mirado (ms, max 60 s por persona).
+  watchMs      BigInt @default(0)
+  /// Personas que vieron el video (casi) entero.
+  completions  Int    @default(0)
+  /// Personas que la pasaron de largo (menos de 1,5 s en pantalla).
+  skips        Int    @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1653,6 +1661,10 @@ model PostImpression {
   id        String   @id @default(cuid())
   userId    String
   postId    String
+  /// Tiempo en pantalla acumulado (ms)
+  dwellMs   Int      @default(0)
+  /// Vio el video (casi) entero
+  completed Boolean  @default(false)
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

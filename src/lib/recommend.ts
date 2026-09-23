@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { Gender, Prisma } from '@prisma/client';
 
+import type { AnonTaste } from '@/lib/anon-taste';
 import { prisma } from '@/lib/prisma';
 import { buildFeedPosts, feedPostSelect, livePostWhere, type FeedPost } from '@/lib/posts';
 import { hasTastes, type Tastes } from '@/lib/tastes';
@@ -12,16 +13,18 @@ import { hasTastes, type Tastes } from '@/lib/tastes';
  * Funciona como TikTok en dos ideas:
  *
  * 1. APRENDE DE CADA FAN. Ademas de lo que respondio en "Tus gustos", cuenta
- *    lo que hace: a quien da me gusta, que desbloquea, que comenta, a quien
- *    sigue, que perfiles visita y que marca como "No me interesa". De ahi
- *    saca que creadoras, etiquetas y tipo de persona le gustan.
+ *    lo que hace: cuanto tiempo mira cada publicacion (y si ve el video
+ *    entero o la pasa de largo), a quien da me gusta, que desbloquea, que
+ *    comenta, a quien sigue, que perfiles visita y que marca como "No me
+ *    interesa". Sin cuenta tambien aprende, con una cookie (anon-taste.ts).
  *
  * 2. EXPOSICION JUSTA PARA TODAS LAS CREADORAS. Cada publicacion nueva recibe
  *    un empujon hasta que la han visto ~40 personas, tenga la creadora 10
  *    seguidores o 10.000. Ademas, 1 de cada 4 huecos del feed se reserva a
  *    publicaciones que aun estan en esa fase de prueba. Despues, lo que manda
  *    es como funciona (me gusta, comentarios y desbloqueos por cada persona
- *    que la vio), no cuantos seguidores tiene: una publicacion que gusta
+ *    que la vio, cuanto tiempo la miran, cuanta gente ve el video entero y
+ *    cuanta la pasa de largo), no cuantos seguidores tiene: una que gusta
  *    sigue circulando mas tiempo aunque sea de alguien pequeno.
  *
  * Lo que ya vio baja, lo marcado como "No me interesa" desaparece, y una
@@ -47,6 +50,12 @@ const SIGNAL = {
   follow: 4,
   visit: 1,
   hide: -4,
+  /** La miro 8 s o mas */
+  longView: 1,
+  /** Vio el video entero */
+  completed: 2,
+  /** La paso de largo (< 1,5 s) */
+  skip: -0.5,
 } as const;
 
 export async function getViewerTastes(viewerId: string | null): Promise<Tastes | null> {
@@ -100,7 +109,7 @@ async function getLearnedProfile(viewerId: string): Promise<LearnedProfile> {
   const model = { select: { id: true, gender: true, tags: true } } as const;
   const viaPost = { post: { select: { model } } } as const;
 
-  const [likes, comments, unlocks, follows, visits, hides] = await Promise.all([
+  const [likes, comments, unlocks, follows, visits, hides, views] = await Promise.all([
     prisma.postLike.findMany({
       where: { userId: viewerId, createdAt: { gte: since } },
       orderBy: { createdAt: 'desc' },
@@ -131,6 +140,12 @@ async function getLearnedProfile(viewerId: string): Promise<LearnedProfile> {
       orderBy: { createdAt: 'desc' },
       take: 400,
       select: { postId: true, ...viaPost },
+    }),
+    prisma.postImpression.findMany({
+      where: { userId: viewerId, createdAt: { gte: new Date(Date.now() - 30 * 86_400_000) } },
+      orderBy: { createdAt: 'desc' },
+      take: 600,
+      select: { dwellMs: true, completed: true, ...viaPost },
     }),
   ]);
 
@@ -163,8 +178,30 @@ async function getLearnedProfile(viewerId: string): Promise<LearnedProfile> {
   follows.forEach((r) => add(r.model, SIGNAL.follow));
   visits.forEach((r) => add(r.model, SIGNAL.visit));
   hides.forEach((r) => add(r.post.model, SIGNAL.hide));
+  views.forEach((r) => {
+    if (r.completed) add(r.post.model, SIGNAL.completed);
+    if (r.dwellMs >= 8000) add(r.post.model, SIGNAL.longView);
+    else if (r.dwellMs < 1500 && !r.completed) add(r.post.model, SIGNAL.skip);
+  });
 
   return profile;
+}
+
+/** Lo aprendido de alguien sin cuenta (cookie) con la misma forma. */
+function learnedFromAnon(taste: AnonTaste): LearnedProfile {
+  const sum = (o: Record<string, number>) =>
+    Object.values(o).reduce((a, v) => a + Math.max(0, v), 0);
+  const positive = (o: Record<string, number>) =>
+    new Map(Object.entries(o).filter(([, v]) => v > 0));
+  return {
+    creators: new Map(Object.entries(taste.c)),
+    tags: positive(taste.t),
+    genders: positive(taste.g as Record<string, number>) as Map<Gender, number>,
+    tagTotal: sum(taste.t),
+    genderTotal: sum(taste.g as Record<string, number>),
+    signals: taste.n,
+    hiddenPosts: new Set(),
+  };
 }
 
 /** Cuanto encaja con lo que el fan HACE. De -0.6 a ~2. */
@@ -197,8 +234,13 @@ interface Candidate {
     createdAt: Date;
   };
   hasMedia: boolean;
+  hasVideo: boolean;
   views: number;
   engagement: number;
+  /** Tiempo total que la han mirado (ms) */
+  watchMs: number;
+  completions: number;
+  skips: number;
 }
 
 interface Scored extends Candidate {
@@ -216,26 +258,49 @@ function scoreCandidates(params: {
   const { candidates, tastes, learned, following, seenBefore } = params;
   const now = Date.now();
 
-  // Tasa media de interaccion de todo el bote: lo "normal" contra lo que se
-  // compara cada publicacion. Con pocas vistas se confia poco en su tasa.
+  // Lo "normal" en el bote, contra lo que se compara cada publicacion. Con
+  // pocas vistas se confia poco en sus numeros (se mezclan con la media).
   const totals = candidates.reduce(
-    (acc, c) => ({ eng: acc.eng + c.engagement, views: acc.views + c.views }),
-    { eng: 0, views: 0 },
+    (acc, c) => ({
+      eng: acc.eng + c.engagement,
+      views: acc.views + c.views,
+      watch: acc.watch + c.watchMs,
+      skips: acc.skips + c.skips,
+      videoViews: acc.videoViews + (c.hasVideo ? c.views : 0),
+      completions: acc.completions + (c.hasVideo ? c.completions : 0),
+    }),
+    { eng: 0, views: 0, watch: 0, skips: 0, videoViews: 0, completions: 0 },
   );
-  const baseRate = totals.views > 50 ? Math.max(totals.eng / totals.views, 0.02) : 0.1;
+  const enough = totals.views > 50;
+  const baseRate = enough ? Math.max(totals.eng / totals.views, 0.02) : 0.1;
+  const baseWatch = enough ? Math.max(totals.watch / totals.views, 1000) : 5000;
+  const baseSkip = enough ? Math.max(totals.skips / totals.views, 0.05) : 0.3;
+  const baseComplete =
+    totals.videoViews > 50 ? Math.max(totals.completions / totals.videoViews, 0.05) : 0.3;
+  const K = 20;
+  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
   return candidates.map((c) => {
-    const smoothedRate = (c.engagement + baseRate * 20) / (c.views + 20);
-    const confidence = c.views / (c.views + 20);
-    const performance =
-      Math.max(-0.6, Math.min(1.5, (smoothedRate - baseRate) / baseRate)) * confidence;
+    const confidence = c.views / (c.views + K);
+    const rate = (c.engagement + baseRate * K) / (c.views + K);
+    const watch = (c.watchMs + baseWatch * K) / (c.views + K);
+    const skip = (c.skips + baseSkip * K) / (c.views + K);
+    const perfEng = clamp((rate - baseRate) / baseRate, -0.6, 1.5);
+    const perfWatch = clamp((watch - baseWatch) / baseWatch, -0.6, 1);
+    const perfSkip = clamp((baseSkip - skip) / baseSkip, -0.6, 0.6);
+    let performance = 0.5 * perfEng + 0.35 * perfWatch + 0.15 * perfSkip;
+    if (c.hasVideo) {
+      const complete = (c.completions + baseComplete * K) / (c.views + K);
+      performance += 0.3 * clamp((complete - baseComplete) / baseComplete, -0.6, 1);
+    }
+    performance *= confidence;
 
     // Lo que funciona envejece mas despacio (sigue circulando mas dias).
     const hours = (now - c.createdAt.getTime()) / 3_600_000;
     const effectiveHours = hours / (1 + Math.max(0, performance));
     let score = 1.5 / (1 + effectiveHours / 36);
 
-    score += 0.6 * performance;
+    score += 0.8 * performance;
 
     // Fase de prueba: empujon hasta que la vean TEST_AUDIENCE personas.
     const inTest = c.views < TEST_AUDIENCE;
@@ -314,18 +379,21 @@ function arrange(scored: Scored[], seenBefore: Set<string>): string[] {
 // ---------------------------------------------------------------------------
 
 /**
- * Descubrir, paginado por numero de pagina. `sessionStart` es cuando se
- * cargo la primera pagina: lo visto DESPUES (en esta misma sesion) no se
- * penaliza, para que el orden no cambie entre paginas.
+ * Descubrir para el scroll infinito: devuelve las `take` mejores que aun no
+ * se le han ensenado en esta sesion (`exclude`). `sessionStart` es cuando
+ * empezo a mirar: lo visto DESPUES no se penaliza como "ya visto".
+ * Sin cuenta, `anonTaste` son sus gustos aprendidos (cookie).
  */
 export async function getForYouFeed(params: {
   viewerId: string | null;
   geoFilter: Prisma.ModelProfileWhereInput;
-  page: number;
   take: number;
   sessionStart: Date;
+  exclude?: string[];
+  anonTaste?: AnonTaste | null;
 }): Promise<FeedPost[]> {
   const { viewerId, take } = params;
+  const exclude = new Set(params.exclude ?? []);
   const baseWhere: Prisma.PostWhereInput = {
     ...livePostWhere(),
     model: { kycStatus: 'APPROVED', ...params.geoFilter },
@@ -345,7 +413,10 @@ export async function getForYouFeed(params: {
         likeCount: true,
         commentCount: true,
         unlockCount: true,
-        _count: { select: { assets: true } },
+        watchMs: true,
+        completions: true,
+        skips: true,
+        assets: { select: { mimeType: true }, take: 20 },
         model: {
           select: {
             id: true,
@@ -360,7 +431,9 @@ export async function getForYouFeed(params: {
       },
     }),
     getViewerTastes(viewerId),
-    viewerId ? getLearnedProfile(viewerId) : Promise.resolve(null),
+    viewerId
+      ? getLearnedProfile(viewerId)
+      : Promise.resolve(params.anonTaste ? learnedFromAnon(params.anonTaste) : null),
     viewerId
       ? prisma.follow.findMany({ where: { userId: viewerId }, select: { modelId: true } })
       : Promise.resolve([]),
@@ -391,13 +464,21 @@ export async function getForYouFeed(params: {
         followersCount: p.model.followersCount,
         createdAt: p.model.createdAt,
       },
-      hasMedia: p._count.assets > 0,
+      hasMedia: p.assets.length > 0,
+      hasVideo: p.assets.some((a) => a.mimeType.startsWith('video/')),
       views: p.viewCount,
+      watchMs: Number(p.watchMs),
+      completions: p.completions,
+      skips: p.skips,
       // Desbloquear pesa mas que comentar, y comentar mas que un me gusta.
       engagement: p.likeCount + 2 * p.commentCount + 3 * p.unlockCount,
     }));
 
-  const seenBefore = new Set(seen.map((s) => s.postId));
+  const seenBefore = new Set([
+    ...seen.map((s) => s.postId),
+    // Sin cuenta: lo que ya vio segun su cookie (menos lo de esta sesion).
+    ...(viewerId ? [] : (params.anonTaste?.s ?? []).filter((id) => !exclude.has(id))),
+  ]);
   const ordered = arrange(
     scoreCandidates({
       candidates,
@@ -409,20 +490,19 @@ export async function getForYouFeed(params: {
     seenBefore,
   );
 
-  const start = params.page * take;
-  const pageIds = ordered.slice(start, start + take);
+  const pageIds = ordered.filter((id) => !exclude.has(id)).slice(0, take);
 
   // Pasado el bote, lo anterior en orden de fecha.
   let older: Awaited<ReturnType<typeof fetchPosts>> = [];
   if (pageIds.length < take) {
+    const skipIds = [...exclude, ...(learned?.hiddenPosts ?? [])];
     older = await prisma.post.findMany({
       where: {
         ...baseWhere,
         createdAt: { lt: poolSince },
-        ...(learned?.hiddenPosts.size ? { id: { notIn: [...learned.hiddenPosts] } } : {}),
+        ...(skipIds.length ? { id: { notIn: skipIds } } : {}),
       },
       orderBy: { createdAt: 'desc' },
-      skip: Math.max(0, start - ordered.length),
       take: take - pageIds.length,
       select: feedPostSelect,
     });

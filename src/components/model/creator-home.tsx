@@ -10,6 +10,7 @@ import {
   PartyPopper,
   Plus,
   Radio,
+  TrendingUp,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -17,6 +18,8 @@ import { OnlineToggle } from '@/components/model/online-toggle';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { getCreatorEarnings, getCreatorPending } from '@/lib/creator-dashboard';
+import { TEST_AUDIENCE } from '@/lib/post-insights';
+import { prisma } from '@/lib/prisma';
 import { getWalletSummary, tokensToPayoutCents } from '@/lib/tokens';
 import { cn, formatMoney, initials } from '@/lib/utils';
 
@@ -35,10 +38,24 @@ export async function CreatorHome({
   userId: string;
   profile: ModelProfile;
 }) {
-  const [wallet, pending, earnings] = await Promise.all([
+  const weekAgo = new Date(Date.now() - 7 * 86_400_000);
+  const [wallet, pending, earnings, reachPeople, inTest] = await Promise.all([
     getWalletSummary(userId),
     getCreatorPending(profile.id, userId),
     getCreatorEarnings(userId),
+    prisma.postImpression.findMany({
+      where: { post: { modelId: profile.id }, createdAt: { gte: weekAgo } },
+      distinct: ['userId'],
+      select: { userId: true },
+    }),
+    prisma.post.count({
+      where: {
+        modelId: profile.id,
+        isPublished: true,
+        viewCount: { lt: TEST_AUDIENCE },
+        createdAt: { lte: new Date(), gte: new Date(Date.now() - 21 * 86_400_000) },
+      },
+    }),
   ]);
 
   const usd = (tokens: number) => formatMoney(tokensToPayoutCents(tokens));
@@ -161,6 +178,31 @@ export async function CreatorHome({
           </span>
         </Link>
       </section>
+
+      {/* Alcance: cuanta gente la ve */}
+      {profile.postsCount > 0 && (
+        <Link
+          href="/dashboard/model/alcance"
+          className="group flex items-center gap-3 rounded-2xl border border-border/60 bg-card p-4 transition-colors hover:border-primary/50"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+            <TrendingUp className="h-5 w-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold">
+              {reachPeople.length.toLocaleString('es')}{' '}
+              {reachPeople.length === 1 ? 'persona te ha visto' : 'personas te han visto'} esta
+              semana
+            </span>
+            <span className="block text-xs text-muted-foreground">
+              {inTest > 0
+                ? `${inTest} ${inTest === 1 ? 'publicacion en prueba' : 'publicaciones en prueba'} · mejor hora para publicar`
+                : 'Como van tus publicaciones y mejor hora para publicar'}
+            </span>
+          </span>
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+        </Link>
+      )}
 
       {/* Primeros pasos (solo hasta completarlos) */}
       {stepsDone < steps.length && (

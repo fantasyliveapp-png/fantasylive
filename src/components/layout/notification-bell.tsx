@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  TrendingUp,
   Bell,
   Check,
   Crown,
@@ -52,6 +53,7 @@ const TYPE_ICON: Record<NotificationType, typeof Bell> = {
   LIVE_STARTED: Radio,
   NEW_POST: ImageIcon,
   GIFT_RECEIVED: Gift,
+  POST_INSIGHT: TrendingUp,
 };
 
 export function NotificationBell() {

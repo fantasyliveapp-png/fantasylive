@@ -39,7 +39,13 @@ export async function CreatorShell({
   const groups: CreatorNavGroup[] = [
     {
       items: [
-        { href: '/dashboard/model', label: 'Hoy', icon: 'today', exact: true },
+        {
+          href: '/dashboard/model',
+          label: 'Hoy',
+          icon: 'today',
+          exact: true,
+          match: ['/dashboard/model/alcance'],
+        },
         {
           href: '/dashboard/model/bandeja',
           label: 'Bandeja',

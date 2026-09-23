@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
-import { PostCard } from '@/components/feed/post-card';
+import { InfiniteFeed } from '@/components/feed/infinite-feed';
 import { Button } from '@/components/ui/button';
 import { requireUser } from '@/lib/auth/guards';
 import { getVisibilityContext } from '@/lib/geo';
@@ -11,14 +11,9 @@ import { getFollowingFeed } from '@/lib/posts';
 export const metadata: Metadata = { title: 'Siguiendo' };
 export const dynamic = 'force-dynamic';
 
-const PAGE_SIZE = 20;
+const FIRST_PAGE = 10;
 
-export default async function FollowingFeedPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ cursor?: string }>;
-}) {
-  const { cursor } = await searchParams;
+export default async function FollowingFeedPage() {
   // El feed de seguidos no existe sin sesion: requireUser redirige al login.
   const user = await requireUser();
   const [{ t }, { filter: geoFilter }] = await Promise.all([
@@ -29,12 +24,9 @@ export default async function FollowingFeedPage({
   const posts = await getFollowingFeed({
     viewerId: user.id,
     geoFilter,
-    take: PAGE_SIZE,
-    cursor: cursor ?? null,
+    take: FIRST_PAGE,
+    cursor: null,
   });
-
-  const nextCursor =
-    posts.length === PAGE_SIZE ? posts[posts.length - 1]!.id : null;
 
   return (
     <div className="container max-w-2xl py-6">
@@ -50,19 +42,7 @@ export default async function FollowingFeedPage({
           </Link>
         </div>
       ) : (
-        <div className="space-y-5">
-          {posts.map((post) => (
-            <PostCard key={post.id} post={post} isAuthenticated />
-          ))}
-        </div>
-      )}
-
-      {nextCursor && (
-        <div className="mt-6 text-center">
-          <Link href={`/feed/siguiendo?cursor=${nextCursor}`}>
-            <Button variant="outline">{t('common.seeMore')}</Button>
-          </Link>
-        </div>
+        <InfiniteFeed kind="following" initialPosts={posts} isAuthenticated />
       )}
     </div>
   );

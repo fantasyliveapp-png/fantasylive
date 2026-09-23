@@ -37,7 +37,7 @@ import {
   unlockPostAction,
 } from '@/server/actions/posts';
 import type { FeedPost } from '@/lib/posts';
-import { trackImpression } from '@/lib/impressions-client';
+import { markCompleted, useViewTracking } from '@/lib/impressions-client';
 import { postAspectRatio } from '@/lib/post-formats';
 import { cn, formatTokens, initials, relativeTime } from '@/lib/utils';
 
@@ -72,34 +72,9 @@ export function PostCard({
   const [isPending, startTransition] = useTransition();
   const [isUnlocking, startUnlock] = useTransition();
   const [hidden, setHidden] = useState(false);
-  const articleRef = useRef<HTMLElement | null>(null);
-
-  // Cuenta como "vista" cuando al menos la mitad lleva 1 s en pantalla. Con
-  // eso el Descubrir sabe que no repetirle y cuanta gente la ha visto.
-  useEffect(() => {
-    const el = articleRef.current;
-    if (!el || preview || post.isOwner || !isAuthenticated) return;
-    let timer: number | null = null;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry?.isIntersecting) {
-          timer = window.setTimeout(() => {
-            trackImpression(post.id);
-            observer.disconnect();
-          }, 1000);
-        } else if (timer !== null) {
-          window.clearTimeout(timer);
-          timer = null;
-        }
-      },
-      { threshold: 0.5 },
-    );
-    observer.observe(el);
-    return () => {
-      observer.disconnect();
-      if (timer !== null) window.clearTimeout(timer);
-    };
-  }, [post.id, post.isOwner, preview, isAuthenticated]);
+  // Tiempo que la tiene en pantalla: lo usa el Descubrir (sin cuenta tambien,
+  // para personalizar su feed) y el panel de alcance de la creadora.
+  const articleRef = useViewTracking(post.id, !preview && !post.isOwner);
 
   function notInterested(undo = false) {
     setHidden(!undo);
@@ -375,6 +350,16 @@ export function PostCard({
                     src={asset.url ?? undefined}
                     controls
                     playsInline
+                    onTimeUpdate={
+                      preview || post.isOwner
+                        ? undefined
+                        : (e) => {
+                            const v = e.currentTarget;
+                            if (v.duration && v.currentTime / v.duration >= 0.9) {
+                              markCompleted(post.id);
+                            }
+                          }
+                    }
                     controlsList={post.watermark ? 'nodownload noremoteplayback' : undefined}
                     disablePictureInPicture={Boolean(post.watermark)}
                     className="h-full w-full object-cover"
