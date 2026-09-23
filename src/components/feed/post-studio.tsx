@@ -7,6 +7,7 @@ import {
   BarChart3,
   Check,
   ChevronLeft,
+  Clock,
   ChevronRight,
   Coins,
   Crown,
@@ -34,6 +35,7 @@ import {
   type PollDraft,
 } from '@/components/feed/post-poll-editor';
 import { PostCard } from '@/components/feed/post-card';
+import { toLocalInputValue } from '@/components/feed/post-owner-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -167,6 +169,8 @@ export function PostStudio({
   const [visibility, setVisibility] = useState<Visibility>('PUBLIC');
   const [priceTokens, setPriceTokens] = useState(50);
   const [poll, setPoll] = useState<PollDraft | null>(startWithPoll ? EMPTY_POLL : null);
+  /** Valor de datetime-local si se programa; null = publicar ya. */
+  const [scheduleAt, setScheduleAt] = useState<string | null>(null);
 
   const [processed, setProcessed] = useState<ProcessedMedia[]>([]);
   const [processing, setProcessing] = useState(false);
@@ -527,6 +531,12 @@ export function PostStudio({
     if (visibility !== 'PUBLIC' && processed.some((p) => !p.previewBlob)) {
       return 'No se pudo generar la miniatura difuminada de algun archivo.';
     }
+    if (final && scheduleAt) {
+      const at = new Date(scheduleAt).getTime();
+      if (Number.isNaN(at) || at - Date.now() < 5 * 60_000) {
+        return 'Programala al menos 5 minutos en el futuro.';
+      }
+    }
     return null;
   }
 
@@ -629,7 +639,9 @@ export function PostStudio({
       }
 
       setProgress({ label: 'Publicando...', value: 100 });
-      const published = await publishPostAction(postId);
+      const published = await publishPostAction(postId, {
+        publishAt: scheduleAt ? new Date(scheduleAt).toISOString() : null,
+      });
       setProgress(null);
 
       if (published.ok) {
@@ -648,6 +660,7 @@ export function PostStudio({
   const previewPost: FeedPost = {
     id: 'preview',
     createdAt: new Date().toISOString(),
+    scheduledFor: null,
     body: body.trim() || null,
     visibility,
     priceTokens: visibility === 'LOCKED' ? priceTokens : 0,
@@ -657,6 +670,7 @@ export function PostStudio({
     isLiked: false,
     isUnlocked: visibility === 'PUBLIC' || previewUnlocked,
     isOwner: false,
+    watermark: null,
     model: { ...model, isOnline: true, isLive: false, subscriptionEnabled },
     assets: processed.map((p) => ({
       id: p.id,
@@ -699,7 +713,9 @@ export function PostStudio({
 
   const nextLabel =
     step === 'share'
-      ? t('feed.publish')
+      ? scheduleAt
+        ? 'Programar'
+        : t('feed.publish')
       : step === 'audience'
         ? 'Ver vista previa'
         : step === 'filter'
@@ -788,6 +804,7 @@ export function PostStudio({
         {step === 'done' ? (
           <DoneScreen
             glowSrc={glowSrc}
+            scheduledFor={scheduleAt}
             onClose={onClose}
             onAnother={() => {
               media.forEach((m) => URL.revokeObjectURL(m.url));
@@ -797,6 +814,7 @@ export function PostStudio({
               setBody('');
               setPoll(null);
               setVisibility('PUBLIC');
+              setScheduleAt(null);
               setStep('share');
             }}
           />
@@ -1282,6 +1300,8 @@ export function PostStudio({
                         />
                       </PanelSection>
                     )}
+
+                    <ScheduleToggle value={scheduleAt} onChange={setScheduleAt} />
 
                     {progress && (
                       <div className="space-y-1.5">
@@ -1961,12 +1981,80 @@ function AudienceOption({
   );
 }
 
+/**
+ * "Programar": en vez de salir ya, la publicacion sale sola a la hora elegida.
+ * Mientras tanto solo la ve ella, marcada como programada en su perfil.
+ */
+function ScheduleToggle({
+  value,
+  onChange,
+}: {
+  value: string | null;
+  onChange: (value: string | null) => void;
+}) {
+  const on = value !== null;
+  return (
+    <div className="rounded-2xl border border-border/60 p-4">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={on}
+        onClick={() =>
+          // Por defecto, manana a la misma hora redondeada: un buen punto de partida.
+          onChange(
+            on
+              ? null
+              : toLocalInputValue(
+                  new Date(Math.ceil((Date.now() + 24 * 3600_000) / 900_000) * 900_000),
+                ),
+          )
+        }
+        className="flex w-full items-center gap-3 text-left text-sm"
+      >
+        <Clock className="h-5 w-5 shrink-0 text-primary" />
+        <span className="min-w-0 flex-1">
+          <span className="block font-medium">Programar</span>
+          <span className="block text-xs text-muted-foreground">
+            {on ? 'Saldra sola a la hora elegida.' : 'Elige cuando sale en vez de publicar ahora.'}
+          </span>
+        </span>
+        <span
+          className={cn(
+            'relative h-6 w-11 shrink-0 rounded-full transition-colors',
+            on ? 'bg-primary' : 'bg-muted',
+          )}
+        >
+          <span
+            className={cn(
+              'absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all',
+              on ? 'left-[22px]' : 'left-0.5',
+            )}
+          />
+        </span>
+      </button>
+      {on && (
+        <input
+          type="datetime-local"
+          value={value}
+          min={toLocalInputValue(new Date(Date.now() + 5 * 60_000))}
+          max={toLocalInputValue(new Date(Date.now() + 60 * 24 * 3600_000))}
+          onChange={(e) => onChange(e.target.value || null)}
+          aria-label="Fecha y hora de publicacion"
+          className="mt-3 w-full rounded-xl border border-border/60 bg-muted/40 px-3 py-2 text-sm outline-none focus:border-primary"
+        />
+      )}
+    </div>
+  );
+}
+
 function DoneScreen({
   glowSrc,
+  scheduledFor,
   onClose,
   onAnother,
 }: {
   glowSrc?: string;
+  scheduledFor: string | null;
   onClose: () => void;
   onAnother: () => void;
 }) {
@@ -1985,9 +2073,19 @@ function DoneScreen({
         <Check className="h-9 w-9 text-white" strokeWidth={3} />
       </div>
       <div className="relative space-y-2">
-        <h3 className="font-heading text-2xl uppercase tracking-wide">Publicado</h3>
+        <h3 className="font-heading text-2xl uppercase tracking-wide">
+          {scheduledFor ? 'Programada' : 'Publicado'}
+        </h3>
         <p className="text-sm text-muted-foreground">
-          Ya esta en el feed de tus seguidores y en Descubrir.
+          {scheduledFor
+            ? `Saldra el ${new Date(scheduledFor).toLocaleString('es', {
+                weekday: 'long',
+                day: 'numeric',
+                month: 'long',
+                hour: '2-digit',
+                minute: '2-digit',
+              })}. Hasta entonces solo la ves tu en tu perfil.`
+            : 'Ya esta en el feed de tus seguidores y en Descubrir.'}
         </p>
       </div>
       <div className="relative flex gap-2">

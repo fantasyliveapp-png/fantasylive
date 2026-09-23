@@ -19,12 +19,12 @@ export async function GET(_request: NextRequest) {
 
   const [notifications, unreadCount] = await Promise.all([
     prisma.notification.findMany({
-      where: { userId: user.id },
+      where: { userId: user.id, createdAt: { lte: new Date() } },
       orderBy: { createdAt: 'desc' },
       take: 20,
     }),
     prisma.notification.count({
-      where: { userId: user.id, isRead: false },
+      where: { userId: user.id, isRead: false, createdAt: { lte: new Date() } },
     }),
   ]);
 

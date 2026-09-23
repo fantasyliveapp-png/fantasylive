@@ -32,6 +32,7 @@ export default async function ModelPostsPage({
     modelId: profile.id,
     viewerId: user.id,
     take: 30,
+    includeScheduled: true,
   });
 
   return (

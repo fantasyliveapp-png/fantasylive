@@ -171,6 +171,28 @@ export async function createDownloadUrl(key: string): Promise<string | null> {
   });
 }
 
+/**
+ * Descarga un objeto privado al servidor (para procesarlo antes de servirlo,
+ * p. ej. la marca de agua del contenido de pago). null si no existe.
+ */
+export async function getObjectBuffer(key: string): Promise<Buffer | null> {
+  if (/^https?:\/\//i.test(key)) {
+    const res = await fetch(key, { signal: AbortSignal.timeout(15_000) });
+    return res.ok ? Buffer.from(await res.arrayBuffer()) : null;
+  }
+  const s3 = getClient();
+  if (!s3) return null;
+  try {
+    const result = await s3.send(
+      new GetObjectCommand({ Bucket: config.storage.bucket, Key: key }),
+    );
+    if (!result.Body) return null;
+    return Buffer.from(await result.Body.transformToByteArray());
+  } catch {
+    return null;
+  }
+}
+
 export async function deleteObject(key: string): Promise<void> {
   const s3 = getClient();
   if (!s3) return;

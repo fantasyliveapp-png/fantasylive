@@ -262,12 +262,37 @@ export async function attachPostAssetAction(input: {
   }
 }
 
-/** Publica el borrador y avisa a los seguidores. */
+/** Minimo y maximo de antelacion al programar una publicacion. */
+const SCHEDULE_MIN_MS = 5 * 60_000;
+const SCHEDULE_MAX_MS = 60 * 24 * 3600_000;
+
+/** Valida una fecha de programacion. null = publicar ya. */
+function parsePublishAt(value: string | null | undefined): Date | null | string {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Fecha no valida.';
+  const diff = date.getTime() - Date.now();
+  if (diff < SCHEDULE_MIN_MS) return 'Programala al menos 5 minutos en el futuro.';
+  if (diff > SCHEDULE_MAX_MS) return 'Solo puedes programar hasta 60 dias vista.';
+  return date;
+}
+
+/**
+ * Publica el borrador y avisa a los seguidores.
+ *
+ * Con `publishAt` queda PROGRAMADA: se guarda como publicada con esa fecha y
+ * el feed no la muestra hasta entonces (ver livePostWhere). Los avisos a los
+ * seguidores se crean ya, con la misma fecha, y tampoco se ven hasta esa hora.
+ */
 export async function publishPostAction(
   postId: string,
+  options: { publishAt?: string | null } = {},
 ): Promise<PostActionResult> {
   try {
     const { profile } = await requireModelProfile();
+
+    const publishAt = parsePublishAt(options.publishAt);
+    if (typeof publishAt === 'string') return { ok: false, error: publishAt };
 
     const post = await prisma.post.findFirst({
       where: { id: postId, modelId: profile.id },
@@ -275,7 +300,7 @@ export async function publishPostAction(
         id: true,
         body: true,
         isPublished: true,
-        poll: { select: { id: true } },
+        poll: { select: { id: true, endsAt: true } },
         _count: { select: { assets: true } },
       },
     });
@@ -285,11 +310,26 @@ export async function publishPostAction(
       return { ok: false, error: 'Anade texto o al menos un archivo.' };
     }
 
+    const goesOutAt = publishAt ?? new Date();
+
     await prisma.$transaction([
       prisma.post.update({
         where: { id: post.id },
-        data: { isPublished: true },
+        data: { isPublished: true, createdAt: goesOutAt },
       }),
+      // La encuesta dura lo elegido desde que SALE, no desde el borrador.
+      ...(publishAt && post.poll?.endsAt
+        ? [
+            prisma.postPoll.update({
+              where: { id: post.poll.id },
+              data: {
+                endsAt: new Date(
+                  post.poll.endsAt.getTime() + (publishAt.getTime() - Date.now()),
+                ),
+              },
+            }),
+          ]
+        : []),
       prisma.modelProfile.update({
         where: { id: profile.id },
         data: { postsCount: { increment: 1 } },
@@ -312,7 +352,8 @@ export async function publishPostAction(
           type: 'NEW_POST' as const,
           title: `${profile.stageName} ha publicado algo nuevo`,
           body: post.body?.slice(0, 120) ?? null,
-          link: `/models/${profile.slug}`,
+          link: postLink(profile.slug, post.id),
+          createdAt: goesOutAt,
         })),
       });
     }
@@ -320,7 +361,127 @@ export async function publishPostAction(
     revalidatePath('/feed');
     revalidatePath('/dashboard/model/posts');
     revalidatePath(`/models/${profile.slug}`);
-    return { ok: true, message: 'Publicacion creada.' };
+    return {
+      ok: true,
+      message: publishAt ? 'Publicacion programada.' : 'Publicacion creada.',
+    };
+  } catch (error) {
+    return { ok: false, error: toMessage(error) };
+  }
+}
+
+/** Enlace de una publicacion (lo usan los avisos a seguidores). */
+function postLink(slug: string, postId: string) {
+  return `/models/${slug}?post=${postId}`;
+}
+
+const updatePostSchema = z.object({
+  postId: z.string().min(1),
+  body: z.string().trim().max(2000),
+  priceTokens: z.number().int().min(1).max(100000).optional(),
+  /** Solo para publicaciones programadas: nueva hora, o null = publicar ya. */
+  publishAt: z.string().nullable().optional(),
+});
+
+/**
+ * Edita una publicacion propia: el texto, el precio si es de pago y, si aun
+ * no ha salido, la hora de publicacion. Quien lo ve (publico, de pago,
+ * suscriptores) NO se cambia: quien ya pago o se suscribio lo hizo por eso.
+ */
+export async function updatePostAction(input: {
+  postId: string;
+  body: string;
+  priceTokens?: number;
+  publishAt?: string | null;
+}): Promise<PostActionResult> {
+  try {
+    const { profile } = await requireModelProfile();
+
+    const parsed = updatePostSchema.safeParse(input);
+    if (!parsed.success) {
+      return { ok: false, error: parsed.error.issues[0]?.message ?? 'Datos no validos.' };
+    }
+    const data = parsed.data;
+
+    const post = await prisma.post.findFirst({
+      where: { id: data.postId, modelId: profile.id, isPublished: true },
+      select: {
+        id: true,
+        visibility: true,
+        createdAt: true,
+        poll: { select: { id: true, endsAt: true } },
+        _count: { select: { assets: true } },
+      },
+    });
+    if (!post) return { ok: false, error: 'Publicacion no encontrada.' };
+
+    if (!data.body && post._count.assets === 0 && !post.poll) {
+      return { ok: false, error: 'La publicacion no puede quedarse vacia.' };
+    }
+    if (data.body) {
+      const contactError = checkNoContactInfo(data.body);
+      if (contactError) return { ok: false, error: contactError };
+    }
+
+    const now = new Date();
+    const isScheduled = post.createdAt > now;
+    let newDate: Date | null = null;
+    if (data.publishAt !== undefined) {
+      if (!isScheduled) {
+        return { ok: false, error: 'Esta publicacion ya salio; no se puede reprogramar.' };
+      }
+      const parsedDate = parsePublishAt(data.publishAt);
+      if (typeof parsedDate === 'string') return { ok: false, error: parsedDate };
+      newDate = parsedDate ?? now;
+    }
+
+    await prisma.$transaction([
+      prisma.post.update({
+        where: { id: post.id },
+        data: {
+          body: data.body || null,
+          ...(post.visibility === 'LOCKED' && data.priceTokens
+            ? { priceTokens: data.priceTokens }
+            : {}),
+          ...(newDate ? { createdAt: newDate } : {}),
+        },
+      }),
+      ...(newDate
+        ? [
+            // Los avisos a seguidores salen con la publicacion.
+            prisma.notification.updateMany({
+              where: { type: 'NEW_POST', link: postLink(profile.slug, post.id) },
+              data: { createdAt: newDate },
+            }),
+            ...(post.poll?.endsAt
+              ? [
+                  prisma.postPoll.update({
+                    where: { id: post.poll.id },
+                    data: {
+                      endsAt: new Date(
+                        post.poll.endsAt.getTime() +
+                          (newDate.getTime() - post.createdAt.getTime()),
+                      ),
+                    },
+                  }),
+                ]
+              : []),
+          ]
+        : []),
+    ]);
+
+    revalidatePath('/feed');
+    revalidatePath('/dashboard/model/posts');
+    revalidatePath(`/models/${profile.slug}`);
+    return {
+      ok: true,
+      message:
+        newDate && newDate <= now
+          ? 'Publicada ahora.'
+          : newDate
+            ? 'Hora de publicacion cambiada.'
+            : 'Publicacion actualizada.',
+    };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
   }
@@ -397,6 +558,7 @@ export async function unlockPostAction(
         visibility: true,
         priceTokens: true,
         isPublished: true,
+        createdAt: true,
         modelId: true,
         model: {
           select: {
@@ -409,7 +571,7 @@ export async function unlockPostAction(
       },
     });
 
-    if (!post || !post.isPublished) {
+    if (!post || !post.isPublished || post.createdAt > new Date()) {
       return { ok: false, error: 'Publicacion no encontrada.' };
     }
     if (post.model.userId === user.id) {
@@ -557,6 +719,7 @@ export async function votePostPollAction(input: {
           select: {
             id: true,
             isPublished: true,
+            createdAt: true,
             visibility: true,
             modelId: true,
             model: { select: { userId: true, blockedCountries: true } },
@@ -564,7 +727,7 @@ export async function votePostPollAction(input: {
         },
       },
     });
-    if (!poll || !poll.post.isPublished) {
+    if (!poll || !poll.post.isPublished || poll.post.createdAt > new Date()) {
       return { ok: false, error: 'Encuesta no encontrada.' };
     }
     if (!poll.options.some((o) => o.id === input.optionId)) {
@@ -659,10 +822,11 @@ export async function addPostCommentAction(input: {
       select: {
         id: true,
         isPublished: true,
+        createdAt: true,
         model: { select: { userId: true, slug: true, blockedCountries: true } },
       },
     });
-    if (!post || !post.isPublished) {
+    if (!post || !post.isPublished || post.createdAt > new Date()) {
       return { ok: false, error: 'Publicacion no encontrada.' };
     }
     if (await isBlockedForViewer(post.model.blockedCountries)) {

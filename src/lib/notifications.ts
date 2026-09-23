@@ -35,5 +35,8 @@ export async function createNotification(
 }
 
 export async function getUnreadNotificationCount(userId: string): Promise<number> {
-  return prisma.notification.count({ where: { userId, isRead: false } });
+  // Las de publicaciones programadas llevan fecha futura: aun no cuentan.
+  return prisma.notification.count({
+    where: { userId, isRead: false, createdAt: { lte: new Date() } },
+  });
 }

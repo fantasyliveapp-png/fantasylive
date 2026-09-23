@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   BarChart3,
   Camera,
+  Clock,
   Crown,
   Layers,
   Lock,
@@ -29,13 +30,18 @@ export function ProfilePostGrid({
   isAuthenticated,
   isOwner,
   stageName,
+  initialOpenId,
 }: {
   posts: FeedPost[];
   isAuthenticated: boolean;
   isOwner: boolean;
   stageName: string;
+  /** ?post=<id> (p. ej. desde un aviso): abre directamente esa publicacion. */
+  initialOpenId?: string;
 }) {
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(() =>
+    initialOpenId && posts.some((p) => p.id === initialOpenId) ? initialOpenId : null,
+  );
 
   // Si se recargo con la pantalla "Publicaciones" abierta, su marca sigue en
   // el historial: se limpia para que la proxima apertura apile la suya.
@@ -203,6 +209,7 @@ function PostTile({ post, onOpen }: { post: FeedPost; onOpen: () => void }) {
     <button
       type="button"
       onClick={onOpen}
+      onContextMenu={post.watermark ? (e) => e.preventDefault() : undefined}
       className="group relative aspect-[4/5] overflow-hidden bg-muted"
       aria-label="Ver publicacion"
     >
@@ -239,8 +246,16 @@ function PostTile({ post, onOpen }: { post: FeedPost; onOpen: () => void }) {
           src={first.url ?? undefined}
           alt=""
           loading="lazy"
+          draggable={!post.watermark}
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
+      )}
+
+      {post.scheduledFor && (
+        <span className="absolute left-1.5 top-1.5 z-10 flex items-center gap-1 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-semibold text-white">
+          <Clock className="h-3 w-3" />
+          Programada
+        </span>
       )}
 
       {locked && first && (

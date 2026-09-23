@@ -1,12 +1,13 @@
 'use client';
 
-import { useRef, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Bot,
   ChevronLeft,
   ChevronRight,
+  Clock,
   Coins,
   Crown,
   Heart,
@@ -15,7 +16,6 @@ import {
   MessageCircle,
   Radio,
   Send,
-  Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -23,12 +23,12 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PostOwnerMenu } from '@/components/feed/post-owner-menu';
 import { PostPoll } from '@/components/feed/post-poll';
 import { SafetyMenu } from '@/components/social/safety-menu';
 import { useI18n } from '@/components/providers/i18n-provider';
 import {
   addPostCommentAction,
-  deletePostAction,
   getPostCommentsAction,
   togglePostLikeAction,
   unlockPostAction,
@@ -141,18 +141,6 @@ export function PostCard({
     });
   }
 
-  function remove() {
-    startTransition(async () => {
-      const result = await deletePostAction(post.id);
-      if (result.ok) {
-        toast.success(result.message ?? '');
-        router.refresh();
-      } else {
-        toast.error(result.error ?? t('common.somethingWentWrong'));
-      }
-    });
-  }
-
   const isLocked = !post.isUnlocked;
   const isSubscriberGate = isLocked && post.visibility === 'SUBSCRIBERS';
   const aspectRatio = postAspectRatio(post.assets);
@@ -201,9 +189,23 @@ export function PostCard({
               </Link>
             )}
           </div>
-          <p className="text-xs text-muted-foreground">
-            {relativeTime(new Date(post.createdAt))}
-          </p>
+          {post.scheduledFor ? (
+            <p className="flex items-center gap-1 text-xs font-medium text-primary">
+              <Clock className="h-3 w-3" />
+              Programada ·{' '}
+              {new Date(post.scheduledFor).toLocaleString('es', {
+                weekday: 'short',
+                day: 'numeric',
+                month: 'short',
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              {relativeTime(new Date(post.createdAt))}
+            </p>
+          )}
         </div>
 
         {!post.isOwner && !preview && isAuthenticated && post.model.userId && (
@@ -216,17 +218,7 @@ export function PostCard({
           />
         )}
 
-        {post.isOwner && !preview && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={remove}
-            disabled={isPending}
-            aria-label="Eliminar publicacion"
-          >
-            <Trash2 className="h-4 w-4 text-muted-foreground" />
-          </Button>
-        )}
+        {post.isOwner && !preview && <PostOwnerMenu post={post} />}
       </header>
 
       {/* Texto */}
@@ -242,8 +234,13 @@ export function PostCard({
           {post.assets.map((asset) => (
             <div
               key={asset.id}
-              className="relative w-full shrink-0 snap-center overflow-hidden bg-muted"
+              className={cn(
+                'relative w-full shrink-0 snap-center overflow-hidden bg-muted',
+                // Contenido de pago: sin menu "guardar imagen" ni arrastrar.
+                post.watermark && 'select-none [-webkit-touch-callout:none]',
+              )}
               style={{ aspectRatio }}
+              onContextMenu={post.watermark ? (e) => e.preventDefault() : undefined}
             >
               {/*
                 Bloqueado: se muestra SOLO la miniatura difuminada. El original
@@ -311,12 +308,17 @@ export function PostCard({
                   </div>
                 </>
               ) : asset.mimeType.startsWith('video/') ? (
-                <video
-                  src={asset.url ?? undefined}
-                  controls
-                  playsInline
-                  className="h-full w-full object-cover"
-                />
+                <>
+                  <video
+                    src={asset.url ?? undefined}
+                    controls
+                    playsInline
+                    controlsList={post.watermark ? 'nodownload noremoteplayback' : undefined}
+                    disablePictureInPicture={Boolean(post.watermark)}
+                    className="h-full w-full object-cover"
+                  />
+                  {post.watermark && <VideoWatermark label={post.watermark} />}
+                </>
               ) : (
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img
@@ -324,6 +326,7 @@ export function PostCard({
                   alt=""
                   className="h-full w-full object-cover"
                   loading="lazy"
+                  draggable={!post.watermark}
                 />
               )}
             </div>
@@ -525,5 +528,38 @@ export function PostMediaCarousel({
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * Marca de agua de un video de pago: el @usuario de quien lo mira flotando
+ * sobre el video (que cambia de sitio cada pocos segundos, para que no se
+ * pueda tapar con un recorte fijo en una grabacion de pantalla).
+ */
+function VideoWatermark({ label }: { label: string }) {
+  const [spot, setSpot] = useState(0);
+  const spots = [
+    'left-3 top-3',
+    'right-3 top-1/3',
+    'left-1/4 bottom-16',
+    'right-3 bottom-24',
+    'left-3 top-1/2',
+  ];
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setSpot((i) => (i + 1) % spots.length), 7000);
+    return () => window.clearInterval(timer);
+  }, [spots.length]);
+
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        'pointer-events-none absolute select-none rounded bg-black/25 px-1.5 py-0.5 text-[11px] font-bold text-white/60 transition-all duration-1000',
+        spots[spot],
+      )}
+    >
+      {label}
+    </span>
   );
 }

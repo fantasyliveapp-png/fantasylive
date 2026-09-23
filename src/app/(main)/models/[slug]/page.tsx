@@ -86,10 +86,10 @@ export default async function ModelProfilePage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ editar?: string }>;
+  searchParams: Promise<{ editar?: string; post?: string }>;
 }) {
   const { slug } = await params;
-  const { editar } = await searchParams;
+  const { editar, post: openPostId } = await searchParams;
   const viewer = await getCurrentUser();
 
   const model = await prisma.modelProfile.findUnique({
@@ -189,6 +189,7 @@ export default async function ModelProfilePage({
     modelId: model.id,
     viewerId: viewer?.id ?? null,
     take: 30,
+    includeScheduled: isOwner,
   });
 
   // Paquetes ya desbloqueados por quien mira
@@ -669,6 +670,7 @@ export default async function ModelProfilePage({
                   isAuthenticated={Boolean(viewer)}
                   isOwner={isOwnProfile}
                   stageName={model.stageName}
+                  initialOpenId={openPostId}
                 />
               </TabsContent>
 
