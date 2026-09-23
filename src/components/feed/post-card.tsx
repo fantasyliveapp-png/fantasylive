@@ -24,6 +24,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PostPoll } from '@/components/feed/post-poll';
+import { SafetyMenu } from '@/components/social/safety-menu';
 import { useI18n } from '@/components/providers/i18n-provider';
 import {
   addPostCommentAction,
@@ -204,6 +205,16 @@ export function PostCard({
             {relativeTime(new Date(post.createdAt))}
           </p>
         </div>
+
+        {!post.isOwner && !preview && isAuthenticated && post.model.userId && (
+          <SafetyMenu
+            targetUserId={post.model.userId}
+            targetName={post.model.stageName}
+            context={`post:${post.id}`}
+            reportLabel="Denunciar publicacion"
+            isAuthenticated={isAuthenticated}
+          />
+        )}
 
         {post.isOwner && !preview && (
           <Button

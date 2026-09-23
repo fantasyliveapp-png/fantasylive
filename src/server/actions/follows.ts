@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { createNotification } from '@/lib/notifications';
+import { isBlockedBetween } from '@/lib/chat';
 import { prisma } from '@/lib/prisma';
 
 export interface FollowActionResult {
@@ -33,6 +34,9 @@ export async function toggleFollowAction(
       where: { userId_modelId: { userId: user.id, modelId } },
       select: { id: true },
     });
+    if (!existing && (await isBlockedBetween(user.id, model.userId))) {
+      return { ok: false, error: 'No puedes seguir a esta cuenta.' };
+    }
 
     if (existing) {
       await prisma.$transaction([

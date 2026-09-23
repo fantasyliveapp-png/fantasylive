@@ -319,14 +319,42 @@ export async function toggleBlockUserAction(
       revalidatePath('/mensajes');
       return { ok: true, blocked: false, message: 'Desbloqueado.' };
     }
-    if (existing) {
-      await prisma.blockedPair.update({
-        where: { id: existing.id },
-        data: { isSkip: false, expiresAt: null },
+    await prisma.$transaction(async (tx) => {
+      if (existing) {
+        await tx.blockedPair.update({
+          where: { id: existing.id },
+          data: { isSkip: false, expiresAt: null },
+        });
+      } else {
+        await tx.blockedPair.create({ data: { blockerId: me.id, blockedId: targetUserId } });
+      }
+
+      // Bloquear corta el seguimiento en los dos sentidos.
+      await tx.userFollow.deleteMany({
+        where: {
+          OR: [
+            { followerId: me.id, followingId: targetUserId },
+            { followerId: targetUserId, followingId: me.id },
+          ],
+        },
       });
-    } else {
-      await prisma.blockedPair.create({ data: { blockerId: me.id, blockedId: targetUserId } });
-    }
+      const profiles = await tx.modelProfile.findMany({
+        where: { userId: { in: [me.id, targetUserId] } },
+        select: { id: true, userId: true },
+      });
+      for (const profile of profiles) {
+        const followerId = profile.userId === me.id ? targetUserId : me.id;
+        const removed = await tx.follow.deleteMany({
+          where: { userId: followerId, modelId: profile.id },
+        });
+        if (removed.count > 0) {
+          await tx.modelProfile.update({
+            where: { id: profile.id },
+            data: { followersCount: { decrement: removed.count } },
+          });
+        }
+      }
+    });
     revalidatePath('/mensajes');
     return { ok: true, blocked: true, message: 'Bloqueado. Ya no podra escribirte.' };
   } catch (error) {

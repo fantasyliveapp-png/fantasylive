@@ -46,6 +46,48 @@ export default async function AdminReportsPage({
     },
   });
 
+  // Denuncias de chats: los ultimos mensajes van con la denuncia para que el
+  // equipo pueda revisarla sin pedir capturas.
+  const evidence = new Map<string, { from: string; body: string; at: string }[]>();
+  await Promise.all(
+    reports.map(async (r) => {
+      const [kind, id] = (r.context ?? '').split(':');
+      if (!id) return;
+      const rows =
+        kind === 'chat'
+          ? await prisma.peerMessage.findMany({
+              where: { chatId: id },
+              orderBy: { createdAt: 'desc' },
+              take: 12,
+              select: { body: true, createdAt: true, senderId: true },
+            })
+          : kind === 'conversation'
+            ? (
+                await prisma.message.findMany({
+                  where: { conversationId: id },
+                  orderBy: { createdAt: 'desc' },
+                  take: 12,
+                  select: { body: true, createdAt: true, senderId: true },
+                })
+              ).map((m) => ({ ...m, body: m.body ?? '[archivo adjunto]' }))
+            : [];
+      if (rows.length === 0) return;
+      evidence.set(
+        r.id,
+        rows.reverse().map((m) => ({
+          from:
+            m.senderId === r.reportedId
+              ? 'Denunciada'
+              : m.senderId === r.reporterId
+                ? 'Denunciante'
+                : 'Otra persona',
+          body: m.body,
+          at: m.createdAt.toISOString(),
+        })),
+      );
+    }),
+  );
+
   return (
     <div className="space-y-8">
       <div>
@@ -73,6 +115,8 @@ export default async function AdminReportsPage({
             reason: r.reason,
             status: r.status,
             details: r.details,
+            context: r.context,
+            evidence: evidence.get(r.id) ?? [],
             createdAt: r.createdAt.toISOString(),
             reporter: {
               id: r.reporter.id,

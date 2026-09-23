@@ -35,8 +35,7 @@ export async function CreatorShell({
 
   // Cuatro secciones, por lo que la creadora quiere hacer. Las paginas de
   // antes siguen existiendo, pero cuelgan de estas y no llenan el menu.
-  const inboxCount =
-    pending.unansweredMessages + pending.pendingRequests + pending.pendingBookings;
+  const inboxCount = pending.pendingRequests + pending.pendingBookings;
   const groups: CreatorNavGroup[] = [
     {
       items: [
@@ -47,7 +46,6 @@ export async function CreatorShell({
           icon: 'inbox',
           badge: inboxCount,
           match: [
-            '/dashboard/model/messages',
             '/dashboard/model/requests',
             '/dashboard/model/bookings',
           ],

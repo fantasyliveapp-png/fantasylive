@@ -118,7 +118,7 @@ export async function startConversationAction(input: {
         userId: model.userId,
         type: 'NEW_MESSAGE',
         title: `${user.name ?? 'Alguien'} te escribio un mensaje`,
-        link: '/dashboard/model/messages',
+        link: `/dashboard/model/messages/${conversation.id}`,
       });
 
       return conversation.id;
@@ -129,8 +129,7 @@ export async function startConversationAction(input: {
     await maybeReplyAsAi(conversationId);
 
     revalidatePath(`/models/${model.slug}`);
-    revalidatePath('/dashboard/messages');
-    revalidatePath('/dashboard/model/messages');
+    revalidatePath('/mensajes');
     return {
       ok: true,
       conversationId,
@@ -223,7 +222,10 @@ export async function sendMessageAction(input: {
       userId: isCustomer ? conversation.model.userId : conversation.userId,
       type: 'NEW_MESSAGE',
       title: `${user.name ?? 'Alguien'} te escribio un mensaje`,
-      link: isCustomer ? '/dashboard/model/messages' : '/dashboard/messages',
+      // Directo al hilo, desde el lado de quien lo recibe.
+      link: isCustomer
+        ? `/dashboard/model/messages/${conversation.id}`
+        : `/dashboard/messages/${conversation.model.slug}`,
     });
 
     // Solo contesta a lo que escribe el cliente. Si el que escribe es el dueno
@@ -416,7 +418,7 @@ export async function unlockMessageAttachmentAction(
         userId: conversation.model.userId,
         type: 'MESSAGE_ATTACHMENT_UNLOCKED',
         title: `${user.name ?? 'Alguien'} desbloqueo tu archivo por ${attachment.priceTokens} tokens`,
-        link: '/dashboard/model/messages',
+        link: '/mensajes',
       });
     });
 

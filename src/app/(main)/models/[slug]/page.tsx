@@ -28,6 +28,7 @@ import { ContentGallery } from '@/components/content/content-gallery';
 import { RequestContentDialog } from '@/components/content/request-content-dialog';
 import { FollowButton } from '@/components/models/follow-button';
 import { MessageButton } from '@/components/messages/message-button';
+import { SafetyMenu } from '@/components/social/safety-menu';
 import { SendMessageButton } from '@/components/social/send-message-button';
 import { ReviewForm } from '@/components/models/review-form';
 import { ShareProfileButton } from '@/components/models/share-profile-button';
@@ -229,6 +230,16 @@ export default async function ModelProfilePage({
       : null;
   const creatorChatHref = creatorChat ? `/mensajes/${creatorChat.id}` : null;
 
+  const iBlockedModel =
+    viewer && !isOwnProfile
+      ? Boolean(
+          await prisma.blockedPair.findFirst({
+            where: { blockerId: viewer.id, blockedId: model.userId, isSkip: false },
+            select: { id: true },
+          }),
+        )
+      : false;
+
   // /models/<slug>?editar=1 abre directamente el editor (enlaces del menu).
   const editRequested = isOwnProfile && editar === '1';
   const isVerified = model.kycStatus === 'APPROVED';
@@ -383,8 +394,20 @@ export default async function ModelProfilePage({
           )}
         </div>
 
-        <div className="absolute right-3 top-3 rounded-full bg-black/40 text-white backdrop-blur md:right-5 md:top-5">
-          <ShareProfileButton slug={model.slug} />
+        <div className="absolute right-3 top-3 flex gap-1 md:right-5 md:top-5">
+          <div className="rounded-full bg-black/40 text-white backdrop-blur">
+            <ShareProfileButton slug={model.slug} />
+          </div>
+          {!isOwnProfile && (
+            <div className="rounded-full bg-black/40 text-white backdrop-blur">
+              <SafetyMenu
+                targetUserId={model.userId}
+                targetName={model.stageName}
+                initialBlocked={iBlockedModel}
+                isAuthenticated={Boolean(viewer)}
+              />
+            </div>
+          )}
         </div>
       </div>
 

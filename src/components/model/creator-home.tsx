@@ -85,7 +85,7 @@ export async function CreatorHome({
   }
   if (pending.unansweredMessages > 0) {
     todo.push({
-      href: '/dashboard/model/bandeja?tipo=mensajes',
+      href: '/mensajes',
       icon: MessageCircle,
       title: `${pending.unansweredMessages} ${pending.unansweredMessages === 1 ? 'fan espera' : 'fans esperan'} tu respuesta`,
     });

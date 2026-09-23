@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 
 import { ProfileEditorButton } from '@/components/model/profile-editor';
+import { BlockedAccounts } from '@/components/social/blocked-accounts';
 import { MessagePrivacySetting } from '@/components/social/message-privacy-setting';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { requireModel } from '@/lib/auth/guards';
@@ -161,6 +162,10 @@ export default async function SettingsPage() {
           Los fans que pagan por abrir chat contigo siempre pueden escribirte
           (lo controlas en &laquo;Mensajes de fans&raquo;). Esto es para chats gratis.
         </p>
+      </Group>
+
+      <Group title="Cuentas bloqueadas">
+        <BlockedAccounts userId={user.id} />
       </Group>
 
       {/* Fans */}

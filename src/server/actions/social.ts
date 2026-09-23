@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { checkNoContactInfo } from '@/lib/content-filter';
 import { createNotification } from '@/lib/notifications';
+import { isBlockedBetween } from '@/lib/chat';
 import { prisma } from '@/lib/prisma';
 import { USERNAME_PATTERN } from '@/lib/usernames';
 import {
@@ -131,6 +132,9 @@ export async function toggleUserFollowAction(
       where: { followerId_followingId: { followerId: user.id, followingId: target.id } },
       select: { id: true },
     });
+    if (!existing && (await isBlockedBetween(user.id, target.id))) {
+      return { ok: false, error: 'No puedes seguir a esta cuenta.' };
+    }
 
     if (existing) {
       await prisma.userFollow.delete({ where: { id: existing.id } });

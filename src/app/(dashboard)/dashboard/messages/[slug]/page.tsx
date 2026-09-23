@@ -6,6 +6,7 @@ import { ArrowLeft } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { MessageThread } from '@/components/messages/message-thread';
 import { ChatRequestBar } from '@/components/social/chat-thread';
+import { SafetyMenu } from '@/components/social/safety-menu';
 import { requireUser } from '@/lib/auth/guards';
 import { buildMessageRows } from '@/lib/messages';
 import { prisma } from '@/lib/prisma';
@@ -60,11 +61,20 @@ export default async function UserConversationPage({
       </Link>
 
       <div className="mb-4 flex items-center gap-3">
-        <Avatar className="h-10 w-10">
-          {model.avatarUrl && <AvatarImage src={model.avatarUrl} alt="" />}
-          <AvatarFallback>{initials(model.stageName)}</AvatarFallback>
-        </Avatar>
-        <p className="text-lg font-semibold">{model.stageName}</p>
+        <Link href={`/models/${slug}`} className="flex min-w-0 flex-1 items-center gap-3">
+          <Avatar className="h-10 w-10">
+            {model.avatarUrl && <AvatarImage src={model.avatarUrl} alt="" />}
+            <AvatarFallback>{initials(model.stageName)}</AvatarFallback>
+          </Avatar>
+          <p className="truncate text-lg font-semibold">{model.stageName}</p>
+        </Link>
+        <SafetyMenu
+          targetUserId={model.userId}
+          targetName={model.stageName}
+          context={`conversation:${conversation.id}`}
+          reportLabel="Denunciar chat"
+          isAuthenticated
+        />
       </div>
 
       {isRequest && (

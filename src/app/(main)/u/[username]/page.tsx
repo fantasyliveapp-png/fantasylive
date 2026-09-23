@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { Lock, Pencil, Sparkles } from 'lucide-react';
 
+import { SafetyMenu } from '@/components/social/safety-menu';
 import { SendMessageButton } from '@/components/social/send-message-button';
 import { FollowPersonButton, UserProfileEditor } from '@/components/social/user-profile-actions';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -87,6 +88,16 @@ export default async function PersonProfilePage({
 
   const displayName = person.name ?? person.username ?? 'Usuario';
 
+  const iBlocked =
+    viewer && !isSelf
+      ? Boolean(
+          await prisma.blockedPair.findFirst({
+            where: { blockerId: viewer.id, blockedId: person.id, isSkip: false },
+            select: { id: true },
+          }),
+        )
+      : false;
+
   // Si ya hay chat con esta persona, "Mensaje" lleva directo a el.
   let existingChatHref: string | null = null;
   if (viewer && !isSelf) {
@@ -144,16 +155,32 @@ export default async function PersonProfilePage({
             </UserProfileEditor>
           ) : (
             <>
-              <FollowPersonButton
-                userId={person.id}
-                initialFollowing={isFollowing}
-                isAuthenticated={Boolean(viewer)}
-              />
-              <SendMessageButton
+              {!iBlocked && (
+                <>
+                  <FollowPersonButton
+                    userId={person.id}
+                    initialFollowing={isFollowing}
+                    isAuthenticated={Boolean(viewer)}
+                  />
+                  <SendMessageButton
+                    targetUserId={person.id}
+                    targetName={displayName}
+                    existingHref={existingChatHref}
+                    isAuthenticated={Boolean(viewer)}
+                  />
+                </>
+              )}
+              {iBlocked && (
+                <p className="flex-1 rounded-xl border border-border/60 px-3 py-2 text-xs text-muted-foreground">
+                  Has bloqueado a {displayName}.
+                </p>
+              )}
+              <SafetyMenu
                 targetUserId={person.id}
                 targetName={displayName}
-                existingHref={existingChatHref}
+                initialBlocked={iBlocked}
                 isAuthenticated={Boolean(viewer)}
+                className="h-10 w-10 border border-border/60"
               />
             </>
           )}

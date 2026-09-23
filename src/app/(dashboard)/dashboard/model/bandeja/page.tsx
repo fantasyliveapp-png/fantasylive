@@ -20,7 +20,7 @@ export const metadata: Metadata = { title: 'Bandeja' };
 export const dynamic = 'force-dynamic';
 
 type Kind = 'message' | 'request' | 'booking';
-type Filter = 'todo' | 'mensajes' | 'pedidos' | 'citas';
+type Filter = 'todo' | 'pedidos' | 'citas';
 
 interface InboxItem {
   id: string;
@@ -44,7 +44,6 @@ const KIND: Record<Kind, { icon: LucideIcon; label: string }> = {
 };
 
 const FILTER_KIND: Record<Exclude<Filter, 'todo'>, Kind> = {
-  mensajes: 'message',
   pedidos: 'request',
   citas: 'booking',
 };
@@ -52,9 +51,8 @@ const FILTER_KIND: Record<Exclude<Filter, 'todo'>, Kind> = {
 /**
  * BANDEJA
  *
- * Todo lo que los fans le piden a la creadora en una sola lista: mensajes,
- * pedidos a medida y citas. Arriba lo que espera respuesta; cada fila lleva a
- * la pantalla donde se resuelve (el chat, el pedido o la reserva).
+ * Pedidos a medida y citas en una sola lista, arriba lo que espera respuesta.
+ * Los chats no se repiten aqui: viven en /mensajes (con acceso directo arriba).
  */
 export default async function InboxPage({
   searchParams,
@@ -64,7 +62,7 @@ export default async function InboxPage({
   const { user, profile } = await requireModel();
   const { tipo } = await searchParams;
   const filter: Filter =
-    tipo === 'mensajes' || tipo === 'pedidos' || tipo === 'citas' ? tipo : 'todo';
+    tipo === 'pedidos' || tipo === 'citas' ? tipo : 'todo';
 
   const [conversations, requests, bookings, bookingsEver] = await Promise.all([
     prisma.conversation.findMany({
@@ -119,23 +117,11 @@ export default async function InboxPage({
     prisma.booking.count({ where: { modelId: profile.id } }),
   ]);
 
+  const unanswered = conversations.filter(
+    (c) => c.messages[0] && c.messages[0].senderId !== user.id,
+  ).length;
+
   const items: InboxItem[] = [
-    ...conversations.map((c): InboxItem => {
-      const last = c.messages[0];
-      const fromFan = Boolean(last && last.senderId !== user.id);
-      const text = last?.body?.trim() || (last?.attachment ? 'Archivo adjunto' : 'Conversacion abierta');
-      return {
-        id: c.id,
-        kind: 'message',
-        name: c.user.name ?? 'Fan',
-        image: c.user.image,
-        preview: last && !fromFan ? `Tu: ${text}` : text,
-        at: c.lastMessageAt,
-        href: `/dashboard/model/messages/${c.id}`,
-        needsAction: fromFan,
-        status: fromFan ? 'Responder' : 'Respondido',
-      };
-    }),
     ...requests.map((r): InboxItem => ({
       id: r.id,
       kind: 'request',
@@ -169,7 +155,6 @@ export default async function InboxPage({
 
   // Solo se ofrecen los filtros de lo que la creadora usa de verdad.
   const available: Exclude<Filter, 'todo'>[] = [];
-  if (profile.messagingEnabled || conversations.length > 0) available.push('mensajes');
   if (requests.length > 0) available.push('pedidos');
   if (profile.acceptsBookings || bookingsEver > 0) available.push('citas');
 
@@ -188,7 +173,7 @@ export default async function InboxPage({
     { value: 'todo', label: 'Todo' },
     ...available.map((v) => ({
       value: v,
-      label: v === 'mensajes' ? 'Mensajes' : v === 'pedidos' ? 'Pedidos' : 'Citas',
+      label: v === 'pedidos' ? 'Pedidos' : 'Citas',
     })),
   ];
 
@@ -197,9 +182,28 @@ export default async function InboxPage({
       <div>
         <h1 className="font-heading text-3xl uppercase tracking-wide">Bandeja</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Todo lo que tus fans te piden, en un solo sitio.
+          Pedidos a medida y citas de tus fans. Los chats estan en Mensajes.
         </p>
       </div>
+
+      {/* Los chats viven en un solo sitio: Mensajes. */}
+      <Link
+        href="/mensajes"
+        className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card p-4 transition-colors hover:border-primary/50"
+      >
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+          <MessageCircle className="h-5 w-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold">Mensajes</span>
+          <span className="block text-xs text-muted-foreground">
+            {unanswered > 0
+              ? `${unanswered} ${unanswered === 1 ? 'chat espera' : 'chats esperan'} tu respuesta`
+              : 'Tus chats con fans y otras cuentas'}
+          </span>
+        </span>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+      </Link>
 
       {chips.length > 1 && (
         <div className="flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -239,9 +243,9 @@ export default async function InboxPage({
           <span className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
             <Inbox className="h-5 w-5 text-muted-foreground" />
           </span>
-          <p className="font-medium">Tu bandeja esta vacia</p>
+          <p className="font-medium">No tienes pedidos ni citas</p>
           <p className="max-w-xs text-sm text-muted-foreground">
-            Aqui apareceran los mensajes, pedidos y citas de tus fans.
+            Aqui apareceran los pedidos a medida y las citas que te reserven.
           </p>
         </div>
       ) : (

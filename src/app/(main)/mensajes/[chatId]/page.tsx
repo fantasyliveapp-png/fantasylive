@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 
 import { ChatRequestBar, PeerChatThread } from '@/components/social/chat-thread';
+import { SafetyMenu } from '@/components/social/safety-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { requireUser } from '@/lib/auth/guards';
 import { isBlockedBetween } from '@/lib/chat';
@@ -53,7 +54,14 @@ export default async function PeerChatPage({
   const pending = chat.acceptedAt === null;
   const iAmRecipient = pending && chat.createdById !== user.id;
   const iSentRequest = pending && chat.createdById === user.id;
-  const blocked = await isBlockedBetween(user.id, other.id);
+  const [blocked, myBlock] = await Promise.all([
+    isBlockedBetween(user.id, other.id),
+    prisma.blockedPair.findFirst({
+      where: { blockerId: user.id, blockedId: other.id, isSkip: false },
+      select: { id: true },
+    }),
+  ]);
+  const iBlocked = Boolean(myBlock);
 
   return (
     <div className="container max-w-2xl space-y-4 py-4">
@@ -72,6 +80,15 @@ export default async function PeerChatPage({
         ) : (
           <span className="truncate font-semibold">{name}</span>
         )}
+        <SafetyMenu
+          targetUserId={other.id}
+          targetName={name}
+          context={`chat:${chat.id}`}
+          reportLabel="Denunciar chat"
+          initialBlocked={iBlocked}
+          isAuthenticated
+          className="ml-auto"
+        />
       </header>
 
       {iAmRecipient && !blocked && (

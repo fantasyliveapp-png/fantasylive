@@ -1312,6 +1312,8 @@ model Report {
   reporterId String
   reportedId String
   sessionId  String?
+  /// Que se denuncio: "profile", "post:<id>", "chat:<id>", "conversation:<id>".
+  context    String?
 
   reason       ReportReason
   details      String?

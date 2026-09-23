@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Coins, Mail, MessageCircle, ShieldCheck, User as UserIcon } from 'lucide-react';
+import { Ban, Coins, Mail, MessageCircle, ShieldCheck, User as UserIcon } from 'lucide-react';
 
 import { LogoutButton } from '@/components/auth/logout-button';
+import { BlockedAccounts } from '@/components/social/blocked-accounts';
 import { MessagePrivacySetting } from '@/components/social/message-privacy-setting';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -43,6 +44,18 @@ export default async function SettingsPage() {
           </CardHeader>
           <CardContent>
             <MessagePrivacySetting initial={user.messagePrivacy} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Ban className="h-4 w-4" />
+              Cuentas bloqueadas
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="-mx-6 -mb-6 p-0">
+            <BlockedAccounts userId={user.id} />
           </CardContent>
         </Card>
 

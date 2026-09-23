@@ -54,6 +54,8 @@ export interface FeedPost {
   isOwner: boolean;
   model: {
     id: string;
+    /** Cuenta de la creadora (para denunciar o bloquear desde la publicacion). */
+    userId?: string;
     slug: string;
     stageName: string;
     avatarUrl: string | null;
@@ -214,6 +216,7 @@ export async function buildFeedPosts(
         isOwner,
         model: {
           id: post.model.id,
+          userId: post.model.userId,
           slug: post.model.slug,
           stageName: post.model.stageName,
           avatarUrl: post.model.avatarUrl,

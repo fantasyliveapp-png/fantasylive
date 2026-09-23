@@ -41,6 +41,10 @@ interface ReportRow {
   reason: string;
   status: string;
   details: string | null;
+  /** Que se denuncio: "profile", "post:<id>", "chat:<id>", "conversation:<id>". */
+  context?: string | null;
+  /** Ultimos mensajes del chat denunciado. */
+  evidence?: { from: string; body: string; at: string }[];
   createdAt: string;
   reporter: { id: string; name: string | null; email: string };
   reported: {
@@ -201,6 +205,38 @@ export function ReportsReviewList({ reports }: { reports: ReportRow[] }) {
                     </p>
                   </div>
                 </div>
+
+                {report.context && (
+                  <p className="text-xs text-muted-foreground">
+                    Denunciado desde:{' '}
+                    <span className="font-medium text-foreground">
+                      {report.context === 'profile'
+                        ? 'su perfil'
+                        : report.context.startsWith('post:')
+                          ? 'una publicacion'
+                          : report.context.startsWith('chat:')
+                            ? 'un chat entre personas'
+                            : 'un chat con creadora'}
+                    </span>
+                  </p>
+                )}
+
+                {report.evidence && report.evidence.length > 0 && (
+                  <div className="max-h-64 space-y-1.5 overflow-y-auto rounded-lg border border-border p-3 text-xs">
+                    {report.evidence.map((m, i) => (
+                      <p key={i}>
+                        <span
+                          className={
+                            m.from === 'Denunciada' ? 'font-semibold text-destructive' : 'font-semibold'
+                          }
+                        >
+                          {m.from}:
+                        </span>{' '}
+                        <span className="text-muted-foreground">{m.body}</span>
+                      </p>
+                    ))}
+                  </div>
+                )}
 
                 {report.details && (
                   <div className="rounded-lg bg-muted/50 p-3">
