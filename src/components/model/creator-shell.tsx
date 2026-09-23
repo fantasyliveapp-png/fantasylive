@@ -98,7 +98,7 @@ export async function CreatorShell({
   return (
     <div className="container py-4 lg:py-8">
       <div className="grid gap-8 lg:grid-cols-[250px_minmax(0,1fr)]">
-        <aside className="hidden space-y-5 lg:sticky lg:top-24 lg:block lg:self-start">
+        <aside className="hidden space-y-5 lg:sticky lg:top-8 lg:block lg:self-start">
           <div className="relative overflow-hidden rounded-2xl border border-border bg-card p-4">
             <div
               aria-hidden

@@ -19,6 +19,7 @@ import {
 import type { Role } from '@prisma/client';
 
 import { LanguageSubMenu } from '@/components/layout/language-switcher';
+import { SIDEBAR_ROW } from '@/components/layout/sidebar-row';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -46,7 +47,7 @@ interface UserMenuProps {
    * Como se abre: con la foto (barra de arriba, escritorio) o con un boton
    * de menu (en el propio perfil, en el movil, donde la foto ya esta abajo).
    */
-  trigger?: 'avatar' | 'menu';
+  trigger?: 'avatar' | 'menu' | 'sidebar';
 }
 
 export function UserMenu({
@@ -63,13 +64,20 @@ export function UserMenu({
     <DropdownMenu>
       <DropdownMenuTrigger
         className={
-          trigger === 'menu'
-            ? 'flex h-9 w-9 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring'
-            : 'rounded-full outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'
+          trigger === 'sidebar'
+            ? SIDEBAR_ROW
+            : trigger === 'menu'
+              ? 'flex h-9 w-9 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring'
+              : 'rounded-full outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'
         }
         aria-label="Menu de tu cuenta"
       >
-        {trigger === 'menu' ? (
+        {trigger === 'sidebar' ? (
+          <>
+            <Menu className="h-6 w-6" />
+            <span>Mas</span>
+          </>
+        ) : trigger === 'menu' ? (
           <Menu className="h-5 w-5" />
         ) : (
           <Avatar className="h-9 w-9 border border-border">
@@ -79,7 +87,11 @@ export function UserMenu({
         )}
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="end" className="w-60">
+      <DropdownMenuContent
+        align={trigger === 'sidebar' ? 'start' : 'end'}
+        side={trigger === 'sidebar' ? 'top' : 'bottom'}
+        className="w-60"
+      >
         <DropdownMenuLabel className="flex flex-col gap-1">
           <span className="truncate">{name}</span>
           <span className="truncate text-xs font-normal text-muted-foreground">
@@ -163,7 +175,7 @@ export function UserMenu({
           </Link>
         </DropdownMenuItem>
         {/* En el movil el globo no cabe arriba: el idioma va aqui. */}
-        <LanguageSubMenu className="sm:hidden" />
+        <LanguageSubMenu className={trigger === 'avatar' ? 'sm:hidden' : undefined} />
 
         <DropdownMenuSeparator />
 

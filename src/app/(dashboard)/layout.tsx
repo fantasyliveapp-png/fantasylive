@@ -1,5 +1,6 @@
 import { BottomNav } from '@/components/layout/bottom-nav';
 import { Navbar } from '@/components/layout/navbar';
+import { SideNavServer } from '@/components/layout/side-nav-server';
 import { getCurrentUser } from '@/lib/auth/guards';
 import { getOwnUsername, getProfileShortcut } from '@/lib/profile-shortcut';
 
@@ -15,7 +16,8 @@ export default async function DashboardGroupLayout({
   ]);
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-screen flex-col lg:pl-60">
+      <SideNavServer />
       <Navbar />
       {/* Misma barra inferior que el resto de la app: en movil el panel no
           debe ser un callejon sin salida. */}

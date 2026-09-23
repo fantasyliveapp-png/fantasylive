@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import type { NotificationType } from '@prisma/client';
 
+import { SIDEBAR_ROW } from '@/components/layout/sidebar-row';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -56,7 +57,11 @@ const TYPE_ICON: Record<NotificationType, typeof Bell> = {
   POST_INSIGHT: TrendingUp,
 };
 
-export function NotificationBell() {
+/**
+ * `label`: se pinta como una fila de la barra lateral de escritorio
+ * (icono + texto) en vez de como un boton redondo de la barra de arriba.
+ */
+export function NotificationBell({ label }: { label?: string } = {}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
@@ -109,17 +114,35 @@ export function NotificationBell() {
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative h-9 w-9" aria-label="Notificaciones">
-          <Bell className="h-4 w-4" />
-          {unreadCount > 0 && (
-            <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-primary-foreground">
-              {unreadCount > 9 ? '9+' : unreadCount}
+        {label ? (
+          <button type="button" className={SIDEBAR_ROW} aria-label="Notificaciones">
+            <span className="relative">
+              <Bell className="h-6 w-6" />
+              {unreadCount > 0 && (
+                <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-primary-foreground">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
             </span>
-          )}
-        </Button>
+            <span>{label}</span>
+          </button>
+        ) : (
+          <Button variant="ghost" size="icon" className="relative h-9 w-9" aria-label="Notificaciones">
+            <Bell className="h-4 w-4" />
+            {unreadCount > 0 && (
+              <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-primary-foreground">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </Button>
+        )}
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="end" className="w-80 p-0">
+      <DropdownMenuContent
+        align={label ? 'start' : 'end'}
+        side={label ? 'right' : 'bottom'}
+        className="w-80 p-0"
+      >
         <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
           <p className="text-sm font-semibold">Notificaciones</p>
           {unreadCount > 0 && (

@@ -43,7 +43,8 @@ export async function Navbar() {
   ];
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl">
+    // En escritorio grande (lg) la navegacion es la barra lateral.
+    <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl lg:hidden">
       <div className="container flex h-16 items-center justify-between gap-2 px-4 sm:gap-4 sm:px-6">
         <div className="flex min-w-0 items-center gap-8">
           {/* El nombre siempre visible; en movil se ajusta al ancho de la

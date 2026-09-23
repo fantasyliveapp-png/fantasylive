@@ -668,7 +668,7 @@ export default async function ModelProfilePage({
                   packs antiguos que ya existian. */}
               <TabsList
                 className={cn(
-                  'sticky top-16 z-20 grid h-auto w-full rounded-none border-b border-border/60 bg-background/90 p-0 backdrop-blur',
+                  'sticky top-16 lg:top-0 z-20 grid h-auto w-full rounded-none border-b border-border/60 bg-background/90 p-0 backdrop-blur',
                   hasPacks ? 'grid-cols-3' : 'grid-cols-2',
                 )}
               >
@@ -868,7 +868,7 @@ export default async function ModelProfilePage({
           </div>
 
           {/* COLUMNA LATERAL (escritorio) */}
-          <aside className="hidden space-y-5 lg:sticky lg:top-24 lg:mt-20 lg:block lg:self-start">
+          <aside className="hidden space-y-5 lg:sticky lg:top-8 lg:mt-20 lg:block lg:self-start">
             {callCard}
             {bookingWidget}
           </aside>

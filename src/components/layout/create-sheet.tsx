@@ -51,7 +51,7 @@ export function CreateSheet({
     <>
       <div
         className={cn(
-          'fixed inset-0 z-[55] transition-opacity duration-200 md:hidden',
+          'fixed inset-0 z-[55] transition-opacity duration-200',
           open ? 'opacity-100' : 'pointer-events-none opacity-0',
         )}
         aria-hidden={!open}
@@ -70,11 +70,13 @@ export function CreateSheet({
           aria-label="Crear"
           className={cn(
             'absolute inset-x-0 bottom-0 rounded-t-[1.75rem] border-t border-border/60 bg-background p-4 shadow-2xl transition-transform duration-300 ease-out',
-            open ? 'translate-y-0' : 'translate-y-full',
+            // Escritorio: el mismo menu, centrado como una ventana.
+            'md:inset-x-auto md:bottom-auto md:left-1/2 md:top-1/2 md:w-[440px] md:-translate-x-1/2 md:rounded-3xl md:border',
+            open ? 'translate-y-0 md:-translate-y-1/2' : 'translate-y-full md:-translate-y-[40%]',
           )}
           style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
         >
-          <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted-foreground/30" />
+          <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted-foreground/30 md:hidden" />
           <div className="mb-4 flex items-center justify-between px-1">
             <h2 className="font-heading text-lg uppercase tracking-[0.2em]">Crear</h2>
             <button
