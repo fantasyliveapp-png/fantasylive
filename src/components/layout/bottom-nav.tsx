@@ -55,6 +55,7 @@ export function BottomNav({
   if (
     pathname.startsWith('/call/') ||
     pathname.startsWith('/live/') ||
+    pathname === '/bienvenida' ||
     /^\/dashboard\/(model\/)?messages\/[^/]+/.test(pathname)
   ) {
     return null;

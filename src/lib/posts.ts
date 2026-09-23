@@ -277,32 +277,6 @@ export async function buildFeedPosts(
   );
 }
 
-/**
- * Publicaciones del feed de descubrimiento.
- *
- * Excluye los perfiles que bloquean el pais del visitante (el filtro llega ya
- * resuelto desde getVisibilityContext) y los que no tienen el KYC aprobado.
- */
-export async function getDiscoverFeed(params: {
-  viewerId: string | null;
-  geoFilter: Prisma.ModelProfileWhereInput;
-  take?: number;
-  cursor?: string | null;
-}): Promise<FeedPost[]> {
-  const posts = await prisma.post.findMany({
-    where: {
-      ...livePostWhere(),
-      model: { kycStatus: 'APPROVED', ...params.geoFilter },
-    },
-    orderBy: { createdAt: 'desc' },
-    take: params.take ?? 20,
-    ...(params.cursor ? { cursor: { id: params.cursor }, skip: 1 } : {}),
-    select: feedPostSelect,
-  });
-
-  return buildFeedPosts(posts, params.viewerId);
-}
-
 /** Publicaciones solo de las creadoras a las que sigue el visitante. */
 export async function getFollowingFeed(params: {
   viewerId: string;

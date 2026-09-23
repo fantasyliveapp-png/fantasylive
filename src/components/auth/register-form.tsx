@@ -42,7 +42,8 @@ export function RegisterForm({ defaultRole }: { defaultRole: 'USER' | 'MODEL' })
   useEffect(() => {
     if (state.success) {
       toast.success(state.success);
-      router.push(wantsCreator ? '/hazte-creadora' : '/');
+      // A los fans se les pregunta que les gusta para su Descubrir.
+      router.push(wantsCreator ? '/hazte-creadora' : '/bienvenida');
       router.refresh();
     }
     if (state.error) toast.error(state.error);

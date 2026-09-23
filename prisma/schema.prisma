@@ -313,6 +313,16 @@ model User {
   /// como solicitud de mensaje.
   messagePrivacy  MessagePrivacy @default(EVERYONE)
 
+  // Gustos (preguntas de bienvenida): ordenan su Descubrir.
+  /// A quien quiere ver. Vacio = a todos.
+  preferredGenders Gender[]  @default([])
+  /// Etiquetas que le gustan (las mismas que ponen las creadoras).
+  interests        String[]  @default([])
+  /// Que busca: fotos, directos, chatear, videollamadas.
+  lookingFor       String[]  @default([])
+  /// Cuando respondio (o se salto) las preguntas. null = aun no.
+  onboardedAt      DateTime?
+
   // Estado de plataforma
   isVip          Boolean   @default(false)
   vipUntil       DateTime?

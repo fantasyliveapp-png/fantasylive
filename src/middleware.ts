@@ -7,6 +7,7 @@ import { authConfig } from '@/lib/auth/auth.config';
 const { auth } = NextAuth(authConfig);
 
 const PROTECTED_PREFIXES = [
+  '/bienvenida',
   '/dashboard',
   '/wallet',
   '/bookings',

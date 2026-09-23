@@ -12,6 +12,7 @@ import {
   Settings,
   Shield,
   Sparkles,
+  SlidersHorizontal,
   UserRound,
 } from 'lucide-react';
 import type { Role } from '@prisma/client';
@@ -114,6 +115,11 @@ export function UserMenu({
         <DropdownMenuItem asChild>
           <Link href="/dashboard/subscriptions">
             <Heart /> Mis suscripciones
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/bienvenida">
+            <SlidersHorizontal /> Tus gustos
           </Link>
         </DropdownMenuItem>
         {!profileSlug && (

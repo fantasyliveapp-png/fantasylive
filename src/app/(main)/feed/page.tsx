@@ -1,12 +1,14 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { ChevronRight, Sparkles } from 'lucide-react';
 
 import { PostCard } from '@/components/feed/post-card';
 import { Button } from '@/components/ui/button';
 import { getCurrentUser } from '@/lib/auth/guards';
 import { getVisibilityContext } from '@/lib/geo';
 import { getI18n } from '@/lib/i18n/server';
-import { getDiscoverFeed } from '@/lib/posts';
+import { prisma } from '@/lib/prisma';
+import { getForYouFeed } from '@/lib/recommend';
 
 export const metadata: Metadata = { title: 'Feed' };
 export const dynamic = 'force-dynamic';
@@ -16,27 +18,66 @@ const PAGE_SIZE = 20;
 export default async function FeedPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cursor?: string }>;
+  searchParams: Promise<{ pagina?: string }>;
 }) {
-  const { cursor } = await searchParams;
+  const { pagina } = await searchParams;
+  const page = Math.max(0, Math.min(500, Number.parseInt(pagina ?? '0', 10) || 0));
   const [{ t }, viewer, { filter: geoFilter }] = await Promise.all([
     getI18n(),
     getCurrentUser(),
     getVisibilityContext(),
   ]);
 
-  const posts = await getDiscoverFeed({
-    viewerId: viewer?.id ?? null,
-    geoFilter,
-    take: PAGE_SIZE,
-    cursor: cursor ?? null,
-  });
+  // Ordenado segun sus gustos (preguntas de bienvenida), si los tiene.
+  const [posts, account] = await Promise.all([
+    getForYouFeed({
+      viewerId: viewer?.id ?? null,
+      geoFilter,
+      page,
+      take: PAGE_SIZE,
+    }),
+    viewer
+      ? prisma.user.findUnique({
+          where: { id: viewer.id },
+          select: { onboardedAt: true, interests: true, preferredGenders: true, lookingFor: true },
+        })
+      : null,
+  ]);
 
-  const nextCursor =
-    posts.length === PAGE_SIZE ? posts[posts.length - 1]!.id : null;
+  const nextPage = posts.length === PAGE_SIZE ? page + 1 : null;
+  const personalized = Boolean(
+    account &&
+      (account.interests.length || account.preferredGenders.length || account.lookingFor.length),
+  );
 
   return (
     <div className="container max-w-2xl py-6">
+      {account && !account.onboardedAt && page === 0 && (
+        <Link
+          href="/bienvenida"
+          className="group mb-5 flex items-center gap-3 rounded-2xl border border-primary/40 bg-gradient-to-r from-primary/15 to-champagne-gold/10 p-4"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/20 text-primary">
+            <Sparkles className="h-5 w-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold">Haz tu Descubrir a tu gusto</span>
+            <span className="block text-xs text-muted-foreground">
+              Responde 3 preguntas y te enseñamos lo que te gusta primero.
+            </span>
+          </span>
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+        </Link>
+      )}
+      {personalized && page === 0 && (
+        <p className="mb-4 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+          <Sparkles className="h-3.5 w-3.5 text-primary" />
+          Ordenado segun tus gustos ·
+          <Link href="/bienvenida" className="font-medium text-primary hover:underline">
+            Cambiar
+          </Link>
+        </p>
+      )}
       {posts.length === 0 ? (
         <p className="rounded-xl border border-border/60 bg-card/40 p-8 text-center text-sm text-muted-foreground">
           {t('feed.emptyDiscover')}
@@ -53,11 +94,11 @@ export default async function FeedPage({
         </div>
       )}
 
-      {nextCursor && (
+      {nextPage !== null && (
         <div className="mt-6 text-center">
-          {/* Paginacion por cursor en la URL: se puede compartir y no
-              depende de estado de cliente ni de scroll infinito. */}
-          <Link href={`/feed?cursor=${nextCursor}`}>
+          {/* Paginacion en la URL: se puede compartir y no depende de
+              estado de cliente ni de scroll infinito. */}
+          <Link href={`/feed?pagina=${nextPage}`}>
             <Button variant="outline">{t('common.seeMore')}</Button>
           </Link>
         </div>
