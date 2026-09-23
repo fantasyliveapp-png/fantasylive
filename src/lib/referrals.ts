@@ -18,7 +18,8 @@ type Tx = Prisma.TransactionClient;
  *
  * 2. TUS FANS, TU COMISION: los fans que llegan por el enlace de una
  *    creadora le dejan mas dinero a ella: en lo que gasten CON ELLA, la
- *    plataforma se queda el 25% en vez del 40% durante sus primeros 12 meses.
+ *    plataforma se queda el 30% en vez del 40% (ella, el 70%) durante sus
+ *    primeros 12 meses.
  *
  * Nadie cobra por registrarse ni por adelantado, y quien paga nunca cobra
  * comision de si mismo.
@@ -30,7 +31,7 @@ export const REF_COOKIE_MAX_AGE = 30 * 24 * 3600;
 export const FOUNDER_SPOTS = 100;
 export const AMBASSADOR_PERCENT = 5;
 export const AMBASSADOR_MONTHS = 12;
-export const FAN_LINK_PLATFORM_PERCENT = 25;
+export const FAN_LINK_PLATFORM_PERCENT = 30;
 export const FAN_LINK_MONTHS = 12;
 
 function monthsAgo(n: number) {
@@ -42,7 +43,7 @@ function monthsAgo(n: number) {
 export interface ReferralSplit {
   platformFeeTokens: number;
   modelTokens: number;
-  /** % de la plataforma aplicado (40 normal, 25 con fan propio). */
+  /** % de la plataforma aplicado (40 normal, 30 con fan propio). */
   platformPercent: number;
   /** Comision de embajadora, si toca. */
   ambassador: { userId: string; tokens: number } | null;
