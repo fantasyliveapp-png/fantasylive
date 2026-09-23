@@ -50,6 +50,8 @@ export interface FeedPost {
   likeCount: number;
   commentCount: number;
   unlockCount: number;
+  /** Personas distintas que la han visto. Solo para su duena. */
+  views: number | null;
   isLiked: boolean;
   /** Puede ver los archivos originales */
   isUnlocked: boolean;
@@ -95,6 +97,7 @@ export const feedPostSelect = {
   likeCount: true,
   commentCount: true,
   unlockCount: true,
+  viewCount: true,
   createdAt: true,
   modelId: true,
   model: {
@@ -240,6 +243,7 @@ export async function buildFeedPosts(
         likeCount: post.likeCount,
         commentCount: post.commentCount,
         unlockCount: post.unlockCount,
+        views: isOwner ? post.viewCount : null,
         isLiked: likedPosts.has(post.id),
         isUnlocked,
         isOwner,

@@ -667,6 +667,7 @@ export function PostStudio({
     likeCount: 0,
     commentCount: 0,
     unlockCount: 0,
+    views: null,
     isLiked: false,
     isUnlocked: visibility === 'PUBLIC' || previewUnlocked,
     isOwner: false,

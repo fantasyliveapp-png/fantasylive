@@ -315,13 +315,15 @@ model User {
 
   // Gustos (preguntas de bienvenida): ordenan su Descubrir.
   /// A quien quiere ver. Vacio = a todos.
-  preferredGenders Gender[]  @default([])
+  preferredGenders Gender[]         @default([])
   /// Etiquetas que le gustan (las mismas que ponen las creadoras).
-  interests        String[]  @default([])
+  interests        String[]         @default([])
   /// Que busca: fotos, directos, chatear, videollamadas.
-  lookingFor       String[]  @default([])
+  lookingFor       String[]         @default([])
   /// Cuando respondio (o se salto) las preguntas. null = aun no.
   onboardedAt      DateTime?
+  postImpressions  PostImpression[]
+  postHides        PostHide[]
 
   // Estado de plataforma
   isVip          Boolean   @default(false)
@@ -1401,19 +1403,22 @@ model Post {
   likeCount    Int @default(0)
   commentCount Int @default(0)
   unlockCount  Int @default(0)
+  /// Personas distintas que la han visto en el feed (ver PostImpression).
   viewCount    Int @default(0)
   tokensEarned Int @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  model        ModelProfile  @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  model        ModelProfile     @relation(fields: [modelId], references: [id], onDelete: Cascade)
   assets       PostAsset[]
   unlocks      PostUnlock[]
   likes        PostLike[]
   comments     PostComment[]
   transactions Transaction[]
   poll         PostPoll?
+  impressions  PostImpression[]
+  hides        PostHide[]
 
   @@index([isPublished, createdAt])
   @@index([modelId, createdAt])
@@ -1639,4 +1644,35 @@ model AutoGreetingLog {
   @@unique([modelId, userId])
   @@index([modelId, createdAt])
   @@map("auto_greeting_logs")
+}
+
+/// Una persona vio una publicacion en el feed (al menos 1 s en pantalla).
+/// Sirve para no repetirle lo ya visto, para medir que tal funciona cada
+/// publicacion (me gusta / vistas) y para repartir la visibilidad.
+model PostImpression {
+  id        String   @id @default(cuid())
+  userId    String
+  postId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@index([userId, createdAt])
+  @@map("post_impressions")
+}
+
+/// "No me interesa": la publicacion deja de salirle y su creadora baja.
+model PostHide {
+  id        String   @id @default(cuid())
+  userId    String
+  postId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@map("post_hides")
 }

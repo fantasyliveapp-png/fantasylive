@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Ban, Flag, Loader2, MoreHorizontal, ShieldCheck } from 'lucide-react';
+import { Ban, EyeOff, Flag, Loader2, MoreHorizontal, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -48,6 +48,7 @@ export function SafetyMenu({
   isAuthenticated,
   className,
   onBlockedChange,
+  onNotInterested,
 }: {
   targetUserId: string;
   targetName: string;
@@ -57,6 +58,8 @@ export function SafetyMenu({
   isAuthenticated: boolean;
   className?: string;
   onBlockedChange?: (blocked: boolean) => void;
+  /** En publicaciones: opcion "No me interesa" encima de denunciar. */
+  onNotInterested?: () => void;
 }) {
   const router = useRouter();
   const [blocked, setBlocked] = useState(initialBlocked);
@@ -123,6 +126,11 @@ export function SafetyMenu({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
+          {onNotInterested && (
+            <DropdownMenuItem onClick={onNotInterested}>
+              <EyeOff /> No me interesa
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem
             onClick={() => {
               if (requireAuth()) setReporting(true);

@@ -934,3 +934,35 @@ function toMessage(error: unknown): string {
   }
   return 'Error inesperado.';
 }
+
+/**
+ * "No me interesa": la publicacion deja de salirle en el Descubrir y lo de
+ * esa creadora baja. Con `undo` se deshace.
+ */
+export async function hidePostAction(
+  postId: string,
+  undo = false,
+): Promise<PostActionResult> {
+  try {
+    const user = await getAuthedUserOrThrow();
+    if (undo) {
+      await prisma.postHide.deleteMany({ where: { userId: user.id, postId } });
+      return { ok: true };
+    }
+    const post = await prisma.post.findUnique({
+      where: { id: postId },
+      select: { id: true, model: { select: { userId: true } } },
+    });
+    if (!post || post.model.userId === user.id) {
+      return { ok: false, error: 'Publicacion no encontrada.' };
+    }
+    await prisma.postHide.upsert({
+      where: { userId_postId: { userId: user.id, postId } },
+      create: { userId: user.id, postId },
+      update: {},
+    });
+    return { ok: true, message: 'Veras menos publicaciones como esta.' };
+  } catch (error) {
+    return { ok: false, error: toMessage(error) };
+  }
+}

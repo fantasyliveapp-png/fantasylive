@@ -8,6 +8,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  Eye,
+  EyeOff,
   Coins,
   Crown,
   Heart,
@@ -30,10 +32,12 @@ import { useI18n } from '@/components/providers/i18n-provider';
 import {
   addPostCommentAction,
   getPostCommentsAction,
+  hidePostAction,
   togglePostLikeAction,
   unlockPostAction,
 } from '@/server/actions/posts';
 import type { FeedPost } from '@/lib/posts';
+import { trackImpression } from '@/lib/impressions-client';
 import { postAspectRatio } from '@/lib/post-formats';
 import { cn, formatTokens, initials, relativeTime } from '@/lib/utils';
 
@@ -67,6 +71,45 @@ export function PostCard({
   const [commentDraft, setCommentDraft] = useState('');
   const [isPending, startTransition] = useTransition();
   const [isUnlocking, startUnlock] = useTransition();
+  const [hidden, setHidden] = useState(false);
+  const articleRef = useRef<HTMLElement | null>(null);
+
+  // Cuenta como "vista" cuando al menos la mitad lleva 1 s en pantalla. Con
+  // eso el Descubrir sabe que no repetirle y cuanta gente la ha visto.
+  useEffect(() => {
+    const el = articleRef.current;
+    if (!el || preview || post.isOwner || !isAuthenticated) return;
+    let timer: number | null = null;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          timer = window.setTimeout(() => {
+            trackImpression(post.id);
+            observer.disconnect();
+          }, 1000);
+        } else if (timer !== null) {
+          window.clearTimeout(timer);
+          timer = null;
+        }
+      },
+      { threshold: 0.5 },
+    );
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      if (timer !== null) window.clearTimeout(timer);
+    };
+  }, [post.id, post.isOwner, preview, isAuthenticated]);
+
+  function notInterested(undo = false) {
+    setHidden(!undo);
+    void hidePostAction(post.id, undo).then((r) => {
+      if (!r.ok) {
+        setHidden(undo);
+        toast.error(r.error ?? t('common.somethingWentWrong'));
+      }
+    });
+  }
 
   const requiresLogin = () => {
     if (preview) return true;
@@ -141,12 +184,30 @@ export function PostCard({
     });
   }
 
+  if (hidden) {
+    return (
+      <div className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card/60 p-4 text-sm">
+        <EyeOff className="h-5 w-5 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 flex-1">
+          <span className="block font-medium">Publicacion oculta</span>
+          <span className="block text-xs text-muted-foreground">
+            Veras menos cosas como esta.
+          </span>
+        </span>
+        <Button variant="outline" size="sm" onClick={() => notInterested(true)}>
+          Deshacer
+        </Button>
+      </div>
+    );
+  }
+
   const isLocked = !post.isUnlocked;
   const isSubscriberGate = isLocked && post.visibility === 'SUBSCRIBERS';
   const aspectRatio = postAspectRatio(post.assets);
 
   return (
     <article
+      ref={articleRef}
       className="overflow-hidden rounded-2xl border border-border/60 bg-card"
       // En la vista previa un enlace sacaria a la creadora del borrador.
       onClickCapture={
@@ -215,6 +276,7 @@ export function PostCard({
             context={`post:${post.id}`}
             reportLabel="Denunciar publicacion"
             isAuthenticated={isAuthenticated}
+            onNotInterested={() => notInterested()}
           />
         )}
 
@@ -376,11 +438,18 @@ export function PostCard({
           {commentCount > 0 ? commentCount : t('feed.comment')}
         </Button>
 
-        {post.visibility === 'LOCKED' && post.unlockCount > 0 && (
-          <span className="ml-auto pr-2 text-xs text-muted-foreground">
-            {t('feed.unlockCount', { count: post.unlockCount })}
-          </span>
-        )}
+        <span className="ml-auto flex items-center gap-3 pr-2 text-xs text-muted-foreground">
+          {post.visibility === 'LOCKED' && post.unlockCount > 0 && (
+            <span>{t('feed.unlockCount', { count: post.unlockCount })}</span>
+          )}
+          {/* Alcance: solo lo ve la duena. */}
+          {post.views !== null && !post.scheduledFor && (
+            <span className="flex items-center gap-1" title="Personas que la han visto">
+              <Eye className="h-3.5 w-3.5" />
+              {post.views}
+            </span>
+          )}
+        </span>
       </footer>
 
       {/* Comentarios */}

@@ -18,10 +18,17 @@ const PAGE_SIZE = 20;
 export default async function FeedPage({
   searchParams,
 }: {
-  searchParams: Promise<{ pagina?: string }>;
+  searchParams: Promise<{ pagina?: string; t?: string }>;
 }) {
-  const { pagina } = await searchParams;
+  const { pagina, t: startParam } = await searchParams;
   const page = Math.max(0, Math.min(500, Number.parseInt(pagina ?? '0', 10) || 0));
+  // Cuando empezo a mirar: lo que vea en esta sesion no se le "castiga" en
+  // las paginas siguientes, asi el orden no se mueve mientras baja.
+  const startMs = Number(startParam);
+  const sessionStart =
+    page > 0 && Number.isFinite(startMs) && startMs > Date.now() - 6 * 3600_000
+      ? new Date(startMs)
+      : new Date();
   const [{ t }, viewer, { filter: geoFilter }] = await Promise.all([
     getI18n(),
     getCurrentUser(),
@@ -35,6 +42,7 @@ export default async function FeedPage({
       geoFilter,
       page,
       take: PAGE_SIZE,
+      sessionStart,
     }),
     viewer
       ? prisma.user.findUnique({
@@ -98,7 +106,7 @@ export default async function FeedPage({
         <div className="mt-6 text-center">
           {/* Paginacion en la URL: se puede compartir y no depende de
               estado de cliente ni de scroll infinito. */}
-          <Link href={`/feed?pagina=${nextPage}`}>
+          <Link href={`/feed?pagina=${nextPage}&t=${sessionStart.getTime()}`}>
             <Button variant="outline">{t('common.seeMore')}</Button>
           </Link>
         </div>
