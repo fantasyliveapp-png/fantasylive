@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
-  BarChart3,
   Compass,
   Crown,
   Eye,
@@ -25,7 +24,11 @@ import {
 } from 'lucide-react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import type { ExploreMosaic, MosaicItem } from '@/lib/personal-search';
+import type {
+  ExploreMosaic,
+  MosaicLiveItem,
+  MosaicPostItem,
+} from '@/lib/personal-search';
 import type { SearchCreator, SearchResult } from '@/lib/search';
 import { TASTE_TAGS } from '@/lib/tastes';
 import { cn, formatTokens, initials } from '@/lib/utils';
@@ -191,7 +194,7 @@ function Mosaic({
   onTag: (tag: string) => void;
 }) {
   const [filter, setFilter] = useState<string | null>(null);
-  const hasLive = mosaic.items.some((i) => i.post.model.isLive);
+  const hasLive = mosaic.items.some((i) => i.kind === 'live');
   const filters: { id: string; label: string; icon?: LucideIcon }[] = [
     { id: 'all', label: 'Para ti', icon: Sparkles },
     ...(hasLive ? [{ id: 'live', label: 'En directo', icon: Radio }] : []),
@@ -202,7 +205,7 @@ function Mosaic({
     active === 'all'
       ? mosaic.items
       : active === 'live'
-        ? mosaic.items.filter((i) => i.post.model.isLive)
+        ? mosaic.items.filter((i) => i.kind === 'live')
         : mosaic.items.filter((i) => i.tags.includes(active));
 
   return (
@@ -214,8 +217,8 @@ function Mosaic({
         </h2>
         <p className="mt-0.5 text-xs text-muted-foreground">
           {mosaic.personalized
-            ? 'Elegido con lo que has visto, te ha gustado y sigues.'
-            : 'Lo que mas gusta ahora. Cuanto mas mires, mas a tu medida.'}
+            ? 'Fotos, videos y directos elegidos con lo que has visto, te ha gustado y sigues.'
+            : 'Fotos, videos y directos que mas gustan ahora. Cuanto mas mires, mas a tu medida.'}
         </p>
       </div>
 
@@ -243,7 +246,11 @@ function Mosaic({
 
       {items.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border/60 p-8 text-center text-sm text-muted-foreground">
-          Nada de esto por ahora.{' '}
+          {active === 'all'
+            ? 'Todavia no hay fotos, videos ni directos para ti. Vuelve pronto.'
+            : active === 'live'
+              ? 'Ahora mismo no hay nadie en directo.'
+              : 'Nada de esto por ahora.'}{' '}
           {active !== 'all' && active !== 'live' && (
             <button
               type="button"
@@ -256,9 +263,18 @@ function Mosaic({
         </div>
       ) : (
         <div className="grid grid-flow-dense auto-rows-[118px] grid-cols-3 gap-1.5 sm:auto-rows-[170px] md:grid-cols-4">
-          {items.map((item, i) => (
-            <MosaicTile key={item.post.id} item={item} shape={tileShape(i)} big={i % 9 === 0} />
-          ))}
+          {items.map((item, i) =>
+            item.kind === 'live' ? (
+              <LiveTile key={`live-${item.stream.id}`} item={item} />
+            ) : (
+              <MosaicTile
+                key={item.post.id}
+                item={item}
+                shape={tileShape(i)}
+                big={i % 9 === 0}
+              />
+            ),
+          )}
         </div>
       )}
 
@@ -270,6 +286,74 @@ function Mosaic({
         Seguir viendo en Descubrir
       </Link>
     </div>
+  );
+}
+
+/**
+ * Un directo en el mosaico: alto (como una pantalla de movil), con la
+ * portada de la creadora, borde que late, EN VIVO, espectadores y titulo.
+ * Tocarlo entra al directo.
+ */
+function LiveTile({ item }: { item: MosaicLiveItem }) {
+  const { stream } = item;
+  const bg = stream.model.coverUrl ?? stream.model.avatarUrl;
+  return (
+    <Link
+      href={`/live/${stream.model.slug}`}
+      className="group relative row-span-2 overflow-hidden rounded-2xl bg-muted"
+    >
+      {bg ? (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+          src={bg}
+          alt=""
+          className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+        />
+      ) : (
+        <span className="block h-full w-full bg-gradient-to-br from-rose-600/50 via-primary/30 to-muted" />
+      )}
+      <span className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/85" />
+      {/* Borde que late: esta pasando ahora */}
+      <span className="pointer-events-none absolute inset-0 animate-pulse rounded-2xl ring-2 ring-inset ring-rose-500" />
+
+      <span className="absolute inset-x-1.5 top-1.5 flex items-start justify-between gap-1">
+        <span className="flex items-center gap-1 whitespace-nowrap rounded-md bg-rose-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+          <span className="relative flex h-1.5 w-1.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75" />
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-white" />
+          </span>
+          En vivo
+        </span>
+        {item.match !== null && (
+          <span className="rounded-full bg-black/55 px-1.5 py-0.5 text-[10px] font-bold text-white backdrop-blur">
+            {item.match}%
+          </span>
+        )}
+      </span>
+
+      <span className="absolute inset-x-0 bottom-0 space-y-1 px-2 pb-2">
+        {stream.title && (
+          <span className="line-clamp-2 text-[11px] font-medium leading-snug text-white sm:text-xs">
+            {stream.title}
+          </span>
+        )}
+        <span className="flex items-center gap-1.5">
+          <span className="shrink-0 rounded-full bg-gradient-to-tr from-primary via-fantazy-red to-champagne-gold p-[1.5px]">
+            <Avatar className="h-5 w-5">
+              {stream.model.avatarUrl && <AvatarImage src={stream.model.avatarUrl} alt="" />}
+              <AvatarFallback className="text-[8px]">{initials(stream.model.stageName)}</AvatarFallback>
+            </Avatar>
+          </span>
+          <span className="min-w-0 truncate text-[11px] font-semibold text-white">
+            {stream.model.stageName}
+          </span>
+          <span className="ml-auto flex shrink-0 items-center gap-0.5 text-[10px] text-white/80">
+            <Eye className="h-3 w-3" />
+            {stream.viewerCount}
+          </span>
+        </span>
+      </span>
+    </Link>
   );
 }
 
@@ -287,7 +371,15 @@ function reasonIcon(reason: string): LucideIcon {
  * pago y no la has desbloqueado), por que te sale, tu % de afinidad y quien
  * la publico. Abre la publicacion en el perfil de la creadora.
  */
-function MosaicTile({ item, shape, big }: { item: MosaicItem; shape: string; big: boolean }) {
+function MosaicTile({
+  item,
+  shape,
+  big,
+}: {
+  item: MosaicPostItem;
+  shape: string;
+  big: boolean;
+}) {
   const { post } = item;
   const first = post.assets[0];
   const isVideo = first?.mimeType.startsWith('video/');
@@ -330,19 +422,7 @@ function MosaicTile({ item, shape, big }: { item: MosaicItem; shape: string; big
           />
         )
       ) : (
-        // Sin fotos: el texto (o la pregunta de la encuesta) es la portada.
-        // (con margen arriba y abajo para no quedar bajo las etiquetas)
-        <span className="flex h-full w-full items-center bg-gradient-to-br from-primary/35 via-card to-champagne-gold/25 px-3 pb-8 pt-8">
-          <span
-            className={cn(
-              'overflow-hidden font-medium leading-snug',
-              big ? 'line-clamp-5 text-base' : 'line-clamp-2 text-[11px] sm:line-clamp-4 sm:text-xs',
-            )}
-          >
-            {post.poll && big && <BarChart3 className="mb-1 h-4 w-4 text-primary" />}
-            {post.body ?? post.poll?.question}
-          </span>
-        </span>
+        <span className="block h-full w-full bg-gradient-to-br from-primary/30 via-muted to-muted" />
       )}
 
       {/* Candado de pago */}

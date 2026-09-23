@@ -4,6 +4,7 @@ import type { Gender, Prisma } from '@prisma/client';
 
 import type { AnonTaste } from '@/lib/anon-taste';
 import type { FeedPost } from '@/lib/posts';
+import { getLiveStreams } from '@/lib/live';
 import { prisma } from '@/lib/prisma';
 import {
   getForYouFeed,
@@ -32,8 +33,7 @@ export interface TasteDnaSlice {
   pct: number;
 }
 
-export interface MosaicItem {
-  post: FeedPost;
+interface MosaicBase {
   /** % de afinidad con quien busca (40-99). null si aun no hay gustos. */
   match: number | null;
   /** Por que se la ensena, en pocas palabras. */
@@ -41,6 +41,23 @@ export interface MosaicItem {
   /** Etiquetas de la creadora (para filtrar el mosaico por gusto). */
   tags: string[];
 }
+
+export interface MosaicPostItem extends MosaicBase {
+  kind: 'post';
+  post: FeedPost;
+}
+
+export interface MosaicLiveItem extends MosaicBase {
+  kind: 'live';
+  stream: {
+    id: string;
+    title: string | null;
+    viewerCount: number;
+    model: { slug: string; stageName: string; avatarUrl: string | null; coverUrl: string | null };
+  };
+}
+
+export type MosaicItem = MosaicPostItem | MosaicLiveItem;
 
 export interface ExploreMosaic {
   personalized: boolean;
@@ -155,18 +172,28 @@ export async function getExploreMosaic(params: {
   geoFilter: Prisma.ModelProfileWhereInput;
 }): Promise<ExploreMosaic> {
   const { ctx } = params;
-  const posts = await getForYouFeed({
-    viewerId: params.viewerId,
-    geoFilter: params.geoFilter,
-    take: 36,
-    sessionStart: new Date(),
-    anonTaste: params.anonTaste ?? null,
-  });
+  const [ranked, lives] = await Promise.all([
+    getForYouFeed({
+      viewerId: params.viewerId,
+      geoFilter: params.geoFilter,
+      take: 60,
+      sessionStart: new Date(),
+      anonTaste: params.anonTaste ?? null,
+    }),
+    getLiveStreams({ geoFilter: params.geoFilter, take: 8 }),
+  ]);
 
-  const modelIds = [...new Set(posts.map((p) => p.model.id))];
+  // Solo lo visual: publicaciones con fotos o videos (sin texto suelto ni
+  // encuestas), y nunca las propias.
+  const posts = ranked
+    .filter((p) => p.assets.length > 0 && p.model.id !== ctx.ownModelId)
+    .slice(0, 36);
+  const liveList = lives.filter((l) => l.model.id !== ctx.ownModelId);
+
+  const modelIds = [...new Set([...posts.map((p) => p.model.id), ...liveList.map((l) => l.model.id)])];
   const models = await prisma.modelProfile.findMany({
     where: { id: { in: modelIds } },
-    select: { id: true, gender: true, tags: true, createdAt: true },
+    select: { id: true, gender: true, tags: true, createdAt: true, isOnline: true },
   });
   const byId = new Map(models.map((m) => [m.id, m]));
 
@@ -175,32 +202,61 @@ export async function getExploreMosaic(params: {
   const personalized = isPersonalized(ctx);
   const monthAgo = Date.now() - 30 * 86_400_000;
 
-  const items: MosaicItem[] = posts
-    .filter((p) => p.model.id !== ctx.ownModelId)
-    .map((post) => {
-      const m = byId.get(post.model.id);
-      const bits = {
-        id: post.model.id,
-        gender: m?.gender ?? 'FEMALE',
-        tags: m?.tags ?? [],
-        isOnline: post.model.isOnline,
-        isLive: post.model.isLive,
-      };
-      const { match, reason } = affinityOf(ctx, bits, dnaTop);
-      const isNew = m ? m.createdAt.getTime() > monthAgo : false;
+  const affinity = (modelId: string, isLive: boolean) => {
+    const m = byId.get(modelId);
+    const bits = {
+      id: modelId,
+      gender: m?.gender ?? ('FEMALE' as const),
+      tags: m?.tags ?? [],
+      isOnline: m?.isOnline ?? false,
+      isLive,
+    };
+    const { match, reason } = affinityOf(ctx, bits, dnaTop);
+    const isNew = m ? m.createdAt.getTime() > monthAgo : false;
+    return {
+      match: personalized ? match : null,
+      reason: personalized ? reason : isNew ? 'Creadora nueva' : 'Popular ahora',
+      tags: bits.tags,
+    };
+  };
+
+  const postItems: MosaicItem[] = posts.map((post) => ({
+    kind: 'post',
+    post,
+    ...affinity(post.model.id, post.model.isLive),
+  }));
+  const liveItems: MosaicItem[] = liveList
+    .map((l) => {
+      const a = affinity(l.model.id, true);
       return {
-        post,
-        match: personalized ? match : null,
-        reason: post.model.isLive
-          ? 'En directo ahora'
-          : personalized
-            ? reason
-            : isNew
-              ? 'Creadora nueva'
-              : 'Popular ahora',
-        tags: bits.tags,
+        kind: 'live' as const,
+        stream: {
+          id: l.id,
+          title: l.title,
+          viewerCount: l.viewerCount,
+          model: {
+            slug: l.model.slug,
+            stageName: l.model.stageName,
+            avatarUrl: l.model.avatarUrl,
+            coverUrl: l.model.coverUrl,
+          },
+        },
+        ...a,
+        reason: 'En directo ahora',
       };
-    });
+    })
+    // Los directos que mas encajan, primero.
+    .sort((x, y) => (y.match ?? 0) - (x.match ?? 0));
+
+  // Directos repartidos por el mosaico (despues de la primera publicacion y
+  // luego cada 5), para que se vean sin tapar las publicaciones.
+  const items: MosaicItem[] = [];
+  let li = 0;
+  postItems.forEach((item, i) => {
+    items.push(item);
+    if (li < liveItems.length && (i === 0 || (i > 0 && i % 5 === 0))) items.push(liveItems[li++]!);
+  });
+  while (li < liveItems.length) items.push(liveItems[li++]!);
 
   return { personalized, dna, items };
 }
