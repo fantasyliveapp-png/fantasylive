@@ -109,18 +109,26 @@ export async function registerAction(
   const passwordHash = await bcrypt.hash(data.password, 10);
   const bonus = config.economy.signupBonusTokens;
 
-  // Referidos: la creadora cuyo enlace le trajo (cookie de /r/<slug>).
-  const refUserId = (await cookies()).get(REF_COOKIE)?.value;
-  const referrer = refUserId
-    ? await prisma.user.findFirst({
-        where: {
-          id: refUserId,
-          status: 'ACTIVE',
-          modelProfile: { kycStatus: 'APPROVED' },
-        },
+  // Referidos: quien le trajo (cookie de /r/<slug> o /reclutar/<code>).
+  // "r:<id>" = reclutador; si no, el id de la creadora que invito.
+  const refValue = (await cookies()).get(REF_COOKIE)?.value ?? '';
+  const recruiter = refValue.startsWith('r:')
+    ? await prisma.recruiter.findFirst({
+        where: { id: refValue.slice(2), active: true },
         select: { id: true },
       })
     : null;
+  const referrer =
+    refValue && !refValue.startsWith('r:')
+      ? await prisma.user.findFirst({
+          where: {
+            id: refValue,
+            status: 'ACTIVE',
+            modelProfile: { kycStatus: 'APPROVED' },
+          },
+          select: { id: true },
+        })
+      : null;
 
   const username = data.username;
   if (
@@ -146,6 +154,7 @@ export async function registerAction(
         role: 'USER',
         status: 'ACTIVE',
         referredById: referrer?.id ?? null,
+        recruitedById: recruiter?.id ?? null,
         wallet: { create: { balance: bonus } },
       },
     });

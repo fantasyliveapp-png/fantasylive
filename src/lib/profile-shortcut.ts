@@ -42,3 +42,10 @@ export const getOwnUsername = cache(
     return row?.username ?? null;
   },
 );
+
+/** Si la cuenta es de un reclutador (para el acceso a su panel). */
+export const isRecruiterAccount = cache(async (userId: string | null | undefined): Promise<boolean> => {
+  if (!userId) return false;
+  const r = await prisma.recruiter.findUnique({ where: { userId }, select: { id: true } });
+  return Boolean(r);
+});

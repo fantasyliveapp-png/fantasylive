@@ -57,6 +57,7 @@ export default async function AdminLayout({
           badge: pendingPayouts,
         },
         { href: '/admin/transactions', label: 'Transacciones', icon: 'receipt' },
+        { href: '/admin/reclutadores', label: 'Reclutadores', icon: 'users' },
       ],
     },
   ];

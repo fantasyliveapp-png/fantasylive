@@ -32,3 +32,24 @@ export async function refRedirect(
   });
   return res;
 }
+
+/**
+ * Enlace de un reclutador: /reclutar/<code>. Guarda 30 dias "r:<id>" y
+ * lleva al registro como creadora. Reclutador pausado o codigo roto: portada.
+ */
+export async function recruiterRedirect(req: NextRequest, code: string) {
+  const recruiter = await prisma.recruiter.findUnique({
+    where: { code: code.toLowerCase() },
+    select: { id: true, active: true },
+  });
+  if (!recruiter?.active) return NextResponse.redirect(new URL('/', req.url));
+  const res = NextResponse.redirect(new URL('/register?role=model', req.url));
+  res.cookies.set(REF_COOKIE, `r:${recruiter.id}`, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: REF_COOKIE_MAX_AGE,
+    path: '/',
+  });
+  return res;
+}

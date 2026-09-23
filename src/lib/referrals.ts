@@ -21,10 +21,19 @@ type Tx = Prisma.TransactionClient;
  *    plataforma se queda el 30% en vez del 40% (ella, el 70%) durante sus
  *    primeros 12 meses.
  *
+ * 3. RECLUTADORES: personas que no crean contenido y solo traen creadoras.
+ *    Los da de alta el equipo con condiciones negociadas (su %, cuantos
+ *    meses y un cupo maximo de creadoras). Cobran de la comision de la
+ *    plataforma, igual que las embajadoras.
+ *
  * Nadie cobra por registrarse ni por adelantado, y quien paga nunca cobra
  * comision de si mismo.
  */
 
+/**
+ * Cookie de quien invito: "<userId>" (creadora) o "r:<recruiterId>"
+ * (reclutador). Gana el ultimo enlace que abrio antes de registrarse.
+ */
 export const REF_COOKIE = 'fl_ref';
 export const REF_COOKIE_MAX_AGE = 30 * 24 * 3600;
 
@@ -45,8 +54,8 @@ export interface ReferralSplit {
   modelTokens: number;
   /** % de la plataforma aplicado (40 normal, 30 con fan propio). */
   platformPercent: number;
-  /** Comision de embajadora, si toca. */
-  ambassador: { userId: string; tokens: number } | null;
+  /** A quien hay que pagar comision de referidos (embajadora, reclutador). */
+  referrers: { userId: string; tokens: number; kind: 'ambassador' | 'recruiter' }[];
 }
 
 /**
@@ -67,6 +76,7 @@ export async function referralSplit(
       where: { id: earnerId },
       select: {
         referredById: true,
+        recruitedById: true,
         modelProfile: { select: { createdAt: true } },
       },
     }),
@@ -82,8 +92,9 @@ export async function referralSplit(
   let platformFeeTokens = Math.round((tokens * platformPercent) / 100);
   const modelTokens = tokens - platformFeeTokens;
 
+  const referrers: ReferralSplit['referrers'] = [];
+
   // 1. Embajadora: quien invito a esta creadora cobra su % (de la comision).
-  let ambassador: ReferralSplit['ambassador'] = null;
   const referrerId = earner?.referredById;
   if (referrerId && referrerId !== payerId && earner?.modelProfile) {
     const referrer = await tx.modelProfile.findUnique({
@@ -99,13 +110,83 @@ export async function referralSplit(
         Math.floor((tokens * AMBASSADOR_PERCENT) / 100),
       );
       if (share > 0) {
-        ambassador = { userId: referrerId, tokens: share };
+        referrers.push({ userId: referrerId, tokens: share, kind: 'ambassador' });
         platformFeeTokens -= share;
       }
     }
   }
 
-  return { platformFeeTokens, modelTokens, platformPercent, ambassador };
+  // 3. Reclutador: su % negociado, dentro de sus meses y de su cupo.
+  if (earner?.recruitedById && earner.modelProfile) {
+    const recruiter = await tx.recruiter.findUnique({
+      where: { id: earner.recruitedById },
+      select: {
+        id: true,
+        userId: true,
+        active: true,
+        commissionPercent: true,
+        months: true,
+        maxCreators: true,
+      },
+    });
+    const creatorSince = earner.modelProfile.createdAt;
+    const inWindow =
+      recruiter?.months == null || creatorSince >= monthsAgo(recruiter.months);
+    // Cupo: solo cuentan sus N primeras creadoras (por orden de alta).
+    const inQuota =
+      recruiter?.maxCreators == null ||
+      (await tx.user.count({
+        where: {
+          recruitedById: recruiter.id,
+          modelProfile: { createdAt: { lt: creatorSince } },
+        },
+      })) < recruiter.maxCreators;
+    if (recruiter?.active && recruiter.userId !== payerId && inWindow && inQuota) {
+      const share = Math.min(
+        platformFeeTokens,
+        Math.floor((tokens * recruiter.commissionPercent) / 100),
+      );
+      if (share > 0) {
+        referrers.push({ userId: recruiter.userId, tokens: share, kind: 'recruiter' });
+        platformFeeTokens -= share;
+      }
+    }
+  }
+
+  return { platformFeeTokens, modelTokens, platformPercent, referrers };
+}
+
+/** Asienta en el monedero de cada referidor lo que le toca de un cobro. */
+export async function payReferrers(
+  tx: Tx,
+  referrers: ReferralSplit['referrers'],
+  meta: {
+    description: string;
+    fromCreatorUserId: string;
+    applyLedgerEntry: (tx: Tx, entry: {
+      userId: string;
+      type: 'REFERRAL_EARNING';
+      tokens: number;
+      description: string;
+      metadata: Prisma.InputJsonValue;
+      callSessionId?: string;
+      bookingId?: string;
+    }) => Promise<unknown>;
+    callSessionId?: string;
+    bookingId?: string;
+  },
+) {
+  for (const r of referrers) {
+    await meta.applyLedgerEntry(tx, {
+      userId: r.userId,
+      type: 'REFERRAL_EARNING',
+      tokens: r.tokens,
+      description: `${r.kind === 'recruiter' ? 'Reclutador' : 'Embajadora'}: ${meta.description}`,
+      metadata: { kind: r.kind, fromCreatorUserId: meta.fromCreatorUserId },
+      ...(meta.callSessionId ? { callSessionId: meta.callSessionId } : {}),
+      ...(meta.bookingId ? { bookingId: meta.bookingId } : {}),
+    });
+  }
 }
 
 /**

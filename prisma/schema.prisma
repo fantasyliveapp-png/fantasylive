@@ -330,11 +330,16 @@ model User {
   /// Programa de referidos: la creadora que trajo esta cuenta (por su
   /// enlace). Si esta cuenta es fan, lo que gaste con ella le deja mas a la
   /// creadora; si se hace creadora, la que la invito cobra un %.
-  referredById    String?
-  referredBy      User?            @relation("Referrals", fields: [referredById], references: [id], onDelete: SetNull)
-  referrals       User[]           @relation("Referrals")
-  postImpressions PostImpression[]
-  postHides       PostHide[]
+  referredById     String?
+  referredBy       User?            @relation("Referrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals        User[]           @relation("Referrals")
+  /// Reclutador que trajo a esta cuenta (solo trae creadoras; cobra un %).
+  recruitedById    String?
+  recruitedBy      Recruiter?       @relation("RecruitedBy", fields: [recruitedById], references: [id], onDelete: SetNull)
+  /// Si esta cuenta es de un reclutador, sus condiciones.
+  recruiterAccount Recruiter?       @relation("RecruiterAccount")
+  postImpressions  PostImpression[]
+  postHides        PostHide[]
 
   // Estado de plataforma
   isVip          Boolean   @default(false)
@@ -1706,4 +1711,30 @@ model PostHide {
 
   @@unique([userId, postId])
   @@map("post_hides")
+}
+
+/// RECLUTADOR: alguien que no crea contenido y solo trae creadoras. Lo da de
+/// alta el equipo (desde admin) con las condiciones negociadas con el. Cobra
+/// un % de lo que venden sus creadoras, de la comision de la plataforma.
+model Recruiter {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  /// Codigo de su enlace: /reclutar/<code>
+  code              String   @unique
+  /// % de cada venta de sus creadoras (sale de la comision de la plataforma).
+  commissionPercent Int      @default(3)
+  /// Meses que cobra por cada creadora desde que se hizo creadora. null = siempre.
+  months            Int?     @default(12)
+  /// Cupo negociado: cuantas creadoras le cuentan como maximo. null = sin tope.
+  maxCreators       Int?
+  active            Boolean  @default(true)
+  /// Notas internas de la negociacion (solo admin).
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user     User   @relation("RecruiterAccount", fields: [userId], references: [id], onDelete: Cascade)
+  creators User[] @relation("RecruitedBy")
+
+  @@map("recruiters")
 }

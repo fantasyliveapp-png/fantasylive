@@ -8,7 +8,7 @@ import { assertCreatorVerified } from '@/lib/creator-kyc';
 import { prisma } from '@/lib/prisma';
 import { tokensForMinutes } from '@/lib/rates';
 import { GEO_BLOCKED_MESSAGE, isBlockedForViewer } from '@/lib/geo';
-import { referralSplit } from '@/lib/referrals';
+import { payReferrers, referralSplit } from '@/lib/referrals';
 import { applyLedgerEntry, InsufficientTokensError } from '@/lib/tokens';
 import { applySubscriberDiscount, getActiveSubscription } from '@/lib/subscriptions';
 import { randomRoomName } from '@/lib/utils';
@@ -364,15 +364,12 @@ export async function settleBookingAction(
         tokens: booking.totalTokens,
       });
       const modelTokens = split.modelTokens;
-      if (split.ambassador) {
-        await applyLedgerEntry(tx, {
-          userId: split.ambassador.userId,
-          type: 'REFERRAL_EARNING',
-          tokens: split.ambassador.tokens,
-          description: 'Embajadora: reserva completada',
-          bookingId: booking.id,
-        });
-      }
+      await payReferrers(tx, split.referrers, {
+        description: 'reserva completada',
+        fromCreatorUserId: booking.model.userId,
+        applyLedgerEntry,
+        bookingId: booking.id,
+      });
 
       await applyLedgerEntry(tx, {
         userId: booking.model.userId,

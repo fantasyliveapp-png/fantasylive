@@ -6,6 +6,7 @@ import {
   Calendar,
   Coins,
   Crown,
+  Handshake,
   Heart,
   LayoutDashboard,
   LogOut,
@@ -48,6 +49,8 @@ interface UserMenuProps {
    * de menu (en el propio perfil, en el movil, donde la foto ya esta abajo).
    */
   trigger?: 'avatar' | 'menu' | 'sidebar';
+  /** Cuenta de reclutador: acceso a su panel. */
+  isRecruiter?: boolean;
 }
 
 export function UserMenu({
@@ -59,6 +62,7 @@ export function UserMenu({
   profileSlug,
   username,
   trigger = 'avatar',
+  isRecruiter = false,
 }: UserMenuProps) {
   return (
     <DropdownMenu>
@@ -138,6 +142,13 @@ export function UserMenu({
 
         <DropdownMenuSeparator />
 
+        {isRecruiter && (
+          <DropdownMenuItem asChild>
+            <Link href="/reclutador" className="font-medium text-primary">
+              <Handshake /> Panel de reclutador
+            </Link>
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem asChild>
           <Link href="/wallet">
             <Coins /> Monedero

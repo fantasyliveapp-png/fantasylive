@@ -43,6 +43,7 @@ export interface SideNavAccount {
   /** Identidad verificada (solo creadoras): sin ella el + lleva a verificarse. */
   verified: boolean;
   balance: number;
+  isRecruiter: boolean;
 }
 
 /**
@@ -185,6 +186,7 @@ export function SideNav({ account }: { account: SideNavAccount | null }) {
               </Link>
               <UserMenu
                 trigger="sidebar"
+                isRecruiter={account.isRecruiter}
                 name={account.name}
                 email={account.email}
                 image={account.image}
