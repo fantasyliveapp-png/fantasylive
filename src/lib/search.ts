@@ -3,6 +3,7 @@ import 'server-only';
 import type { Prisma } from '@prisma/client';
 
 import { MODEL_TAGS, PUBLIC_MODEL_TAGS } from '@/lib/constants';
+import { affinityOf, isPersonalized, type AffinityContext } from '@/lib/personal-search';
 import { prisma } from '@/lib/prisma';
 
 /**
@@ -23,6 +24,8 @@ export interface SearchCreator {
   isLive: boolean;
   followersCount: number;
   tags: string[];
+  /** % de afinidad con quien busca (solo si hay gustos o senales). */
+  match?: number;
 }
 
 export interface SearchResult {
@@ -40,6 +43,7 @@ const select = {
   isOnline: true,
   followersCount: true,
   tags: true,
+  gender: true,
   streams: { where: { status: 'LIVE' as const }, select: { id: true }, take: 1 },
 } satisfies Prisma.ModelProfileSelect;
 
@@ -77,6 +81,8 @@ function baseWhere(geoFilter: Prisma.ModelProfileWhereInput): Prisma.ModelProfil
 export async function searchCreators(
   rawQuery: string,
   geoFilter: Prisma.ModelProfileWhereInput,
+  /** Gustos de quien busca: suben lo que encaja con el y se ve su % de match. */
+  affinity?: AffinityContext,
 ): Promise<SearchResult> {
   const q = normalizeQuery(rawQuery);
   if (!q) return { query: '', creators: [], tags: [] };
@@ -115,36 +121,25 @@ export async function searchCreators(
     return s + Math.min(30, Math.log10(r.followersCount + 1) * 6);
   };
 
+  // Con gustos: la afinidad suma (sin pasar por encima de un nombre exacto).
+  const personal = affinity && isPersonalized(affinity);
+  const matches = new Map(
+    personal
+      ? rows.map((r) => [
+          r.id,
+          affinityOf(affinity, { ...r, isLive: r.streams.length > 0 }).match,
+        ])
+      : [],
+  );
+  const total = (r: Row) => score(r) + (matches.get(r.id) ?? 0) * 1.2;
+
   const creators = rows
-    .sort((a, b) => score(b) - score(a))
+    .sort((a, b) => total(b) - total(a))
     .slice(0, 24)
-    .map(toCreator);
+    .map((r) => ({ ...toCreator(r), ...(personal ? { match: matches.get(r.id) } : {}) }));
 
   // Etiquetas publicas que encajan con lo escrito (sugerencias rapidas).
   const tags = PUBLIC_MODEL_TAGS.filter((t) => t.includes(q)).slice(0, 6);
 
   return { query: q, creators, tags };
-}
-
-/** Lo que se ve antes de escribir: quien esta conectada y las mas seguidas. */
-export async function searchSuggestions(geoFilter: Prisma.ModelProfileWhereInput) {
-  const [online, popular] = await Promise.all([
-    prisma.modelProfile.findMany({
-      where: { ...baseWhere(geoFilter), isOnline: true },
-      orderBy: { followersCount: 'desc' },
-      take: 12,
-      select,
-    }),
-    prisma.modelProfile.findMany({
-      where: baseWhere(geoFilter),
-      orderBy: { followersCount: 'desc' },
-      take: 8,
-      select,
-    }),
-  ]);
-  return {
-    online: online.map(toCreator),
-    popular: popular.map(toCreator),
-    tags: [...PUBLIC_MODEL_TAGS],
-  };
 }

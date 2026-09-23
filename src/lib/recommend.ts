@@ -91,7 +91,7 @@ export function tasteScore(
 // Lo que el fan HACE
 // ---------------------------------------------------------------------------
 
-interface LearnedProfile {
+export interface LearnedProfile {
   creators: Map<string, number>;
   tags: Map<string, number>;
   genders: Map<Gender, number>;
@@ -102,9 +102,9 @@ interface LearnedProfile {
   hiddenPosts: Set<string>;
 }
 
-type ModelBits = { id: string; gender: Gender; tags: string[] };
+export type ModelBits = { id: string; gender: Gender; tags: string[] };
 
-async function getLearnedProfile(viewerId: string): Promise<LearnedProfile> {
+export async function getLearnedProfile(viewerId: string): Promise<LearnedProfile> {
   const since = new Date(Date.now() - LEARN_DAYS * 86_400_000);
   const model = { select: { id: true, gender: true, tags: true } } as const;
   const viaPost = { post: { select: { model } } } as const;
@@ -188,7 +188,7 @@ async function getLearnedProfile(viewerId: string): Promise<LearnedProfile> {
 }
 
 /** Lo aprendido de alguien sin cuenta (cookie) con la misma forma. */
-function learnedFromAnon(taste: AnonTaste): LearnedProfile {
+export function learnedFromAnon(taste: AnonTaste): LearnedProfile {
   const sum = (o: Record<string, number>) =>
     Object.values(o).reduce((a, v) => a + Math.max(0, v), 0);
   const positive = (o: Record<string, number>) =>
@@ -205,7 +205,7 @@ function learnedFromAnon(taste: AnonTaste): LearnedProfile {
 }
 
 /** Cuanto encaja con lo que el fan HACE. De -0.6 a ~2. */
-function learnedScore(p: LearnedProfile, m: ModelBits): number {
+export function learnedScore(p: LearnedProfile, m: ModelBits): number {
   // Creadora concreta: saturada para que 50 me gusta no valgan 50 veces mas.
   const creator = Math.tanh((p.creators.get(m.id) ?? 0) / 10);
   // Con muy pocas senales solo cuenta lo negativo ("No me interesa").
