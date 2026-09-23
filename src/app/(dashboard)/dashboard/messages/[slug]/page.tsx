@@ -5,6 +5,7 @@ import { ArrowLeft } from 'lucide-react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { MessageThread } from '@/components/messages/message-thread';
+import { ChatRequestBar } from '@/components/social/chat-thread';
 import { requireUser } from '@/lib/auth/guards';
 import { buildMessageRows } from '@/lib/messages';
 import { prisma } from '@/lib/prisma';
@@ -23,7 +24,7 @@ export default async function UserConversationPage({
 
   const model = await prisma.modelProfile.findUnique({
     where: { slug },
-    select: { id: true, stageName: true, avatarUrl: true },
+    select: { id: true, stageName: true, avatarUrl: true, userId: true },
   });
   if (!model) notFound();
 
@@ -42,14 +43,16 @@ export default async function UserConversationPage({
     where: { userId: user.id },
     select: { balance: true },
   });
-  const canSend = (wallet?.balance ?? 0) > 0;
+  // En los chats gratis (precio 0 o abiertos por ella) no hace falta saldo.
+  const canSend = conversation.unlockPriceTokens === 0 || (wallet?.balance ?? 0) > 0;
+  const isRequest = conversation.startedByModel && conversation.acceptedAt === null;
 
   const messages = await buildMessageRows(conversation.messages, user.id);
 
   return (
     <div className="container max-w-2xl py-10">
       <Link
-        href="/dashboard/messages"
+        href="/mensajes"
         className="mb-4 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4" />
@@ -63,6 +66,17 @@ export default async function UserConversationPage({
         </Avatar>
         <p className="text-lg font-semibold">{model.stageName}</p>
       </div>
+
+      {isRequest && (
+        <div className="mb-4">
+          <ChatRequestBar
+            kind="conversation"
+            id={conversation.id}
+            fromName={model.stageName}
+            fromUserId={model.userId}
+          />
+        </div>
+      )}
 
       <MessageThread
         conversationId={conversation.id}

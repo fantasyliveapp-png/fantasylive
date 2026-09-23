@@ -8,6 +8,7 @@ import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { createNotification } from '@/lib/notifications';
 import { prisma } from '@/lib/prisma';
 import { checkNoContactInfo } from '@/lib/content-filter';
+import { isBlockedBetween } from '@/lib/chat';
 import { GEO_BLOCKED_MESSAGE, isBlockedForViewer } from '@/lib/geo';
 import {
   buildMessageAttachmentKey,
@@ -63,6 +64,9 @@ export async function startConversationAction(input: {
     if (await isBlockedForViewer(model.blockedCountries)) {
       return { ok: false, error: GEO_BLOCKED_MESSAGE };
     }
+    if (await isBlockedBetween(user.id, model.userId)) {
+      return { ok: false, error: 'No puedes escribir a esta persona.' };
+    }
 
     const existing = await prisma.conversation.findUnique({
       where: { userId_modelId: { userId: user.id, modelId: input.modelId } },
@@ -72,29 +76,35 @@ export async function startConversationAction(input: {
       return sendMessageAction({ conversationId: existing.id, body: body.data });
     }
 
-    if (!model.messagingEnabled || model.messagePriceTokens <= 0) {
-      return { ok: false, error: 'Esta modelo no tiene mensajeria activada.' };
+    // Con la mensajeria activada ella decide el precio; 0 = gratis.
+    if (!model.messagingEnabled) {
+      return { ok: false, error: 'Esta creadora no tiene los mensajes activados.' };
     }
+    const price = Math.max(0, model.messagePriceTokens);
 
     const conversationId = await prisma.$transaction(async (tx) => {
       const conversation = await tx.conversation.create({
         data: {
           userId: user.id,
           modelId: input.modelId,
-          unlockPriceTokens: model.messagePriceTokens,
+          unlockPriceTokens: price,
+          // La abre (y paga) el fan: no es una solicitud.
+          acceptedAt: new Date(),
         },
         select: { id: true },
       });
 
-      await transferWithCommission(tx, {
-        fromUserId: user.id,
-        toUserId: model.userId,
-        tokens: model.messagePriceTokens,
-        debitType: 'MESSAGE_UNLOCK',
-        creditType: 'MESSAGE_UNLOCK_EARNING',
-        description: 'Desbloqueo de conversacion',
-        conversationId: conversation.id,
-      });
+      if (price > 0) {
+        await transferWithCommission(tx, {
+          fromUserId: user.id,
+          toUserId: model.userId,
+          tokens: price,
+          debitType: 'MESSAGE_UNLOCK',
+          creditType: 'MESSAGE_UNLOCK_EARNING',
+          description: 'Desbloqueo de conversacion',
+          conversationId: conversation.id,
+        });
+      }
 
       await tx.message.create({
         data: {
@@ -124,7 +134,7 @@ export async function startConversationAction(input: {
     return {
       ok: true,
       conversationId,
-      message: `Conversacion desbloqueada por ${model.messagePriceTokens} tokens.`,
+      message: price > 0 ? `Conversacion desbloqueada por ${price} tokens.` : undefined,
     };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
@@ -167,8 +177,19 @@ export async function sendMessageAction(input: {
     if (isCustomer && (await isBlockedForViewer(conversation.model.blockedCountries))) {
       return { ok: false, error: GEO_BLOCKED_MESSAGE };
     }
+    if (await isBlockedBetween(conversation.userId, conversation.model.userId)) {
+      return { ok: false, error: 'No puedes escribir a esta persona.' };
+    }
 
-    if (isCustomer) {
+    // Chat abierto por la creadora y aun sin aceptar: ella no puede insistir;
+    // si el fan responde, la solicitud queda aceptada.
+    const pendingRequest = conversation.startedByModel && conversation.acceptedAt === null;
+    if (pendingRequest && isModel) {
+      return { ok: false, error: 'Espera a que acepte tu solicitud de mensaje.' };
+    }
+
+    // En los chats gratis (precio 0 o abiertos por ella) no hace falta saldo.
+    if (isCustomer && conversation.unlockPriceTokens > 0) {
       const wallet = await prisma.wallet.findUnique({
         where: { userId: user.id },
         select: { balance: true },
@@ -191,7 +212,10 @@ export async function sendMessageAction(input: {
       }),
       prisma.conversation.update({
         where: { id: conversation.id },
-        data: { lastMessageAt: new Date() },
+        data: {
+          lastMessageAt: new Date(),
+          ...(pendingRequest && isCustomer ? { acceptedAt: new Date() } : {}),
+        },
       }),
     ]);
 

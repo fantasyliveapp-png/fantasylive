@@ -129,6 +129,13 @@ enum TransactionType {
   PAYOUT_FEE
 }
 
+/// Quien puede escribirle a una cuenta (ajuste de privacidad).
+enum MessagePrivacy {
+  EVERYONE
+  FOLLOWING
+  NOBODY
+}
+
 enum SubscriptionStatus {
   ACTIVE
   CANCELLED
@@ -292,16 +299,19 @@ model User {
 
   // Perfil / compliance
   birthDate       DateTime?
-  ageVerified     Boolean      @default(false)
+  ageVerified     Boolean        @default(false)
   gender          Gender?
   orientation     Orientation?
   country         String?
   city            String?
-  languages       String[]     @default([])
+  languages       String[]       @default([])
   bio             String?
   /// Perfil de fan visible para todos. Privado por defecto: solo se ve el
   /// nombre y la foto hasta que la persona decide abrirlo.
-  isProfilePublic Boolean      @default(false)
+  isProfilePublic Boolean        @default(false)
+  /// Quien puede escribirle. Aunque sea "todos", quien no se siguen llega
+  /// como solicitud de mensaje.
+  messagePrivacy  MessagePrivacy @default(EVERYONE)
 
   // Estado de plataforma
   isVip          Boolean   @default(false)
@@ -349,6 +359,9 @@ model User {
   /// Personas (no creadoras) a las que sigue y que le siguen.
   userFollowing            UserFollow[]              @relation("UserFollowing")
   userFollowers            UserFollow[]              @relation("UserFollowers")
+  peerChatsA               PeerChat[]                @relation("PeerChatA")
+  peerChatsB               PeerChat[]                @relation("PeerChatB")
+  peerMessages             PeerMessage[]
   postComments             PostComment[]
   profileVisits            ProfileVisit[]
   greetingsReceived        AutoGreetingLog[]
@@ -803,7 +816,12 @@ model Conversation {
 
   /// Precio pagado para desbloquearla, guardado como referencia
   unlockPriceTokens Int
-  lastMessageAt     DateTime @default(now())
+  lastMessageAt     DateTime  @default(now())
+  /// La abrio la creadora (gratis) en vez del fan.
+  startedByModel    Boolean   @default(false)
+  /// null = solicitud pendiente: la abrio la creadora y el fan aun no la
+  /// acepto ni respondio. Las que abre y paga el fan nacen aceptadas.
+  acceptedAt        DateTime?
 
   createdAt DateTime @default(now())
 
@@ -815,6 +833,43 @@ model Conversation {
   @@unique([userId, modelId])
   @@index([modelId, lastMessageAt])
   @@map("conversations")
+}
+
+/// Chat gratis entre dos cuentas que no es fan -> creadora (fan con fan,
+/// creadora con creadora). userAId < userBId: un solo chat por pareja.
+model PeerChat {
+  id            String    @id @default(cuid())
+  userAId       String
+  userBId       String
+  /// Quien escribio primero.
+  createdById   String
+  /// null = solicitud: quien la recibio aun no la acepto ni respondio.
+  acceptedAt    DateTime?
+  lastMessageAt DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+
+  userA    User          @relation("PeerChatA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB    User          @relation("PeerChatB", fields: [userBId], references: [id], onDelete: Cascade)
+  messages PeerMessage[]
+
+  @@unique([userAId, userBId])
+  @@index([userAId, lastMessageAt])
+  @@index([userBId, lastMessageAt])
+  @@map("peer_chats")
+}
+
+model PeerMessage {
+  id        String   @id @default(cuid())
+  chatId    String
+  senderId  String
+  body      String
+  createdAt DateTime @default(now())
+
+  chat   PeerChat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  sender User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([chatId, createdAt])
+  @@map("peer_messages")
 }
 
 model Message {

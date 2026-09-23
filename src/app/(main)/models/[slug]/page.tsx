@@ -28,6 +28,7 @@ import { ContentGallery } from '@/components/content/content-gallery';
 import { RequestContentDialog } from '@/components/content/request-content-dialog';
 import { FollowButton } from '@/components/models/follow-button';
 import { MessageButton } from '@/components/messages/message-button';
+import { SendMessageButton } from '@/components/social/send-message-button';
 import { ReviewForm } from '@/components/models/review-form';
 import { ShareProfileButton } from '@/components/models/share-profile-button';
 import { StartPrivateCallButton } from '@/components/calls/start-private-call-button';
@@ -48,6 +49,7 @@ import { getModelPosts } from '@/lib/posts';
 import { recordProfileVisit } from '@/lib/visits';
 import { formatRateNumber } from '@/lib/rates';
 import { GENDER_LABELS, ORIENTATION_LABELS } from '@/lib/constants';
+import { peerPair } from '@/lib/chat';
 import { prisma } from '@/lib/prisma';
 import { applySubscriberDiscount, getActiveSubscription } from '@/lib/subscriptions';
 import { cn, formatDate, formatTokens, initials, relativeTime } from '@/lib/utils';
@@ -216,6 +218,17 @@ export default async function ModelProfilePage({
   const reviewerMap = new Map(reviewers.map((r) => [r.id, r]));
 
   const isOwnProfile = viewer?.id === model.userId;
+
+  // Creadora que visita a otra creadora: su chat entre creadoras, si existe.
+  const creatorChat =
+    viewer?.modelProfileId && !isOwnProfile
+      ? await prisma.peerChat.findUnique({
+          where: { userAId_userBId: peerPair(viewer.id, model.userId) },
+          select: { id: true },
+        })
+      : null;
+  const creatorChatHref = creatorChat ? `/mensajes/${creatorChat.id}` : null;
+
   // /models/<slug>?editar=1 abre directamente el editor (enlaces del menu).
   const editRequested = isOwnProfile && editar === '1';
   const isVerified = model.kycStatus === 'APPROVED';
@@ -480,7 +493,16 @@ export default async function ModelProfilePage({
                   initialFollowing={isFollowing}
                   isAuthenticated={Boolean(viewer)}
                 />
-                {model.messagingEnabled && model.messagePriceTokens > 0 && (
+                {/* Otra creadora le escribe gratis (chat entre creadoras). */}
+                {viewer?.modelProfileId ? (
+                  <SendMessageButton
+                    targetUserId={model.userId}
+                    targetName={model.stageName}
+                    existingHref={creatorChatHref}
+                    isAuthenticated
+                    className="h-10 gap-1.5 px-5"
+                  />
+                ) : model.messagingEnabled && (
                   <MessageButton
                     modelId={model.id}
                     slug={model.slug}

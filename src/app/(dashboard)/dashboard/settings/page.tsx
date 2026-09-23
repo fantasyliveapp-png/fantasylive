@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Coins, Mail, ShieldCheck, User as UserIcon } from 'lucide-react';
+import { Coins, Mail, MessageCircle, ShieldCheck, User as UserIcon } from 'lucide-react';
 
 import { LogoutButton } from '@/components/auth/logout-button';
+import { MessagePrivacySetting } from '@/components/social/message-privacy-setting';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,6 +34,18 @@ export default async function SettingsPage() {
       </div>
 
       <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MessageCircle className="h-4 w-4" />
+              Quien puede escribirme
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <MessagePrivacySetting initial={user.messagePrivacy} />
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">

@@ -3,10 +3,12 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { Lock, Pencil, Sparkles } from 'lucide-react';
 
+import { SendMessageButton } from '@/components/social/send-message-button';
 import { FollowPersonButton, UserProfileEditor } from '@/components/social/user-profile-actions';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { getCurrentUser } from '@/lib/auth/guards';
+import { peerPair } from '@/lib/chat';
 import { prisma } from '@/lib/prisma';
 import { formatDate, formatTokens, initials } from '@/lib/utils';
 
@@ -85,6 +87,24 @@ export default async function PersonProfilePage({
 
   const displayName = person.name ?? person.username ?? 'Usuario';
 
+  // Si ya hay chat con esta persona, "Mensaje" lleva directo a el.
+  let existingChatHref: string | null = null;
+  if (viewer && !isSelf) {
+    if (viewer.modelProfileId) {
+      const c = await prisma.conversation.findUnique({
+        where: { userId_modelId: { userId: person.id, modelId: viewer.modelProfileId } },
+        select: { id: true },
+      });
+      if (c) existingChatHref = `/dashboard/model/messages/${c.id}`;
+    } else {
+      const c = await prisma.peerChat.findUnique({
+        where: { userAId_userBId: peerPair(viewer.id, person.id) },
+        select: { id: true },
+      });
+      if (c) existingChatHref = `/mensajes/${c.id}`;
+    }
+  }
+
   return (
     <div className="container max-w-2xl space-y-6 py-8">
       <section className="flex flex-col items-center text-center">
@@ -123,11 +143,19 @@ export default async function PersonProfilePage({
               Editar perfil
             </UserProfileEditor>
           ) : (
-            <FollowPersonButton
-              userId={person.id}
-              initialFollowing={isFollowing}
-              isAuthenticated={Boolean(viewer)}
-            />
+            <>
+              <FollowPersonButton
+                userId={person.id}
+                initialFollowing={isFollowing}
+                isAuthenticated={Boolean(viewer)}
+              />
+              <SendMessageButton
+                targetUserId={person.id}
+                targetName={displayName}
+                existingHref={existingChatHref}
+                isAuthenticated={Boolean(viewer)}
+              />
+            </>
           )}
         </div>
       </section>

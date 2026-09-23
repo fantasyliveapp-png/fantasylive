@@ -78,7 +78,7 @@ export function MessageButton({
     <>
       <Button variant="outline" size="sm" onClick={openDialog} className="gap-1.5">
         <MessageCircle className="h-4 w-4" />
-        Enviar mensaje · {priceTokens}
+        {priceTokens > 0 ? `Enviar mensaje · ${priceTokens}` : 'Enviar mensaje'}
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -86,10 +86,16 @@ export function MessageButton({
           <DialogHeader>
             <DialogTitle>Abrir conversacion</DialogTitle>
             <DialogDescription>
-              Se descontaran{' '}
-              <strong className="text-token">{priceTokens} tokens</strong> por
-              abrir la conversacion. Despues podes seguir escribiendo mientras
-              tengas saldo en tu monedero.
+              {priceTokens > 0 ? (
+                <>
+                  Se descontaran{' '}
+                  <strong className="text-token">{priceTokens} tokens</strong> por
+                  abrir la conversacion. Despues puedes seguir escribiendo
+                  mientras tengas saldo en tu monedero.
+                </>
+              ) : (
+                'Escribirle es gratis.'
+              )}
             </DialogDescription>
           </DialogHeader>
 
@@ -107,8 +113,8 @@ export function MessageButton({
             </Button>
             <Button variant="token" onClick={submit} disabled={isPending}>
               {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              <Coins className="h-4 w-4" />
-              Pagar {priceTokens} y enviar
+              {priceTokens > 0 && <Coins className="h-4 w-4" />}
+              {priceTokens > 0 ? `Pagar ${priceTokens} y enviar` : 'Enviar'}
             </Button>
           </DialogFooter>
         </DialogContent>

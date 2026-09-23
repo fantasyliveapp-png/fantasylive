@@ -107,7 +107,7 @@ export function BottomNav({
             kind: 'create',
           },
           {
-            href: '/dashboard/model/messages',
+            href: '/mensajes',
             label: t('nav.messages'),
             icon: MessageCircle,
           },
@@ -128,7 +128,7 @@ export function BottomNav({
           { href: '/feed/siguiendo', label: t('feed.following'), icon: Users },
           { href: '/live', label: t('live.title'), icon: Radio },
           {
-            href: '/dashboard/messages',
+            href: '/mensajes',
             label: t('nav.messages'),
             icon: MessageCircle,
           },

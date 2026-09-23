@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 
 import { ProfileEditorButton } from '@/components/model/profile-editor';
+import { MessagePrivacySetting } from '@/components/social/message-privacy-setting';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { requireModel } from '@/lib/auth/guards';
 import { KYC_STATUS_LABELS } from '@/lib/constants';
@@ -34,8 +35,11 @@ export const dynamic = 'force-dynamic';
  * aparece en la Bandeja ni en el perfil.
  */
 export default async function SettingsPage() {
-  const { profile } = await requireModel();
-  const legacyPacks = await prisma.contentPackage.count({ where: { modelId: profile.id } });
+  const { user, profile } = await requireModel();
+  const [legacyPacks, account] = await Promise.all([
+    prisma.contentPackage.count({ where: { modelId: profile.id } }),
+    prisma.user.findUniqueOrThrow({ where: { id: user.id }, select: { messagePrivacy: true } }),
+  ]);
 
   const kycOk = profile.kycStatus === 'APPROVED';
 
@@ -48,9 +52,12 @@ export default async function SettingsPage() {
     },
     {
       icon: MessageCircle,
-      label: 'Mensajes de pago',
-      on: profile.messagingEnabled && profile.messagePriceTokens > 0,
-      detail: `${formatTokens(profile.messagePriceTokens)} tokens por abrir chat`,
+      label: 'Mensajes de fans',
+      on: profile.messagingEnabled,
+      detail:
+        profile.messagePriceTokens > 0
+          ? `${formatTokens(profile.messagePriceTokens)} tokens por abrir chat`
+          : 'Gratis',
     },
     {
       icon: CalendarDays,
@@ -142,6 +149,17 @@ export default async function SettingsPage() {
         <p className="border-t border-border/60 px-4 py-2.5 text-[11px] text-muted-foreground">
           Lo que tengas apagado no aparece en tu Bandeja ni en tu perfil. Actívalo en
           &laquo;Precios y herramientas&raquo; cuando lo quieras usar.
+        </p>
+      </Group>
+
+      {/* Mensajes */}
+      <Group title="Quien puede escribirme">
+        <div className="p-3">
+          <MessagePrivacySetting initial={account.messagePrivacy} />
+        </div>
+        <p className="border-t border-border/60 px-4 py-2.5 text-[11px] text-muted-foreground">
+          Los fans que pagan por abrir chat contigo siempre pueden escribirte
+          (lo controlas en &laquo;Mensajes de fans&raquo;). Esto es para chats gratis.
         </p>
       </Group>
 

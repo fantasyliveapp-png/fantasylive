@@ -14,6 +14,7 @@ const PROTECTED_PREFIXES = [
   '/random',
   '/vip',
   '/hazte-creadora',
+  '/mensajes',
 ];
 
 const MODEL_PREFIXES = ['/dashboard/model'];
