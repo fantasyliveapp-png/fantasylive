@@ -61,7 +61,9 @@ export const config = {
     platformCommissionPercent,
     /** Porcentaje que se lleva la modelo. Derivado, nunca se configura aparte. */
     modelRevenueSharePercent: 100 - platformCommissionPercent,
-    signupBonusTokens: num(process.env.SIGNUP_BONUS_TOKENS, 25),
+    // 0 por defecto: regalar tokens cuesta dinero real cuando se gastan con
+    // una creadora (ella cobra), y atrae cuentas falsas.
+    signupBonusTokens: num(process.env.SIGNUP_BONUS_TOKENS, 0),
     /**
      * Duracion maxima de una llamada SIN tarifa (la prueba gratuita del modo
      * aleatorio). Al agotarse, el servidor corta la llamada y ofrece seguir

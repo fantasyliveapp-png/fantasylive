@@ -451,6 +451,16 @@ export default async function ModelProfilePage({
                     {model.stageName}
                   </h1>
                   {isVerified && <BadgeCheck className="h-6 w-6 text-primary" />}
+                  {model.founderNumber != null && (
+                    <Badge
+                      variant="muted"
+                      className="gap-1 border border-champagne-gold/40 bg-champagne-gold/15 text-champagne-gold"
+                      title="De las 100 primeras creadoras de FantasyLive"
+                    >
+                      <Crown className="h-3 w-3" />
+                      Fundadora
+                    </Badge>
+                  )}
                   {model.tier !== 'STANDARD' && (
                     <Badge variant="vip" className="gap-1">
                       <Crown className="h-3 w-3" />

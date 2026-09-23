@@ -9,7 +9,7 @@ import {
   Dices,
   Eye,
   EyeOff,
-  Gift,
+  BadgeCheck,
   Loader2,
   Lock,
   ShieldAlert,
@@ -225,7 +225,7 @@ export function RegisterForm({
               text="Obligatorio"
               tone="danger"
             />
-            <Pill icon={Gift} title="25 tokens" text="De regalo" />
+            <Pill icon={BadgeCheck} title="Gratis" text="Crear cuenta no cuesta nada" />
           </div>
         </div>
 

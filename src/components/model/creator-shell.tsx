@@ -76,6 +76,7 @@ export async function CreatorShell({
             '/dashboard/model/earnings',
             '/dashboard/model/payouts',
             '/dashboard/model/analytics',
+            '/dashboard/model/invita',
           ],
         },
         {

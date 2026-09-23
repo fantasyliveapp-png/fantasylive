@@ -23,6 +23,7 @@ export const EARNING_SOURCES = {
   CONTENT_REQUEST_EARNING: 'Pedidos a medida',
   MESSAGE_UNLOCK_EARNING: 'Mensajes',
   MESSAGE_ATTACHMENT_EARNING: 'Mensajes',
+  REFERRAL_EARNING: 'Creadoras invitadas',
 } as const satisfies Partial<Record<TransactionType, string>>;
 
 export type EarningType = keyof typeof EARNING_SOURCES;

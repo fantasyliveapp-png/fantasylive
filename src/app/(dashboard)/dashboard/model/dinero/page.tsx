@@ -7,6 +7,7 @@ import {
   Gift,
   History,
   Images,
+  Users,
   MessageCircle,
   SquarePen,
   Video,
@@ -34,6 +35,7 @@ const SOURCE_ICONS: Record<EarningType, LucideIcon> = {
   CONTENT_REQUEST_EARNING: Gift,
   MESSAGE_UNLOCK_EARNING: MessageCircle,
   MESSAGE_ATTACHMENT_EARNING: MessageCircle,
+  REFERRAL_EARNING: Users,
 };
 
 /**
@@ -106,6 +108,23 @@ export default async function MoneyPage() {
           </div>
         </div>
       </section>
+
+      {/* Referidos */}
+      <Link
+        href="/dashboard/model/invita"
+        className="group flex items-center gap-3 rounded-2xl border border-champagne-gold/40 bg-champagne-gold/10 p-4 transition-colors hover:border-champagne-gold"
+      >
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-champagne-gold/20 text-champagne-gold">
+          <Crown className="h-5 w-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold">Invita y gana</span>
+          <span className="block text-xs text-muted-foreground">
+            Tu enlace para fans y para creadoras. Ganas sin pagar nada.
+          </span>
+        </span>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+      </Link>
 
       {/* Semana y origen */}
       <section className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">

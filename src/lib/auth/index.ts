@@ -139,7 +139,7 @@ export const { handlers, auth, signIn, signOut, unstable_update: refreshSession 
     /** Crea monedero + bono de bienvenida para altas via OAuth */
     async createUser({ user }) {
       if (!user.id) return;
-      const bonus = Number(process.env.SIGNUP_BONUS_TOKENS ?? 25);
+      const bonus = Number(process.env.SIGNUP_BONUS_TOKENS ?? 0);
       await prisma.wallet.upsert({
         where: { userId: user.id },
         create: {

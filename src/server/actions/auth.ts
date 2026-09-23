@@ -2,10 +2,12 @@
 
 import { AuthError } from 'next-auth';
 import bcrypt from 'bcryptjs';
+import { cookies } from 'next/headers';
 import { z } from 'zod';
 
 import { signIn, signOut } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { REF_COOKIE } from '@/lib/referrals';
 import { config } from '@/lib/config';
 import { isReservedUsername, USERNAME_PATTERN } from '@/lib/usernames';
 import { calculateAge } from '@/lib/utils';
@@ -107,6 +109,19 @@ export async function registerAction(
   const passwordHash = await bcrypt.hash(data.password, 10);
   const bonus = config.economy.signupBonusTokens;
 
+  // Referidos: la creadora cuyo enlace le trajo (cookie de /r/<slug>).
+  const refUserId = (await cookies()).get(REF_COOKIE)?.value;
+  const referrer = refUserId
+    ? await prisma.user.findFirst({
+        where: {
+          id: refUserId,
+          status: 'ACTIVE',
+          modelProfile: { kycStatus: 'APPROVED' },
+        },
+        select: { id: true },
+      })
+    : null;
+
   const username = data.username;
   if (
     await prisma.user.findUnique({ where: { username }, select: { id: true } })
@@ -130,6 +145,7 @@ export async function registerAction(
         // intencion, para llevarla alli tras registrarse).
         role: 'USER',
         status: 'ACTIVE',
+        referredById: referrer?.id ?? null,
         wallet: { create: { balance: bonus } },
       },
     });

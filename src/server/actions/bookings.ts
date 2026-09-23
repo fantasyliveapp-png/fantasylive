@@ -8,6 +8,7 @@ import { assertCreatorVerified } from '@/lib/creator-kyc';
 import { prisma } from '@/lib/prisma';
 import { tokensForMinutes } from '@/lib/rates';
 import { GEO_BLOCKED_MESSAGE, isBlockedForViewer } from '@/lib/geo';
+import { referralSplit } from '@/lib/referrals';
 import { applyLedgerEntry, InsufficientTokensError } from '@/lib/tokens';
 import { applySubscriberDiscount, getActiveSubscription } from '@/lib/subscriptions';
 import { randomRoomName } from '@/lib/utils';
@@ -355,14 +356,24 @@ export async function settleBookingAction(
       return { ok: false, error: 'Esta reserva no se puede liquidar.' };
     }
 
-    const commission = Math.round(
-      (booking.totalTokens *
-        Number(process.env.PLATFORM_COMMISSION_PERCENT ?? 30)) /
-        100,
-    );
-    const modelTokens = booking.totalTokens - commission;
+    const modelTokens = await prisma.$transaction(async (tx) => {
+      // Mismo reparto que el resto (comision de la config + referidos).
+      const split = await referralSplit(tx, {
+        payerId: booking.userId,
+        earnerId: booking.model.userId,
+        tokens: booking.totalTokens,
+      });
+      const modelTokens = split.modelTokens;
+      if (split.ambassador) {
+        await applyLedgerEntry(tx, {
+          userId: split.ambassador.userId,
+          type: 'REFERRAL_EARNING',
+          tokens: split.ambassador.tokens,
+          description: 'Embajadora: reserva completada',
+          bookingId: booking.id,
+        });
+      }
 
-    await prisma.$transaction(async (tx) => {
       await applyLedgerEntry(tx, {
         userId: booking.model.userId,
         type: 'CALL_EARNING',
@@ -384,6 +395,7 @@ export async function settleBookingAction(
           totalTokensEarned: { increment: modelTokens },
         },
       });
+      return modelTokens;
     });
 
     revalidatePath('/dashboard/model/bookings');

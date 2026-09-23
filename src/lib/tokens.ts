@@ -6,6 +6,7 @@ import type {
 
 import { prisma } from '@/lib/prisma';
 import { config } from '@/lib/config';
+import { referralSplit } from '@/lib/referrals';
 
 export class InsufficientTokensError extends Error {
   constructor(
@@ -75,6 +76,7 @@ const EARNING_TYPES: TransactionType[] = [
   'MESSAGE_UNLOCK_EARNING',
   'MESSAGE_ATTACHMENT_EARNING',
   'POST_EARNING',
+  'REFERRAL_EARNING',
 ];
 
 export interface LedgerEntry {
@@ -323,7 +325,12 @@ export async function transferWithCommission(
     metadata?: Prisma.InputJsonValue;
   },
 ) {
-  const { platformFeeTokens, modelTokens } = splitEarnings(params.tokens);
+  // Reparto con las reglas de referidos (fan propio / embajadora).
+  const { platformFeeTokens, modelTokens, ambassador } = await referralSplit(tx, {
+    payerId: params.fromUserId,
+    earnerId: params.toUserId,
+    tokens: params.tokens,
+  });
 
   const debit = await applyLedgerEntry(tx, {
     userId: params.fromUserId,
@@ -362,6 +369,17 @@ export async function transferWithCommission(
       postId: params.postId,
       liveStreamId: params.liveStreamId,
       metadata: params.metadata,
+    });
+  }
+
+  // La creadora que invito a esta cobra su % (sale de la comision).
+  if (ambassador) {
+    await applyLedgerEntry(tx, {
+      userId: ambassador.userId,
+      type: 'REFERRAL_EARNING',
+      tokens: ambassador.tokens,
+      description: `Embajadora: ${params.description}`,
+      metadata: { fromCreatorUserId: params.toUserId },
     });
   }
 

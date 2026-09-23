@@ -127,6 +127,8 @@ enum TransactionType {
   POST_EARNING // ingreso de la modelo por una publicacion (+)
   /// Comision de retiro (10%): se descuenta al solicitar el payout
   PAYOUT_FEE
+  /// Programa de referidos: % de lo que genera una creadora invitada (+)
+  REFERRAL_EARNING
 }
 
 /// Quien puede escribirle a una cuenta (ajuste de privacidad).
@@ -317,15 +319,22 @@ model User {
 
   // Gustos (preguntas de bienvenida): ordenan su Descubrir.
   /// A quien quiere ver. Vacio = a todos.
-  preferredGenders Gender[]         @default([])
+  preferredGenders Gender[]  @default([])
   /// Etiquetas que le gustan (las mismas que ponen las creadoras).
-  interests        String[]         @default([])
+  interests        String[]  @default([])
   /// Que busca: fotos, directos, chatear, videollamadas.
-  lookingFor       String[]         @default([])
+  lookingFor       String[]  @default([])
   /// Cuando respondio (o se salto) las preguntas. null = aun no.
   onboardedAt      DateTime?
-  postImpressions  PostImpression[]
-  postHides        PostHide[]
+
+  /// Programa de referidos: la creadora que trajo esta cuenta (por su
+  /// enlace). Si esta cuenta es fan, lo que gaste con ella le deja mas a la
+  /// creadora; si se hace creadora, la que la invito cobra un %.
+  referredById    String?
+  referredBy      User?            @relation("Referrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals       User[]           @relation("Referrals")
+  postImpressions PostImpression[]
+  postHides       PostHide[]
 
   // Estado de plataforma
   isVip          Boolean   @default(false)
@@ -550,6 +559,10 @@ model Transaction {
 model ModelProfile {
   id     String @id @default(cuid())
   userId String @unique
+
+  /// "Fundadora" n.o 1-100: de las 100 primeras creadoras verificadas. Su %
+  /// por invitar creadoras es para siempre (las demas, 12 meses).
+  founderNumber Int? @unique
 
   stageName String
   slug      String  @unique
