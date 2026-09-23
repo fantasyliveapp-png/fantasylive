@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
+import { assertCreatorVerified } from '@/lib/creator-kyc';
 import { prisma } from '@/lib/prisma';
 import { tokensForMinutes } from '@/lib/rates';
 import { GEO_BLOCKED_MESSAGE, isBlockedForViewer } from '@/lib/geo';
@@ -165,6 +166,7 @@ export async function confirmBookingAction(
     if (booking.model.userId !== user.id && user.role !== 'ADMIN') {
       return { ok: false, error: 'No autorizado.' };
     }
+    if (user.role !== 'ADMIN') await assertCreatorVerified({ userId: user.id });
     if (booking.status !== 'PENDING_CONFIRMATION') {
       return { ok: false, error: 'Esta reserva ya no se puede confirmar.' };
     }

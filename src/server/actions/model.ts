@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
+import { assertCreatorVerified } from '@/lib/creator-kyc';
 import { prisma } from '@/lib/prisma';
 import { checkNoContactInfo } from '@/lib/content-filter';
 import { config } from '@/lib/config';
@@ -197,6 +198,7 @@ export async function updateRatesAction(input: {
 }): Promise<ModelActionResult> {
   try {
     const { profile } = await requireModelProfile();
+    await assertCreatorVerified({ modelId: profile.id });
     const parsed = ratesSchema.safeParse(input);
     if (!parsed.success) {
       return {
@@ -253,6 +255,7 @@ export async function setOnlineStatusAction(input: {
 }): Promise<ModelActionResult> {
   try {
     const { profile } = await requireModelProfile();
+    if (input.isOnline) await assertCreatorVerified({ modelId: profile.id });
 
     if (
       input.isOnline &&
@@ -309,6 +312,7 @@ export async function createContentPackageAction(input: {
 }): Promise<ModelActionResult<{ packageId: string }>> {
   try {
     const { profile } = await requireModelProfile();
+    await assertCreatorVerified({ modelId: profile.id });
     const parsed = contentSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: 'Datos de contenido invalidos.' };
     if (parsed.data.subscriberOnly && !profile.subscriptionEnabled) {
@@ -352,6 +356,7 @@ export async function updateContentPackageAction(input: {
 }): Promise<ModelActionResult> {
   try {
     const { profile } = await requireModelProfile();
+    await assertCreatorVerified({ modelId: profile.id });
 
     const pkg = await prisma.contentPackage.findFirst({
       where: { id: input.packageId, modelId: profile.id },
@@ -414,6 +419,7 @@ export async function requestContentUploadUrlAction(input: {
 }): Promise<ModelActionResult<{ uploadUrl: string; key: string }>> {
   try {
     const { profile } = await requireModelProfile();
+    await assertCreatorVerified({ modelId: profile.id });
 
     const pkg = await prisma.contentPackage.findFirst({
       where: { id: input.packageId, modelId: profile.id },
@@ -457,6 +463,7 @@ export async function attachContentAssetAction(input: {
 }): Promise<ModelActionResult> {
   try {
     const { profile } = await requireModelProfile();
+    await assertCreatorVerified({ modelId: profile.id });
 
     const pkg = await prisma.contentPackage.findFirst({
       where: { id: input.packageId, modelId: profile.id },
@@ -901,6 +908,7 @@ export async function setAvailabilityAction(
 ): Promise<ModelActionResult> {
   try {
     const { profile } = await requireModelProfile();
+    await assertCreatorVerified({ modelId: profile.id });
 
     await prisma.$transaction([
       prisma.availabilitySlot.deleteMany({ where: { modelId: profile.id } }),

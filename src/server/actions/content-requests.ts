@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { createNotification } from '@/lib/notifications';
+import { assertCreatorVerified } from '@/lib/creator-kyc';
 import { prisma } from '@/lib/prisma';
 import { checkNoContactInfo } from '@/lib/content-filter';
 import { GEO_BLOCKED_MESSAGE, isBlockedForViewer } from '@/lib/geo';
@@ -100,6 +101,7 @@ export async function quoteContentRequestAction(input: {
 }): Promise<ContentRequestActionResult> {
   try {
     const { profile } = await requireModelProfile();
+    await assertCreatorVerified({ modelId: profile.id });
 
     if (!Number.isInteger(input.quotedTokens) || input.quotedTokens < 1) {
       return { ok: false, error: 'El precio debe ser un numero de tokens mayor a 0.' };
@@ -255,6 +257,7 @@ export async function deliverContentRequestAction(input: {
 }): Promise<ContentRequestActionResult> {
   try {
     const { profile } = await requireModelProfile();
+    await assertCreatorVerified({ modelId: profile.id });
 
     const request = await prisma.contentRequest.findFirst({
       where: { id: input.requestId, modelId: profile.id },

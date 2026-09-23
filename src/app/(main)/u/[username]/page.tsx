@@ -50,11 +50,15 @@ export default async function PersonProfilePage({
       status: true,
       isProfilePublic: true,
       createdAt: true,
-      modelProfile: { select: { slug: true } },
+      modelProfile: { select: { slug: true, kycStatus: true } },
     },
   });
   if (!person || person.status === 'BANNED') notFound();
-  if (person.modelProfile) redirect(`/models/${person.modelProfile.slug}`);
+  // Solo las creadoras VERIFICADAS tienen perfil de creadora publico; hasta
+  // entonces se ven como una persona mas.
+  if (person.modelProfile?.kycStatus === 'APPROVED') {
+    redirect(`/models/${person.modelProfile.slug}`);
+  }
 
   const isSelf = viewer?.id === person.id;
   const canSeeDetails = isSelf || person.isProfilePublic;

@@ -14,6 +14,7 @@ import {
   POLL_OPTION_MAX,
   POLL_QUESTION_MAX,
 } from '@/lib/polls';
+import { assertCreatorVerified } from '@/lib/creator-kyc';
 import { prisma } from '@/lib/prisma';
 import { buildPostKey, createUploadUrl, deleteObject } from '@/lib/storage';
 import { getActiveSubscription } from '@/lib/subscriptions';
@@ -94,6 +95,7 @@ export async function createPostAction(input: {
 }): Promise<PostActionResult<{ postId: string }>> {
   try {
     const { profile } = await requireModelProfile();
+    await assertCreatorVerified({ modelId: profile.id });
 
     const parsed = postSchema.safeParse(input);
     if (!parsed.success) {
@@ -171,6 +173,7 @@ export async function requestPostUploadUrlAction(input: {
 }): Promise<PostActionResult<{ uploadUrl: string; key: string }>> {
   try {
     const { profile } = await requireModelProfile();
+    await assertCreatorVerified({ modelId: profile.id });
 
     const post = await prisma.post.findFirst({
       where: { id: input.postId, modelId: profile.id },
@@ -223,6 +226,7 @@ export async function attachPostAssetAction(input: {
 }): Promise<PostActionResult> {
   try {
     const { profile } = await requireModelProfile();
+    await assertCreatorVerified({ modelId: profile.id });
 
     const post = await prisma.post.findFirst({
       where: { id: input.postId, modelId: profile.id },
@@ -290,6 +294,7 @@ export async function publishPostAction(
 ): Promise<PostActionResult> {
   try {
     const { profile } = await requireModelProfile();
+    await assertCreatorVerified({ modelId: profile.id });
 
     const publishAt = parsePublishAt(options.publishAt);
     if (typeof publishAt === 'string') return { ok: false, error: publishAt };
@@ -396,6 +401,7 @@ export async function updatePostAction(input: {
 }): Promise<PostActionResult> {
   try {
     const { profile } = await requireModelProfile();
+    await assertCreatorVerified({ modelId: profile.id });
 
     const parsed = updatePostSchema.safeParse(input);
     if (!parsed.success) {

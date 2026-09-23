@@ -8,6 +8,8 @@ export interface ProfileShortcut {
   slug: string;
   stageName: string;
   avatarUrl: string | null;
+  /** Identidad verificada (KYC aprobado): sin ella no puede crear nada. */
+  verified: boolean;
 }
 
 /**
@@ -19,10 +21,13 @@ export interface ProfileShortcut {
 export const getProfileShortcut = cache(
   async (modelProfileId: string | null | undefined): Promise<ProfileShortcut | null> => {
     if (!modelProfileId) return null;
-    return prisma.modelProfile.findUnique({
+    const row = await prisma.modelProfile.findUnique({
       where: { id: modelProfileId },
-      select: { slug: true, stageName: true, avatarUrl: true },
+      select: { slug: true, stageName: true, avatarUrl: true, kycStatus: true },
     });
+    if (!row) return null;
+    const { kycStatus, ...rest } = row;
+    return { ...rest, verified: kycStatus === 'APPROVED' };
   },
 );
 

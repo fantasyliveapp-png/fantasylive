@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import {
   BadgeCheck,
   Bot,
@@ -114,6 +114,18 @@ export default async function ModelProfilePage({
   // siguen viendo el perfil; para el resto se comporta como inexistente (404
   // en vez de 403, para no confirmar que la modelo existe).
   const isOwner = viewer?.id === model.userId;
+
+  // Sin identidad verificada no hay perfil de creadora publico: solo lo ven
+  // ella (para prepararlo) y el equipo. El resto ve su perfil de persona.
+  if (model.kycStatus !== 'APPROVED' && !isOwner && viewer?.role !== 'ADMIN') {
+    const person = await prisma.user.findUnique({
+      where: { id: model.userId },
+      select: { username: true },
+    });
+    if (person?.username) redirect(`/u/${person.username}`);
+    notFound();
+  }
+
   const viewerCountry = await getViewerCountry();
   if (!isOwner && viewer?.role !== 'ADMIN') {
     if (isCountryBlocked(model.blockedCountries, viewerCountry)) notFound();

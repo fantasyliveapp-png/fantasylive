@@ -7,11 +7,14 @@ import {
   CreatorSidebar,
   type CreatorNavGroup,
 } from '@/components/model/creator-nav';
+import { KycGate } from '@/components/model/kyc-gate';
+import { KycGateSwitch } from '@/components/model/kyc-gate-switch';
 import { OnlineToggle } from '@/components/model/online-toggle';
 import { ProfileEditorButton } from '@/components/model/profile-editor';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { getCreatorPending } from '@/lib/creator-dashboard';
+import { prisma } from '@/lib/prisma';
 import { initials } from '@/lib/utils';
 
 /**
@@ -32,6 +35,15 @@ export async function CreatorShell({
 }) {
   const pending = await getCreatorPending(profile.id, userId);
   const kycPending = profile.kycStatus !== 'APPROVED';
+  // Sin verificar no hay herramientas: solo la pantalla de verificacion (y
+  // preparar el perfil). El motivo del ultimo rechazo, si lo hubo.
+  const lastRejection = kycPending
+    ? await prisma.kycVerification.findFirst({
+        where: { modelId: profile.id, status: 'REJECTED' },
+        orderBy: { submittedAt: 'desc' },
+        select: { rejectionReason: true },
+      })
+    : null;
 
   // Cuatro secciones, por lo que la creadora quiere hacer. Las paginas de
   // antes siguen existiendo, pero cuelgan de estas y no llenan el menu.
@@ -133,20 +145,22 @@ export async function CreatorShell({
               </ProfileEditorButton>
             </div>
 
-            <div className="relative mt-4 border-t border-border/60 pt-4">
-              <OnlineToggle
-                isOnline={profile.isOnline}
-                isAvailableForVip={profile.isAvailableForVip}
-                isVipEnabled={profile.isVipEnabled}
-                canStream={profile.kycStatus === 'APPROVED'}
-              />
-            </div>
+            {!kycPending && (
+              <div className="relative mt-4 border-t border-border/60 pt-4">
+                <OnlineToggle
+                  isOnline={profile.isOnline}
+                  isAvailableForVip={profile.isAvailableForVip}
+                  isVipEnabled={profile.isVipEnabled}
+                  canStream
+                />
+              </div>
+            )}
           </div>
 
-          <CreatorSidebar groups={groups} />
+          {!kycPending && <CreatorSidebar groups={groups} />}
 
           {/* En escritorio no hay "+" abajo: crear queda aqui, a la vista. */}
-          <div className="space-y-2">
+          <div className={kycPending ? 'hidden' : 'space-y-2'}>
             <Link href="/dashboard/model/posts?nuevo=fotos" className="block">
               <Button variant="brand" className="w-full">
                 <Plus className="h-4 w-4" />
@@ -163,8 +177,24 @@ export async function CreatorShell({
         </aside>
 
         <div className="min-w-0">
-          <CreatorMobileTabs groups={groups} />
-          {children}
+          {kycPending ? (
+            <KycGateSwitch
+              gate={
+                <KycGate
+                  status={profile.kycStatus}
+                  rejectionReason={lastRejection?.rejectionReason ?? null}
+                  profileSlug={profile.slug}
+                />
+              }
+            >
+              {children}
+            </KycGateSwitch>
+          ) : (
+            <>
+              <CreatorMobileTabs groups={groups} />
+              {children}
+            </>
+          )}
         </div>
       </div>
     </div>

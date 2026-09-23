@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { checkNoContactInfo } from '@/lib/content-filter';
+import { assertCreatorVerified } from '@/lib/creator-kyc';
 import { prisma } from '@/lib/prisma';
 import {
   buildGreetingKey,
@@ -67,6 +68,7 @@ export async function updateAutoGreetingAction(input: {
 }): Promise<GreetingActionResult> {
   try {
     const { profile } = await requireModelProfile();
+    await assertCreatorVerified({ modelId: profile.id });
 
     const parsed = greetingSchema.safeParse(input);
     if (!parsed.success) {
@@ -128,6 +130,7 @@ export async function requestGreetingUploadUrlAction(input: {
 }): Promise<GreetingActionResult<{ uploadUrl: string; key: string }>> {
   try {
     const { profile } = await requireModelProfile();
+    await assertCreatorVerified({ modelId: profile.id });
 
     const key = buildGreetingKey({
       modelId: profile.id,

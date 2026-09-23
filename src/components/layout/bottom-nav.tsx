@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   Compass,
   LogIn,
@@ -46,6 +46,7 @@ export function BottomNav({
   username?: string | null;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { t } = useI18n();
   const [createOpen, setCreateOpen] = useState(false);
   const closeCreate = useCallback(() => setCreateOpen(false), []);
@@ -173,7 +174,12 @@ export function BottomNav({
                 <li key={item.href} className="flex flex-1 justify-center">
                   <button
                     type="button"
-                    onClick={() => setCreateOpen(true)}
+                    onClick={() =>
+                      // Sin verificar no puede crear: el + lleva a verificarse.
+                      profile && !profile.verified
+                        ? router.push('/dashboard/model')
+                        : setCreateOpen(true)
+                    }
                     aria-label={item.label}
                     aria-haspopup="dialog"
                     aria-expanded={createOpen}
