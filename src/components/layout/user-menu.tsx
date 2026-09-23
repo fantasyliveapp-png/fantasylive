@@ -9,6 +9,7 @@ import {
   Heart,
   LayoutDashboard,
   LogOut,
+  Menu,
   Settings,
   Shield,
   Sparkles,
@@ -41,6 +42,11 @@ interface UserMenuProps {
   profileSlug?: string | null;
   /** @usuario de la cuenta: su perfil de persona (/u/<usuario>). */
   username?: string | null;
+  /**
+   * Como se abre: con la foto (barra de arriba, escritorio) o con un boton
+   * de menu (en el propio perfil, en el movil, donde la foto ya esta abajo).
+   */
+  trigger?: 'avatar' | 'menu';
 }
 
 export function UserMenu({
@@ -51,14 +57,26 @@ export function UserMenu({
   isVip,
   profileSlug,
   username,
+  trigger = 'avatar',
 }: UserMenuProps) {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="rounded-full outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-        <Avatar className="h-9 w-9 border border-border">
-          {image ? <AvatarImage src={image} alt={name} /> : null}
-          <AvatarFallback>{initials(name)}</AvatarFallback>
-        </Avatar>
+      <DropdownMenuTrigger
+        className={
+          trigger === 'menu'
+            ? 'flex h-9 w-9 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring'
+            : 'rounded-full outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'
+        }
+        aria-label="Menu de tu cuenta"
+      >
+        {trigger === 'menu' ? (
+          <Menu className="h-5 w-5" />
+        ) : (
+          <Avatar className="h-9 w-9 border border-border">
+            {image ? <AvatarImage src={image} alt={name} /> : null}
+            <AvatarFallback>{initials(name)}</AvatarFallback>
+          </Avatar>
+        )}
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="end" className="w-60">

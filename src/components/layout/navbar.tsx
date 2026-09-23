@@ -115,15 +115,19 @@ export async function Navbar() {
 
               <NotificationBell />
 
-              <UserMenu
-                name={profile?.stageName ?? user.name ?? user.email}
-                email={user.email}
-                image={profile?.avatarUrl ?? user.image ?? null}
-                role={user.role}
-                isVip={user.isVip}
-                profileSlug={profile?.slug}
-                username={username}
-              />
+              {/* En el movil tu foto ya esta en la barra de abajo (Perfil):
+                  el menu de la cuenta va en tu perfil (boton de menu). */}
+              <div className="hidden md:block">
+                <UserMenu
+                  name={profile?.stageName ?? user.name ?? user.email}
+                  email={user.email}
+                  image={profile?.avatarUrl ?? user.image ?? null}
+                  role={user.role}
+                  isVip={user.isVip}
+                  profileSlug={profile?.slug}
+                  username={username}
+                />
+              </div>
             </>
           ) : (
             <>

@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { Lock, Pencil, Sparkles } from 'lucide-react';
 
+import { OwnAccountMenu } from '@/components/layout/own-account-menu';
 import { SafetyMenu } from '@/components/social/safety-menu';
 import { SendMessageButton } from '@/components/social/send-message-button';
 import { FollowPersonButton, UserProfileEditor } from '@/components/social/user-profile-actions';
@@ -122,6 +123,12 @@ export default async function PersonProfilePage({
 
   return (
     <div className="container max-w-2xl space-y-6 py-8">
+      {isSelf && (
+        // Menu de tu cuenta: en el movil no esta arriba (tu foto va abajo).
+        <div className="-mb-6 flex justify-end md:hidden">
+          <OwnAccountMenu />
+        </div>
+      )}
       <section className="flex flex-col items-center text-center">
         <Avatar className="h-24 w-24 border-4 border-background shadow-xl">
           {person.image && <AvatarImage src={person.image} alt={displayName} />}

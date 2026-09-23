@@ -34,6 +34,7 @@ import { ReviewForm } from '@/components/models/review-form';
 import { ShareProfileButton } from '@/components/models/share-profile-button';
 import { StartPrivateCallButton } from '@/components/calls/start-private-call-button';
 import { ProfileEditorButton } from '@/components/model/profile-editor';
+import { OwnAccountMenu } from '@/components/layout/own-account-menu';
 import { ExpandableText } from '@/components/models/expandable-text';
 import { ProfilePostGrid } from '@/components/models/profile-post-grid';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -411,6 +412,12 @@ export default async function ModelProfilePage({
           <div className="rounded-full bg-black/40 text-white backdrop-blur">
             <ShareProfileButton slug={model.slug} />
           </div>
+          {isOwnProfile && (
+            // Menu de tu cuenta: en el movil no esta arriba (tu foto va abajo).
+            <div className="rounded-full bg-black/40 text-white backdrop-blur md:hidden">
+              <OwnAccountMenu />
+            </div>
+          )}
           {!isOwnProfile && (
             <div className="rounded-full bg-black/40 text-white backdrop-blur">
               <SafetyMenu
