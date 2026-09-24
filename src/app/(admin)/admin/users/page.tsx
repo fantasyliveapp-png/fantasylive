@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+
+import { AdminPageHeader } from '@/components/admin/admin-shell';
 import type { Prisma } from '@prisma/client';
 
 import { UserModerationTable } from '@/components/admin/user-moderation-table';
@@ -60,12 +62,10 @@ export default async function AdminUsersPage({
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Usuarios y modelos</h1>
-        <p className="mt-2 text-muted-foreground">
-          {total} cuentas registradas. Suspende, banea o promociona a VIP.
-        </p>
-      </div>
+      <AdminPageHeader
+        title="Usuarios y creadoras"
+        description={<>{total} cuentas registradas. Suspende, banea o promociona a VIP.</>}
+      />
 
       {users.length === 0 ? (
         <Card>

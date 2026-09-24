@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+
+import { AdminPageHeader, AdminTabs } from '@/components/admin/admin-shell';
 import { ShieldCheck } from 'lucide-react';
 
 import { ReportsReviewList } from '@/components/admin/reports-review-list';
@@ -90,22 +92,33 @@ export default async function AdminReportsPage({
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Reportes y disputas</h1>
-        <p className="mt-2 text-muted-foreground">
-          Resuelve incidencias de llamadas, reembolsa tokens y aplica sanciones.
-          Los reportes por sospecha de menores tienen prioridad absoluta.
-        </p>
-      </div>
+      <AdminPageHeader
+        title="Reportes y disputas"
+        description={
+          <>
+            Resuelve incidencias de llamadas, reembolsa tokens y aplica sanciones. Los reportes por
+            sospecha de menores tienen prioridad absoluta.
+          </>
+        }
+        tabs={
+          <AdminTabs
+            basePath="/admin/reports"
+            current={status ?? ''}
+            tabs={[
+              { value: '', label: 'Abiertos' },
+              { value: 'RESOLVED', label: 'Resueltos' },
+              { value: 'DISMISSED', label: 'Descartados' },
+            ]}
+          />
+        }
+      />
 
       {reports.length === 0 ? (
         <Card>
           <CardContent className="py-16 text-center">
             <ShieldCheck className="mx-auto h-8 w-8 text-emerald-500" />
             <p className="mt-3 font-medium">No hay reportes abiertos</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Todo esta bajo control.
-            </p>
+            <p className="mt-1 text-sm text-muted-foreground">Todo esta bajo control.</p>
           </CardContent>
         </Card>
       ) : (

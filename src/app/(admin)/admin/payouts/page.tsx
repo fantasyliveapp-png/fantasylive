@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+
+import { AdminPageHeader, AdminTabs } from '@/components/admin/admin-shell';
 import { Wallet } from 'lucide-react';
 
 import { PayoutReviewList } from '@/components/admin/payout-review-list';
@@ -37,15 +39,26 @@ export default async function AdminPayoutsPage({
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">
-          Solicitudes de retiro
-        </h1>
-        <p className="mt-2 text-muted-foreground">
-          Aprueba, marca como pagado o rechaza. Rechazar devuelve los tokens al
-          monedero de la modelo automaticamente.
-        </p>
-      </div>
+      <AdminPageHeader
+        title="Retiros de creadoras"
+        description={
+          <>
+            Aprueba, marca como pagado o rechaza. Rechazar devuelve los tokens al monedero de la
+            modelo automaticamente.
+          </>
+        }
+        tabs={
+          <AdminTabs
+            basePath="/admin/payouts"
+            current={status ?? ''}
+            tabs={[
+              { value: '', label: 'Por pagar' },
+              { value: 'PAID', label: 'Pagados' },
+              { value: 'REJECTED', label: 'Rechazados' },
+            ]}
+          />
+        }
+      />
 
       {payouts.length === 0 ? (
         <Card>

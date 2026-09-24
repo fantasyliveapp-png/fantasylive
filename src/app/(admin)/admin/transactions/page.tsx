@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+
+import { AdminPageHeader } from '@/components/admin/admin-shell';
 import type { Prisma } from '@prisma/client';
 
 import { Badge } from '@/components/ui/badge';
@@ -63,12 +65,10 @@ export default async function AdminTransactionsPage({
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Transacciones</h1>
-        <p className="mt-2 text-muted-foreground">
-          {formatTokens(total)} movimientos registrados en el libro mayor.
-        </p>
-      </div>
+      <AdminPageHeader
+        title="Transacciones"
+        description={<>{formatTokens(total)} movimientos registrados en el libro mayor.</>}
+      />
 
       {/* Resumen por tipo */}
       <Card>

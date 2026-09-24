@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+
+import { AdminPageHeader, AdminTabs } from '@/components/admin/admin-shell';
 import { BadgeCheck } from 'lucide-react';
 
 import { KycReviewList } from '@/components/admin/kyc-review-list';
@@ -37,15 +39,26 @@ export default async function AdminKycPage({
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">
-          Verificaciones de identidad
-        </h1>
-        <p className="mt-2 text-muted-foreground">
-          Comprueba que la persona del selfie coincide con el documento y que es
-          mayor de 18 años antes de aprobar.
-        </p>
-      </div>
+      <AdminPageHeader
+        title="Verificaciones de identidad"
+        description={
+          <>
+            Comprueba que la persona del selfie coincide con el documento y que es mayor de 18 años
+            antes de aprobar.
+          </>
+        }
+        tabs={
+          <AdminTabs
+            basePath="/admin/kyc"
+            current={status ?? ''}
+            tabs={[
+              { value: '', label: 'Pendientes' },
+              { value: 'APPROVED', label: 'Aprobadas' },
+              { value: 'REJECTED', label: 'Rechazadas' },
+            ]}
+          />
+        }
+      />
 
       {verifications.length === 0 ? (
         <Card>

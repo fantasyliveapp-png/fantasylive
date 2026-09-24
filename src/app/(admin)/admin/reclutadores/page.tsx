@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 
+import { AdminPageHeader } from '@/components/admin/admin-shell';
+
 import { CreateRecruiterForm, RecruiterRow } from '@/components/admin/recruiter-admin';
 import { requireAdmin } from '@/lib/auth/guards';
 import { config } from '@/lib/config';
@@ -30,13 +32,10 @@ export default async function RecruitersAdminPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Reclutadores</h1>
-        <p className="mt-2 text-muted-foreground">
-          Personas que traen creadoras a cambio de un % de lo que venden. Se paga de nuestra
-          comision y solo cuando la creadora ya ha vendido.
-        </p>
-      </div>
+      <AdminPageHeader
+        title="Reclutadores"
+        description={<>Personas que traen creadoras a cambio de un % de lo que venden. Se paga de nuestra comision y solo cuando la creadora ya ha vendido.</>}
+      />
       <CreateRecruiterForm />
       {overviews.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-border/60 p-8 text-center text-sm text-muted-foreground">
