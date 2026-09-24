@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   AtSign,
   Camera,
@@ -112,6 +112,8 @@ export function ProfileEditor({
   const [isPending, startTransition] = useTransition();
 
   const [stageName, setStageName] = useState(profile.stageName);
+  const [handle, setHandle] = useState(profile.slug);
+  const pathname = usePathname();
   const [headline, setHeadline] = useState(profile.headline);
   const [bio, setBio] = useState(profile.bio);
   const [languages, setLanguages] = useState(profile.languages);
@@ -137,6 +139,7 @@ export function ProfileEditor({
 
   const dirty =
     stageName !== profile.stageName ||
+    handle !== profile.slug ||
     headline !== profile.headline ||
     bio !== profile.bio ||
     avatarUrl !== profile.avatarUrl ||
@@ -251,8 +254,10 @@ export function ProfileEditor({
       return;
     }
     startTransition(async () => {
+      const newHandle = handle.trim().toLowerCase();
       const result = await updateModelProfileAction({
         stageName: stageName.trim(),
+        username: newHandle,
         headline: headline.trim(),
         bio: bio.trim(),
         languages,
@@ -263,7 +268,12 @@ export function ProfileEditor({
       if (result.ok) {
         toast.success(result.message ?? 'Perfil guardado');
         onClose();
-        router.refresh();
+        // Si cambio su @ estando en su perfil, la direccion tambien cambia.
+        if (newHandle !== profile.slug && pathname === `/models/${profile.slug}`) {
+          router.replace(`/models/${newHandle}`);
+        } else {
+          router.refresh();
+        }
       } else {
         toast.error(result.error ?? 'No se pudo guardar el perfil');
       }
@@ -377,9 +387,18 @@ export function ProfileEditor({
               />
             </Field>
             <Field label="Usuario">
-              <span className="flex items-center gap-1 text-sm text-muted-foreground">
-                <AtSign className="h-3.5 w-3.5" />
-                {profile.slug}
+              <span className="flex items-center gap-1 text-sm">
+                <AtSign className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <input
+                  value={handle}
+                  onChange={(e) => setHandle(e.target.value.toLowerCase().replace(/\s/g, ''))}
+                  maxLength={30}
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  className="w-full bg-transparent outline-none"
+                  placeholder="tu.usuario"
+                  aria-label="Tu @usuario"
+                />
               </span>
             </Field>
             <Field label="Titular" hint={`${headline.length}/120`}>

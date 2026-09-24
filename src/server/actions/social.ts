@@ -5,10 +5,11 @@ import { z } from 'zod';
 
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { checkNoContactInfo } from '@/lib/content-filter';
+import { changeHandle, isHandleFree } from '@/lib/creator-profile';
 import { createNotification } from '@/lib/notifications';
 import { isBlockedBetween } from '@/lib/chat';
 import { prisma } from '@/lib/prisma';
-import { USERNAME_PATTERN } from '@/lib/usernames';
+import { isReservedUsername, USERNAME_PATTERN } from '@/lib/usernames';
 import {
   buildUserAvatarKey,
   createUploadUrl,
@@ -88,17 +89,16 @@ export async function updateUserProfileAction(input: {
     const contactError = checkNoContactInfo([data.name, data.bio].filter(Boolean).join(' \n '));
     if (contactError) return { ok: false, error: contactError };
 
-    const taken = await prisma.user.findFirst({
-      where: { username: data.username, NOT: { id: user.id } },
-      select: { id: true },
-    });
-    if (taken) return { ok: false, error: 'Ese nombre de usuario ya esta en uso.' };
+    if (isReservedUsername(data.username) || !(await isHandleFree(data.username, user.id))) {
+      return { ok: false, error: 'Ese nombre de usuario ya esta en uso.' };
+    }
+    // Un solo @: si es creadora, su direccion de creadora cambia con el.
+    await changeHandle(user.id, data.username);
 
     await prisma.user.update({
       where: { id: user.id },
       data: {
         name: data.name,
-        username: data.username,
         bio: data.bio || null,
         isProfilePublic: data.isProfilePublic,
         ...(data.image !== undefined ? { image: data.image || null } : {}),

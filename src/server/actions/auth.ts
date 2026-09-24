@@ -11,7 +11,7 @@ import { prisma } from '@/lib/prisma';
 import { REF_COOKIE } from '@/lib/referrals';
 import { config } from '@/lib/config';
 import { GENDER_LABELS } from '@/lib/constants';
-import { createCreatorProfile } from '@/lib/creator-profile';
+import { createCreatorProfile, isHandleFree } from '@/lib/creator-profile';
 import { isReservedUsername, USERNAME_PATTERN } from '@/lib/usernames';
 import { calculateAge } from '@/lib/utils';
 
@@ -67,13 +67,9 @@ export async function checkUsernameAction(
   if (!parsed.success) {
     return { available: false, error: parsed.error.issues[0]?.message };
   }
-  const taken = await prisma.user.findUnique({
-    where: { username: parsed.data },
-    select: { id: true },
-  });
-  return taken
-    ? { available: false, error: 'Ya esta cogido' }
-    : { available: true };
+  return (await isHandleFree(parsed.data))
+    ? { available: true }
+    : { available: false, error: 'Ya esta cogido' };
 }
 
 export async function registerAction(
@@ -141,9 +137,7 @@ export async function registerAction(
       : null;
 
   const username = data.username;
-  if (
-    await prisma.user.findUnique({ where: { username }, select: { id: true } })
-  ) {
+  if (!(await isHandleFree(username))) {
     return { fieldErrors: { username: ['Ese @usuario ya esta cogido'] } };
   }
 

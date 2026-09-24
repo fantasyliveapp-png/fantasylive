@@ -7,6 +7,8 @@ import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { assertCreatorVerified } from '@/lib/creator-kyc';
 import { prisma } from '@/lib/prisma';
 import { checkNoContactInfo } from '@/lib/content-filter';
+import { changeHandle, isHandleFree } from '@/lib/creator-profile';
+import { isReservedUsername, USERNAME_PATTERN } from '@/lib/usernames';
 import { config } from '@/lib/config';
 import {
   applyLedgerEntry,
@@ -77,6 +79,8 @@ const imageUrlSchema = z
 
 const profileSchema = z.object({
   stageName: z.string().min(2).max(40),
+  /** Su @: el mismo para su cuenta y su direccion de creadora. */
+  username: z.string().trim().toLowerCase().regex(USERNAME_PATTERN).optional(),
   headline: z.string().max(120).optional(),
   bio: z.string().max(1200).optional(),
   languages: z.array(z.string()).max(8).optional(),
@@ -87,6 +91,7 @@ const profileSchema = z.object({
 
 export async function updateModelProfileAction(input: {
   stageName: string;
+  username?: string;
   headline?: string;
   bio?: string;
   languages?: string[];
@@ -107,6 +112,15 @@ export async function updateModelProfileAction(input: {
         .join(' \n '),
     );
     if (contactError) return { ok: false, error: contactError };
+
+    const handle = parsed.data.username;
+    if (handle && handle !== profile.slug) {
+      if (isReservedUsername(handle) || !(await isHandleFree(handle, profile.userId))) {
+        return { ok: false, error: 'Ese @usuario ya esta cogido.' };
+      }
+      await changeHandle(profile.userId, handle);
+      revalidatePath(`/models/${handle}`);
+    }
 
     await prisma.modelProfile.update({
       where: { id: profile.id },

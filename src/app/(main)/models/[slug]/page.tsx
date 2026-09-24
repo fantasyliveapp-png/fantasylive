@@ -109,7 +109,17 @@ export default async function ModelProfilePage({
     },
   });
 
-  if (!model || model.user.status === 'BANNED') notFound();
+  if (!model) {
+    // Un solo @ para todo: /models/<su @usuario> tambien lleva a su perfil.
+    const byHandle = await prisma.user.findUnique({
+      where: { username: decodeURIComponent(slug).toLowerCase() },
+      select: { modelProfile: { select: { slug: true } } },
+    });
+    const target = byHandle?.modelProfile?.slug;
+    if (target && target !== slug) redirect(`/models/${target}`);
+    notFound();
+  }
+  if (model.user.status === 'BANNED') notFound();
 
   // Bloqueo geografico definido por la propia modelo. Ella misma y los admins
   // siguen viendo el perfil; para el resto se comporta como inexistente (404
