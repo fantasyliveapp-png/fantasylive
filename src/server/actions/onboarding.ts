@@ -2,76 +2,41 @@
 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import type { Gender, Orientation } from '@prisma/client';
+import type { Gender } from '@prisma/client';
 
 import { refreshSession } from '@/lib/auth';
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
+import { GENDER_LABELS } from '@/lib/constants';
+import { createCreatorProfile } from '@/lib/creator-profile';
 import { prisma } from '@/lib/prisma';
-import { slugify } from '@/lib/utils';
 
 const schema = z.object({
-  stageName: z.string().min(2).max(40),
-  gender: z.string(),
-  orientation: z.string(),
-  country: z.string().max(60).optional(),
-  headline: z.string().max(120).optional(),
-  bio: z.string().max(1200).optional(),
+  stageName: z.string().trim().min(2).max(40),
+  gender: z.enum(Object.keys(GENDER_LABELS) as [Gender, ...Gender[]]),
 });
 
-/** Crea el perfil de modelo y promueve la cuenta a rol MODEL. */
+/** Activa el modo creadora en una cuenta que ya existe (un solo paso). */
 export async function createModelProfileAction(input: {
   stageName: string;
   gender: Gender;
-  orientation: Orientation;
-  country?: string;
-  headline?: string;
-  bio?: string;
 }): Promise<{ ok: boolean; error?: string }> {
   try {
     const user = await getAuthedUserOrThrow();
     const parsed = schema.safeParse(input);
-    if (!parsed.success) return { ok: false, error: 'Datos invalidos.' };
+    if (!parsed.success) return { ok: false, error: 'Revisa tu nombre de creadora.' };
 
-    const existing = await prisma.modelProfile.findUnique({
-      where: { userId: user.id },
-      select: { id: true },
+    const account = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { orientation: true, country: true, modelProfile: { select: { id: true } } },
     });
-    if (existing) return { ok: false, error: 'Ya tienes un perfil de modelo.' };
+    if (account?.modelProfile) return { ok: true };
 
-    let slug = slugify(parsed.data.stageName);
-    if (!slug) slug = `model-${Date.now().toString(36)}`;
-    if (await prisma.modelProfile.findUnique({ where: { slug } })) {
-      slug = `${slug}-${Math.random().toString(36).slice(2, 6)}`;
-    }
-
-    await prisma.$transaction([
-      prisma.modelProfile.create({
-        data: {
-          userId: user.id,
-          stageName: parsed.data.stageName,
-          slug,
-          gender: parsed.data.gender as Gender,
-          orientation: parsed.data.orientation as Orientation,
-          country: parsed.data.country || null,
-          headline: parsed.data.headline || null,
-          bio: parsed.data.bio || null,
-          kycStatus: 'NOT_SUBMITTED',
-          acceptsBookings: false,
-          isVipEnabled: false,
-        },
-      }),
-      prisma.user.update({
-        where: { id: user.id },
-        data: { role: 'MODEL' },
-      }),
-      prisma.auditLog.create({
-        data: {
-          actorId: user.id,
-          action: 'MODEL_PROFILE_CREATED',
-          entityType: 'ModelProfile',
-        },
-      }),
-    ]);
+    await createCreatorProfile(user.id, {
+      stageName: parsed.data.stageName,
+      gender: parsed.data.gender,
+      orientation: account?.orientation ?? undefined,
+      country: account?.country,
+    });
 
     // El rol nuevo entra en la sesion ya: sin esto el panel quedaria
     // bloqueado (rol viejo en el token) hasta volver a iniciar sesion.

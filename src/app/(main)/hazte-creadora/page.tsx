@@ -34,11 +34,11 @@ export default async function BecomeCreatorPage() {
 
   const account = await prisma.user.findUnique({
     where: { id: user.id },
-    select: { name: true, gender: true, orientation: true, country: true },
+    select: { name: true, username: true, gender: true },
   });
 
   return (
-    <div className="container max-w-2xl space-y-8 py-8">
+    <div className="container max-w-xl py-8">
       <div className="relative overflow-hidden rounded-3xl border border-border/60 bg-card p-6">
         <div
           aria-hidden
@@ -52,9 +52,7 @@ export default async function BecomeCreatorPage() {
           Empieza a ganar con tu contenido
         </h1>
         <p className="relative mt-2 text-sm text-muted-foreground">
-          Es la misma cuenta: sigues pudiendo seguir, escribir y suscribirte a
-          quien quieras. Solo anadimos tu perfil publico y las herramientas para
-          cobrar.
+          No tienes que registrarte otra vez: es tu misma cuenta. Solo un paso y ya.
         </p>
 
         <ul className="relative mt-5 space-y-3">
@@ -71,21 +69,18 @@ export default async function BecomeCreatorPage() {
           ))}
         </ul>
 
-        <p className="relative mt-5 flex items-start gap-2 rounded-xl border border-border/60 bg-background/50 p-3 text-xs text-muted-foreground">
-          <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-          Para cobrar y aparecer en Descubrir tendras que verificar tu identidad.
-          Puedes preparar tu perfil ya y verificarte despues desde tu panel.
-        </p>
-      </div>
+        <div className="relative mt-6 rounded-2xl border border-border/60 bg-background/60 p-4">
+          <OnboardingForm
+            defaultName={account?.name || account?.username || ''}
+            defaultGender={account?.gender ?? null}
+          />
+        </div>
 
-      <div>
-        <h2 className="mb-4 text-lg font-semibold">Tu perfil de creadora</h2>
-        <OnboardingForm
-          defaultName={account?.name ?? ''}
-          defaultGender={account?.gender ?? 'FEMALE'}
-          defaultOrientation={account?.orientation ?? 'STRAIGHT'}
-          defaultCountry={account?.country ?? ''}
-        />
+        <p className="relative mt-4 flex items-start gap-2 text-xs text-muted-foreground">
+          <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+          Foto, bio y precios los pones despues en tu panel. Para cobrar verificaras tu identidad
+          desde alli.
+        </p>
       </div>
     </div>
   );
