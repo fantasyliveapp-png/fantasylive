@@ -14,6 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { BOOKING_DURATIONS } from '@/lib/constants';
 import { createBookingAction } from '@/server/actions/bookings';
 import { formatTokens } from '@/lib/utils';
+import { useJoinPrompt } from '@/components/providers/join-prompt';
 
 interface Slot {
   weekday: number;
@@ -53,6 +54,7 @@ export function BookingWidget({
   availability,
 }: BookingWidgetProps) {
   const router = useRouter();
+  const joinPrompt = useJoinPrompt();
   const [isPending, startTransition] = useTransition();
 
   const days = useMemo(() => nextDays(14), []);
@@ -96,7 +98,7 @@ export function BookingWidget({
 
   function submit() {
     if (!isAuthenticated) {
-      router.push(`/login?callbackUrl=/models/${slug}`);
+      joinPrompt('para reservar una cita');
       return;
     }
     if (!selectedDay || selectedTime === null) {
@@ -275,7 +277,7 @@ export function BookingWidget({
           disabled={isPending || !selectedDay || selectedTime === null}
         >
           {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-          {isAuthenticated ? 'Confirmar reserva' : 'Inicia sesion para reservar'}
+          {isAuthenticated ? 'Confirmar reserva' : 'Crea tu cuenta para reservar'}
         </Button>
       </CardContent>
     </Card>

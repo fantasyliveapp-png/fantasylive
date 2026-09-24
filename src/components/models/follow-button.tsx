@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { toggleFollowAction } from '@/server/actions/follows';
+import { useJoinPrompt } from '@/components/providers/join-prompt';
 
 export function FollowButton({
   modelId,
@@ -20,12 +21,13 @@ export function FollowButton({
   isAuthenticated: boolean;
 }) {
   const router = useRouter();
+  const joinPrompt = useJoinPrompt();
   const [following, setFollowing] = useState(initialFollowing);
   const [isPending, startTransition] = useTransition();
 
   function toggle() {
     if (!isAuthenticated) {
-      router.push(`/login?callbackUrl=/models/${slug}`);
+      joinPrompt('para seguirla');
       return;
     }
 

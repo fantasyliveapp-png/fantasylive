@@ -26,6 +26,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PostOwnerMenu } from '@/components/feed/post-owner-menu';
+import { useJoinPrompt } from '@/components/providers/join-prompt';
 import { PostPoll } from '@/components/feed/post-poll';
 import { SafetyMenu } from '@/components/social/safety-menu';
 import { useI18n } from '@/components/providers/i18n-provider';
@@ -62,6 +63,7 @@ export function PostCard({
   preview?: boolean;
 }) {
   const router = useRouter();
+  const joinPrompt = useJoinPrompt();
   const { t } = useI18n();
 
   const [liked, setLiked] = useState(post.isLiked);
@@ -86,16 +88,16 @@ export function PostCard({
     });
   }
 
-  const requiresLogin = () => {
+  // Sin cuenta se puede mirar; para hacer algo, el aviso "Unete gratis".
+  const requiresLogin = (reason = 'para hacer esto') => {
     if (preview) return true;
     if (isAuthenticated) return false;
-    toast.error(t('common.loginRequired'));
-    router.push('/login');
+    joinPrompt(reason);
     return true;
   };
 
   function toggleLike() {
-    if (requiresLogin()) return;
+    if (requiresLogin('para dar me gusta')) return;
 
     // Optimista: el corazon responde al instante y se corrige si el servidor
     // dice otra cosa. Un "me gusta" que tarda 300 ms en pintarse se siente roto.
@@ -116,7 +118,7 @@ export function PostCard({
   }
 
   function unlock() {
-    if (requiresLogin()) return;
+    if (requiresLogin('para desbloquear esta publicacion')) return;
 
     startUnlock(async () => {
       const result = await unlockPostAction(post.id);
@@ -142,7 +144,7 @@ export function PostCard({
   }
 
   function submitComment() {
-    if (requiresLogin()) return;
+    if (requiresLogin('para comentar')) return;
     const body = commentDraft.trim();
     if (!body) return;
 
@@ -396,7 +398,7 @@ export function PostCard({
                   : 'Desbloquea para votar'
                 : undefined
             }
-            onRequireLogin={preview ? undefined : requiresLogin}
+            onRequireLogin={preview ? undefined : () => requiresLogin('para votar')}
           />
         </div>
       )}

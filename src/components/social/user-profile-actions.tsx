@@ -18,6 +18,7 @@ import {
   toggleUserFollowAction,
   updateUserProfileAction,
 } from '@/server/actions/social';
+import { useJoinPrompt } from '@/components/providers/join-prompt';
 
 /** Boton Seguir de un perfil de persona, con respuesta inmediata. */
 export function FollowPersonButton({
@@ -32,12 +33,13 @@ export function FollowPersonButton({
   onCountChange?: (followers: number) => void;
 }) {
   const router = useRouter();
+  const joinPrompt = useJoinPrompt();
   const [following, setFollowing] = useState(initialFollowing);
   const [isPending, startTransition] = useTransition();
 
   function toggle() {
     if (!isAuthenticated) {
-      router.push('/login');
+      joinPrompt('para seguir a esta persona');
       return;
     }
     const previous = following;

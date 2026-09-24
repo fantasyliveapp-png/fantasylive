@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { startConversationAction } from '@/server/actions/messages';
+import { useJoinPrompt } from '@/components/providers/join-prompt';
 
 export function MessageButton({
   modelId,
@@ -31,6 +32,7 @@ export function MessageButton({
   isAuthenticated: boolean;
 }) {
   const router = useRouter();
+  const joinPrompt = useJoinPrompt();
   const [open, setOpen] = useState(false);
   const [body, setBody] = useState('');
   const [isPending, startTransition] = useTransition();
@@ -51,7 +53,7 @@ export function MessageButton({
 
   function openDialog() {
     if (!isAuthenticated) {
-      router.push(`/login?callbackUrl=/models/${slug}`);
+      joinPrompt('para escribirle');
       return;
     }
     setOpen(true);

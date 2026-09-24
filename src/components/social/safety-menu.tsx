@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Ban, EyeOff, Flag, Loader2, MoreHorizontal, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { useJoinPrompt } from '@/components/providers/join-prompt';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -62,6 +63,7 @@ export function SafetyMenu({
   onNotInterested?: () => void;
 }) {
   const router = useRouter();
+  const joinPrompt = useJoinPrompt();
   const [blocked, setBlocked] = useState(initialBlocked);
   const [reporting, setReporting] = useState(false);
   const [reason, setReason] = useState<Reason | null>(null);
@@ -70,7 +72,7 @@ export function SafetyMenu({
 
   function requireAuth() {
     if (isAuthenticated) return true;
-    router.push('/login');
+    joinPrompt('para denunciar o bloquear');
     return false;
   }
 

@@ -104,8 +104,11 @@ type UsernameStatus = 'idle' | 'checking' | 'free' | 'taken';
  */
 export function RegisterForm({
   defaultRole,
+  next = null,
 }: {
   defaultRole: 'USER' | 'MODEL';
+  /** A donde volver tras la bienvenida (la pagina donde quiso hacer algo). */
+  next?: string | null;
 }) {
   const router = useRouter();
   // Una sola cuenta para todos. Si viene de "trabaja con nosotros"
@@ -132,11 +135,15 @@ export function RegisterForm({
     if (state.success) {
       toast.success(state.success);
       // A los fans se les pregunta que les gusta para su Descubrir.
-      router.push(wantsCreator ? '/hazte-creadora' : '/bienvenida');
+      router.push(
+        wantsCreator
+          ? '/hazte-creadora'
+          : `/bienvenida${next ? `?next=${encodeURIComponent(next)}` : ''}`,
+      );
       router.refresh();
     }
     if (state.error) toast.error(state.error);
-  }, [state, wantsCreator, router]);
+  }, [state, wantsCreator, router, next]);
 
   // Disponibilidad del @usuario mientras se escribe (con una pausa corta).
   useEffect(() => {

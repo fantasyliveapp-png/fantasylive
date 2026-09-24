@@ -19,6 +19,7 @@ import {
   subscribeAction,
 } from '@/server/actions/subscriptions';
 import { cn } from '@/lib/utils';
+import { useJoinPrompt } from '@/components/providers/join-prompt';
 
 export function SubscribeButton({
   modelId,
@@ -36,13 +37,14 @@ export function SubscribeButton({
   className?: string;
 }) {
   const router = useRouter();
+  const joinPrompt = useJoinPrompt();
   const [subscribed, setSubscribed] = useState(initialSubscribed);
   const [confirming, setConfirming] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   function openFlow() {
     if (!isAuthenticated) {
-      router.push(`/login?callbackUrl=/models/${slug}`);
+      joinPrompt('para suscribirte');
       return;
     }
     if (subscribed) {

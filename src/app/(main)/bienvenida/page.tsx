@@ -6,6 +6,7 @@ import { TastesWizard } from '@/components/onboarding/tastes-wizard';
 import { ANON_TASTE_COOKIE, decodeAnonTaste } from '@/lib/anon-taste';
 import { requireUser } from '@/lib/auth/guards';
 import { prisma } from '@/lib/prisma';
+import { safeNext } from '@/lib/safe-next';
 import { TASTE_TAG_IDS } from '@/lib/tastes';
 
 export const metadata: Metadata = { title: 'Tus gustos' };
@@ -15,7 +16,12 @@ export const dynamic = 'force-dynamic';
  * Preguntas de bienvenida tras crear la cuenta. Tambien es la pantalla
  * "Tus gustos" del menu, para cambiarlas cuando quiera.
  */
-export default async function WelcomePage() {
+export default async function WelcomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string }>;
+}) {
+  const next = safeNext((await searchParams).next);
   const user = await requireUser('/bienvenida');
   const account = await prisma.user.findUnique({
     where: { id: user.id },
@@ -60,6 +66,7 @@ export default async function WelcomePage() {
       name={account?.name ?? null}
       isEditing={Boolean(account?.onboardedAt)}
       initial={initial}
+      returnTo={next}
     />
   );
 }

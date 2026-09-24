@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { messageUserAction } from '@/server/actions/chat';
+import { useJoinPrompt } from '@/components/providers/join-prompt';
 
 /**
  * "Enviar mensaje" desde un perfil. Si ya hay chat con esa persona, lleva a
@@ -34,13 +35,14 @@ export function SendMessageButton({
   className?: string;
 }) {
   const router = useRouter();
+  const joinPrompt = useJoinPrompt();
   const [open, setOpen] = useState(false);
   const [body, setBody] = useState('');
   const [isPending, startTransition] = useTransition();
 
   function onClick() {
     if (!isAuthenticated) {
-      router.push('/login');
+      joinPrompt('para enviar mensajes');
       return;
     }
     if (existingHref) {

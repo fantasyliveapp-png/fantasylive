@@ -4,12 +4,14 @@ import { notFound, redirect } from 'next/navigation';
 import { Radio } from 'lucide-react';
 
 import { LiveViewer } from '@/components/live/live-viewer';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { getCurrentUser } from '@/lib/auth/guards';
 import { getViewerCountry, isCountryBlocked } from '@/lib/geo';
 import { getI18n } from '@/lib/i18n/server';
 import { prisma } from '@/lib/prisma';
 import { getWalletSummary } from '@/lib/tokens';
+import { initials } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -82,8 +84,40 @@ export default async function LiveStreamPage({
 
   const viewer = await getCurrentUser();
   if (!viewer) {
-    // Hace falta cuenta para poder cobrar regalos y registrar la visita.
-    redirect(`/login?callbackUrl=/live/${slug}`);
+    // Hace falta cuenta (regalos, visita registrada). En vez de mandarle al
+    // login sin mas, se le explica y se le invita a unirse gratis.
+    const back = encodeURIComponent(`/live/${slug}`);
+    return (
+      <div className="container flex max-w-md flex-col items-center py-16 text-center">
+        <span className="rounded-full bg-gradient-to-tr from-primary via-fantazy-red to-champagne-gold p-[3px]">
+          <Avatar className="h-24 w-24 border-4 border-background">
+            {model.avatarUrl && <AvatarImage src={model.avatarUrl} alt="" />}
+            <AvatarFallback>{initials(model.stageName)}</AvatarFallback>
+          </Avatar>
+        </span>
+        <span className="mt-4 flex items-center gap-1.5 rounded-md bg-rose-600 px-2 py-0.5 text-xs font-bold uppercase text-white">
+          <Radio className="h-3.5 w-3.5" /> En directo
+        </span>
+        <h1 className="mt-3 font-heading text-3xl uppercase tracking-wide">
+          {model.stageName} esta en directo
+        </h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Unete gratis para verlo. Es anonimo: solo se ve tu alias.
+        </p>
+        <div className="mt-6 w-full space-y-2">
+          <Link href={`/register?next=${back}`} className="block">
+            <Button variant="brand" size="lg" className="h-12 w-full">
+              Crear cuenta gratis
+            </Button>
+          </Link>
+          <Link href={`/login?callbackUrl=${back}`} className="block">
+            <Button variant="outline" size="lg" className="h-12 w-full">
+              Ya tengo cuenta
+            </Button>
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   const wallet = await getWalletSummary(viewer.id);

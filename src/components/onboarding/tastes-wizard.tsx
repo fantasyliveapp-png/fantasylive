@@ -120,7 +120,10 @@ export function TastesWizard({
   initial,
   name,
   isEditing,
+  returnTo = null,
 }: {
+  /** Pagina a la que volver al terminar (donde quiso hacer algo). */
+  returnTo?: string | null;
   initial: Tastes;
   name: string | null;
   isEditing: boolean;
@@ -140,7 +143,7 @@ export function TastesWizard({
 
   const stepIndex = step === 'follow' ? 3 : QUESTION_STEPS.indexOf(step);
   const finish = () => {
-    router.push('/feed');
+    router.push(returnTo ?? '/feed');
     router.refresh();
   };
 

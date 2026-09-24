@@ -4,6 +4,7 @@ import { Toaster } from 'sonner';
 import { AgeGate } from '@/components/age-gate';
 import { AuthProvider } from '@/components/providers/auth-provider';
 import { I18nProvider } from '@/components/providers/i18n-provider';
+import { JoinPromptProvider } from '@/components/providers/join-prompt';
 import { config } from '@/lib/config';
 import { fontVariables } from '@/lib/fonts';
 import { getLocale } from '@/lib/i18n/server';
@@ -50,7 +51,7 @@ export default async function RootLayout({
         <I18nProvider locale={locale}>
           <AuthProvider>
             <AgeGate />
-            {children}
+            <JoinPromptProvider>{children}</JoinPromptProvider>
             <Toaster
               position="top-center"
               theme="dark"
