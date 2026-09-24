@@ -100,7 +100,7 @@ export async function CreatorShell({
     <div className="container py-4 lg:py-8">
       <div className="grid gap-8 lg:grid-cols-[250px_minmax(0,1fr)]">
         <aside className="hidden space-y-5 lg:sticky lg:top-8 lg:block lg:self-start">
-          <div className="relative overflow-hidden rounded-2xl border border-border bg-card p-4">
+          <div data-tour="profile" className="relative overflow-hidden rounded-2xl border border-border bg-card p-4">
             <div
               aria-hidden
               className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-primary/20 blur-3xl"
@@ -158,7 +158,11 @@ export async function CreatorShell({
             )}
           </div>
 
-          {!kycPending && <CreatorSidebar groups={groups} />}
+          {!kycPending && (
+            <div data-tour="sections">
+              <CreatorSidebar groups={groups} />
+            </div>
+          )}
 
           {/* En escritorio no hay "+" abajo: crear queda aqui, a la vista. */}
           <div className={kycPending ? 'hidden' : 'space-y-2'}>

@@ -16,9 +16,11 @@ import {
 } from 'lucide-react';
 
 import { OnlineToggle } from '@/components/model/online-toggle';
+import { GuidedTour, TourButton, type TourStep } from '@/components/tour/guided-tour';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { getCreatorEarnings, getCreatorPending } from '@/lib/creator-dashboard';
+import { config } from '@/lib/config';
 import { TEST_AUDIENCE } from '@/lib/post-insights';
 import { prisma } from '@/lib/prisma';
 import { getWalletSummary, tokensToPayoutCents, withdrawableTokens } from '@/lib/tokens';
@@ -123,8 +125,56 @@ export async function CreatorHome({
     });
   }
 
+  const tour: TourStep[] = [
+    {
+      title: `Bienvenida a tu panel, ${firstName}`,
+      body: 'Te enseñamos en unos segundos donde esta cada cosa. Puedes saltarlo cuando quieras.',
+    },
+    {
+      target: 'online',
+      title: 'Conectada o desconectada',
+      body: 'Enciendelo cuando estes disponible: los fans te ven en linea y pueden llamarte. Apagalo al irte.',
+    },
+    {
+      target: 'money',
+      title: 'Tu dinero',
+      body: `Lo que ya puedes retirar. Tocalo para ver tus ganancias y pedir tu retiro (desde ${formatMoney(tokensToPayoutCents(config.economy.minPayoutTokens))}).`,
+    },
+    {
+      target: 'invite',
+      title: 'Invita y gana',
+      body: 'Tu enlace para compartir. Los fans que traes te dejan el 70% y ganas un 5% de las creadoras que invites.',
+    },
+    {
+      target: 'todo',
+      title: 'Te esperan',
+      body: 'Mensajes, citas y pedidos de tus fans que esperan tu respuesta. Contestar rapido vende mas.',
+    },
+    {
+      target: 'create',
+      title: 'Crear',
+      body: 'Publica fotos, videos o encuestas, o empieza un directo. Cada publicacion nueva se ensena a gente nueva.',
+    },
+    {
+      target: 'sections',
+      title: 'Tus secciones',
+      body: 'Hoy es este resumen. Bandeja: citas y pedidos. Dinero: ganancias y retiros. Ajustes: precios, perfil y privacidad.',
+    },
+    {
+      target: 'profile',
+      title: 'Tu perfil',
+      body: 'Asi te ven los fans. Desde aqui cambias tu foto, portada y bio.',
+    },
+    {
+      title: 'Listo',
+      body: 'Ya sabes donde esta todo. Si lo necesitas, vuelve a verlo desde "Ver tutorial", al final de esta pagina.',
+    },
+  ];
+
   return (
     <div className="space-y-5">
+      <GuidedTour id="creator-home-v1" steps={tour} />
+
       {/* Saludo, estado y dinero */}
       <section className="relative overflow-hidden rounded-3xl border border-border/60 bg-card p-5 sm:p-6">
         <div
@@ -138,7 +188,7 @@ export async function CreatorHome({
 
         <div className="relative flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <span className="rounded-full bg-gradient-to-tr from-primary via-fantazy-red to-champagne-gold p-[2px] lg:hidden">
+            <span data-tour="profile" className="rounded-full bg-gradient-to-tr from-primary via-fantazy-red to-champagne-gold p-[2px] lg:hidden">
               <Avatar className="h-12 w-12 border-2 border-card">
                 {profile.avatarUrl && <AvatarImage src={profile.avatarUrl} alt="" />}
                 <AvatarFallback>{initials(profile.stageName)}</AvatarFallback>
@@ -149,6 +199,7 @@ export async function CreatorHome({
             </h1>
           </div>
 
+          <div data-tour="online">
           <OnlineToggle
             variant="hero"
             isOnline={profile.isOnline}
@@ -156,10 +207,12 @@ export async function CreatorHome({
             isVipEnabled={profile.isVipEnabled}
             canStream={profile.kycStatus === 'APPROVED'}
           />
+          </div>
         </div>
 
         <Link
           href="/dashboard/model/dinero"
+          data-tour="money"
           className="group relative mt-6 flex items-end justify-between gap-4"
         >
           <span>
@@ -183,6 +236,7 @@ export async function CreatorHome({
       {/* Invita y gana (referidos) */}
       <Link
         href="/dashboard/model/invita"
+        data-tour="invite"
         className="group flex items-center gap-3 rounded-2xl border border-champagne-gold/40 bg-champagne-gold/10 p-4 transition-colors hover:border-champagne-gold"
       >
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-champagne-gold/20 text-champagne-gold">
@@ -284,7 +338,7 @@ export async function CreatorHome({
       )}
 
       {/* Lo que espera */}
-      <section>
+      <section data-tour="todo">
         <h2 className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           Te esperan
         </h2>
@@ -330,7 +384,7 @@ export async function CreatorHome({
       </section>
 
       {/* Crear */}
-      <section className="grid grid-cols-2 gap-2">
+      <section data-tour="create" className="grid grid-cols-2 gap-2">
         <Link href="/dashboard/model/posts?nuevo=1">
           {/* En movil cada boton ocupa media pantalla: menos margen y el texto
               puede partirse, para que no se salga del boton. */}
@@ -346,6 +400,10 @@ export async function CreatorHome({
           </Button>
         </Link>
       </section>
+
+      <div className="flex justify-center pt-1">
+        <TourButton id="creator-home-v1" />
+      </div>
     </div>
   );
 }
