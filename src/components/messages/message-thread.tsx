@@ -34,8 +34,6 @@ export interface MessageRow {
   /// mensajeria se cobra y el usuario tiene que saber que no le responde una
   /// persona.
   isAiGenerated: boolean;
-  /** Solo en el lado de la creadora: que chatter lo escribio (null = ella). */
-  writtenBy?: string | null;
   attachment: MessageAttachmentView | null;
 }
 
@@ -50,16 +48,12 @@ export function MessageThread({
   canSend,
   disabledReason,
   isModel = false,
-  isOwner = isModel,
 }: {
   conversationId: string;
   messages: MessageRow[];
   canSend: boolean;
   disabledReason?: string;
-  /** Lado de la creadora (ella o su equipo de chat). */
   isModel?: boolean;
-  /** La propia creadora (no su chatter). */
-  isOwner?: boolean;
 }) {
   const router = useRouter();
   const [body, setBody] = useState('');
@@ -211,7 +205,6 @@ export function MessageThread({
                       IA
                     </span>
                   )}
-                  {m.writtenBy && <span className="font-medium">{m.writtenBy} ·</span>}
                   {relativeTime(m.createdAt)}
                 </p>
               </div>
@@ -279,7 +272,6 @@ export function MessageThread({
             {isModel && (
               <VaultPicker
                 conversationId={conversationId}
-                isOwner={isOwner}
                 onSent={() => router.refresh()}
               />
             )}

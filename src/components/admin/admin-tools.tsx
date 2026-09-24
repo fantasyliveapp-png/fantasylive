@@ -8,7 +8,6 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { payChatterAction } from '@/server/actions/chat-team';
 import {
   countAudienceAction,
   featureCreatorAction,
@@ -236,47 +235,5 @@ export function AdminReplyBox({ ticketId, status }: { ticketId: string; status: 
         </Button>
       </div>
     </div>
-  );
-}
-
-/** Anotar el pago semanal a un chatter (igual que a un reclutador). */
-export function PayChatterButton({
-  userId,
-  username,
-  payNow,
-  pending,
-  disabled,
-}: {
-  userId: string;
-  username: string;
-  payNow: string;
-  pending: string;
-  disabled?: boolean;
-}) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  return (
-    <Button
-      size="sm"
-      variant="brand"
-      disabled={disabled || isPending}
-      onClick={() => {
-        const note = window.prompt(
-          `Pagale ${payNow} a @${username} (su saldo de ${pending} menos el 10% de retiro). Como se le pago (referencia):`,
-        );
-        if (note === null) return;
-        startTransition(async () => {
-          const result = await payChatterAction({ userId, note });
-          if (result.ok) {
-            toast.success(result.message ?? 'Pago anotado');
-            router.refresh();
-          } else {
-            toast.error(result.error ?? 'No se pudo anotar');
-          }
-        });
-      }}
-    >
-      Anotar pago
-    </Button>
   );
 }

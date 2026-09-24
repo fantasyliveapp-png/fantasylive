@@ -260,8 +260,6 @@ export interface AdminMessage {
   body: string | null;
   createdAt: Date;
   isAi: boolean;
-  /** Chatter del equipo que lo escribio en nombre de la creadora. */
-  writtenBy?: { id: string; username: string | null } | null;
   attachment: { url: string | null; isVideo: boolean; isImage: boolean; priceTokens: number } | null;
 }
 
@@ -284,7 +282,6 @@ export async function getAdminChat(kind: ChatKind, id: string) {
             body: true,
             createdAt: true,
             isAiGenerated: true,
-            writtenBy: { select: { id: true, username: true } },
             attachment: { select: { storageKey: true, mimeType: true, priceTokens: true } },
           },
         },
@@ -305,7 +302,6 @@ export async function getAdminChat(kind: ChatKind, id: string) {
             body: m.body,
             createdAt: m.createdAt,
             isAi: m.isAiGenerated,
-            writtenBy: m.writtenBy,
             attachment: m.attachment
               ? {
                   url: await adminMediaUrl(m.attachment.storageKey),

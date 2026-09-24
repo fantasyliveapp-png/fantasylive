@@ -77,7 +77,6 @@ export const EARNING_TYPES: TransactionType[] = [
   'MESSAGE_ATTACHMENT_EARNING',
   'POST_EARNING',
   'REFERRAL_EARNING',
-  'CHATTER_EARNING',
 ];
 
 export interface LedgerEntry {
@@ -324,11 +323,6 @@ export async function transferWithCommission(
     postId?: string;
     liveStreamId?: string;
     metadata?: Prisma.InputJsonValue;
-    /**
-     * Venta hecha por un chatter del equipo de la creadora: su % sale de la
-     * parte de ella (la comision de la plataforma no cambia).
-     */
-    assistant?: { id: string; userId: string; percent: number };
   },
 ) {
   // Reparto con las reglas de referidos (fan propio / embajadora).
@@ -357,17 +351,12 @@ export async function transferWithCommission(
     platformFeeTokens,
   });
 
-  const chatterTokens = params.assistant
-    ? Math.floor((modelTokens * Math.min(Math.max(params.assistant.percent, 0), 100)) / 100)
-    : 0;
-  const creatorTokens = modelTokens - chatterTokens;
-
   let credit = { balanceAfter: 0, transactionId: '' };
-  if (creatorTokens > 0) {
+  if (modelTokens > 0) {
     credit = await applyLedgerEntry(tx, {
       userId: params.toUserId,
       type: params.creditType,
-      tokens: creatorTokens,
+      tokens: modelTokens,
       description: params.description,
       callSessionId: params.callSessionId,
       contentPackageId: params.contentPackageId,
@@ -383,23 +372,6 @@ export async function transferWithCommission(
     });
   }
 
-  if (params.assistant && chatterTokens > 0) {
-    await applyLedgerEntry(tx, {
-      userId: params.assistant.userId,
-      type: 'CHATTER_EARNING',
-      tokens: chatterTokens,
-      description: `Tu ${params.assistant.percent}% de una venta en el chat`,
-      conversationId: params.conversationId,
-      messageAttachmentId: params.messageAttachmentId,
-      metadata: {
-        creatorUserId: params.toUserId,
-        assistantId: params.assistant.id,
-        percent: params.assistant.percent,
-        saleTokens: params.tokens,
-      },
-    });
-  }
-
   // Quien trajo a esta creadora (embajadora o reclutador) cobra su %.
   await payReferrers(tx, referrers, {
     description: params.description,
@@ -407,7 +379,7 @@ export async function transferWithCommission(
     applyLedgerEntry,
   });
 
-  return { platformFeeTokens, modelTokens: creatorTokens, chatterTokens, debit, credit };
+  return { platformFeeTokens, modelTokens, debit, credit };
 }
 
 /** Convierte tokens ganados a centavos pagaderos a la modelo. */

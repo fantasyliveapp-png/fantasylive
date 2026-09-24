@@ -17,17 +17,14 @@ const LEVEL_NAMES = ['nada todavia', 'Nivel 1', 'Nivel 2', 'Nivel 3', 'Especial'
 const MAX_PICK = 10;
 
 /**
- * Boton "Boveda" del chat: la creadora (o su chatter) elige fotos o videos de
- * su Boveda y los envia sin que el archivo salga de la plataforma.
+ * Boton "Boveda" del chat: la creadora elige fotos o videos de su Boveda y
+ * los envia sin volver a subirlos.
  */
 export function VaultPicker({
   conversationId,
-  isOwner,
   onSent,
 }: {
   conversationId: string;
-  /** La creadora (puede ir a llenar su Boveda); el chatter no. */
-  isOwner: boolean;
   onSent: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -48,7 +45,6 @@ export function VaultPicker({
         createPortal(
           <VaultSheet
             conversationId={conversationId}
-            isOwner={isOwner}
             onClose={() => setOpen(false)}
             onSent={() => {
               setOpen(false);
@@ -63,12 +59,10 @@ export function VaultPicker({
 
 function VaultSheet({
   conversationId,
-  isOwner,
   onClose,
   onSent,
 }: {
   conversationId: string;
-  isOwner: boolean;
   onClose: () => void;
   onSent: () => void;
 }) {
@@ -187,19 +181,10 @@ function VaultSheet({
         ) : vault.items.length === 0 ? (
           <div className="flex flex-1 flex-col items-center gap-3 p-10 text-center text-sm text-muted-foreground">
             <Gem className="h-8 w-8" />
-            {isOwner ? (
-              <>
-                Tu Boveda esta vacia. Sube fotos y videos para enviarlos desde aqui.
-                <Link
-                  href="/dashboard/model/boveda"
-                  className="font-medium text-primary hover:underline"
-                >
-                  Ir a mi Boveda
-                </Link>
-              </>
-            ) : (
-              'La creadora aun no ha subido nada a su Boveda.'
-            )}
+            Tu Boveda esta vacia. Sube fotos y videos para enviarlos desde aqui.
+            <Link href="/dashboard/model/boveda" className="font-medium text-primary hover:underline">
+              Ir a mi Boveda
+            </Link>
           </div>
         ) : (
           <>

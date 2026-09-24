@@ -11,7 +11,6 @@ import {
   MessageSquareHeart,
   Pencil,
   ShieldBan,
-  UsersRound,
   Gem,
   type LucideIcon,
 } from 'lucide-react';
@@ -39,10 +38,9 @@ export const dynamic = 'force-dynamic';
  */
 export default async function SettingsPage() {
   const { user, profile } = await requireModel();
-  const [legacyPacks, account, teamSize, vaultCount] = await Promise.all([
+  const [legacyPacks, account, vaultCount] = await Promise.all([
     prisma.contentPackage.count({ where: { modelId: profile.id } }),
     prisma.user.findUniqueOrThrow({ where: { id: user.id }, select: { messagePrivacy: true } }),
-    prisma.chatAssistant.count({ where: { modelId: profile.id, status: 'ACTIVE' } }),
     prisma.vaultItem.count({ where: { modelId: profile.id } }),
   ]);
 
@@ -177,16 +175,6 @@ export default async function SettingsPage() {
             vaultCount > 0
               ? `${vaultCount} ${vaultCount === 1 ? 'archivo listo' : 'archivos listos'} para enviar por chat`
               : 'Guarda fotos y videos para enviarlos por chat'
-          }
-        />
-        <Row
-          href="/dashboard/model/equipo"
-          icon={UsersRound}
-          title="Mi equipo"
-          hint={
-            teamSize > 0
-              ? `${teamSize} ${teamSize === 1 ? 'persona lleva' : 'personas llevan'} tus mensajes`
-              : 'Invita a alguien para que conteste tus mensajes por ti'
           }
         />
       </Group>

@@ -6,7 +6,6 @@ import {
   ShieldAlert,
   Megaphone,
   LifeBuoy,
-  UsersRound,
   TrendingUp,
   Bell,
   Check,
@@ -62,7 +61,6 @@ const TYPE_ICON: Record<NotificationType, typeof Bell> = {
   MODERATION: ShieldAlert,
   ANNOUNCEMENT: Megaphone,
   SUPPORT_REPLY: LifeBuoy,
-  TEAM_INVITE: UsersRound,
 };
 
 /**

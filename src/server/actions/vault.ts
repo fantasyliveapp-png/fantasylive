@@ -5,7 +5,6 @@ import { z } from 'zod';
 import type { VaultSection } from '@prisma/client';
 
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
-import { getChatRole } from '@/lib/chat-team';
 import { checkNoContactInfo } from '@/lib/content-filter';
 import { createNotification } from '@/lib/notifications';
 import { prisma } from '@/lib/prisma';
@@ -254,7 +253,7 @@ export async function updateVaultPricesAction(input: {
 }
 
 // ---------------------------------------------------------------------------
-// DESDE EL CHAT (la creadora o su equipo)
+// DESDE EL CHAT
 // ---------------------------------------------------------------------------
 
 async function chatContext(conversationId: string, userId: string) {
@@ -279,9 +278,9 @@ async function chatContext(conversationId: string, userId: string) {
     },
   });
   if (!conversation) throw new Error('Conversacion no encontrada.');
-  const role = await getChatRole(conversation, userId);
-  if (role !== 'creator' && role !== 'assistant') throw new Error('Sin acceso a esta Boveda.');
-  return { conversation, role };
+  // Solo la propia creadora envia desde su Boveda.
+  if (conversation.model.userId !== userId) throw new Error('Sin acceso a esta Boveda.');
+  return { conversation };
 }
 
 export async function getChatVaultAction(
@@ -302,7 +301,7 @@ export async function getChatVaultAction(
   }
 }
 
-/** Envia uno o varios archivos de la Boveda, cada uno con su precio. */
+/** La creadora envia uno o varios archivos de su Boveda, cada uno con su precio. */
 export async function sendVaultItemsAction(input: {
   conversationId: string;
   items: { id: string; priceTokens: number }[];
@@ -310,7 +309,7 @@ export async function sendVaultItemsAction(input: {
 }): Promise<VaultActionResult> {
   try {
     const user = await getAuthedUserOrThrow();
-    const { conversation, role } = await chatContext(input.conversationId, user.id);
+    const { conversation } = await chatContext(input.conversationId, user.id);
     if (conversation.startedByModel && conversation.acceptedAt === null) {
       return { ok: false, error: 'Espera a que acepte tu solicitud de mensaje.' };
     }
@@ -341,14 +340,12 @@ export async function sendVaultItemsAction(input: {
       .filter((x) => x !== null);
     if (toSend.length === 0) return { ok: false, error: 'Esos archivos ya no estan en la Boveda.' };
 
-    const writtenById = role === 'assistant' ? user.id : null;
     await prisma.$transaction(async (tx) => {
       if (body) {
         await tx.message.create({
           data: {
             conversationId: conversation.id,
             senderId: conversation.model.userId,
-            writtenById,
             body,
           },
         });
@@ -358,7 +355,6 @@ export async function sendVaultItemsAction(input: {
           data: {
             conversationId: conversation.id,
             senderId: conversation.model.userId,
-            writtenById,
           },
           select: { id: true },
         });

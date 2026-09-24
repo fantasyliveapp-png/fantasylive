@@ -12,7 +12,6 @@ import {
   ChartColumn,
   Filter,
   Handshake,
-  MessagesSquare,
   LifeBuoy,
   Megaphone,
   Sparkles,
@@ -43,8 +42,6 @@ export type AdminCounts = {
   reports: number;
   payouts: number;
   recruitersToPay: number;
-  /** Chatters (que no son creadoras) con pago pendiente. */
-  chattersToPay: number;
   /** Directos en el aire ahora mismo. */
   live: number;
   /** Consultas de soporte esperando respuesta. */
@@ -90,12 +87,6 @@ const NAV: { title?: string; links: NavLink[] }[] = [
         icon: Handshake,
         count: 'recruitersToPay',
       },
-      {
-        href: '/admin/chatters',
-        label: 'Chatters',
-        icon: MessagesSquare,
-        count: 'chattersToPay',
-      },
       { href: '/admin/avisos', label: 'Avisos', icon: Megaphone },
     ],
   },
@@ -128,7 +119,7 @@ export function AdminShell({
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const current = ALL_LINKS.find((l) => isActive(pathname, l));
-  const totalPending = counts.kyc + counts.reports + counts.payouts + counts.recruitersToPay + counts.chattersToPay + counts.support;
+  const totalPending = counts.kyc + counts.reports + counts.payouts + counts.recruitersToPay + counts.support;
 
   // Al navegar desde el menu del movil, se cierra solo.
   useEffect(() => setOpen(false), [pathname]);
