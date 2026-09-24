@@ -4,14 +4,12 @@ import { AuthError } from 'next-auth';
 import bcrypt from 'bcryptjs';
 import { cookies } from 'next/headers';
 import { z } from 'zod';
-import type { Gender } from '@prisma/client';
 
 import { signIn, signOut } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { REF_COOKIE } from '@/lib/referrals';
 import { config } from '@/lib/config';
-import { GENDER_LABELS } from '@/lib/constants';
-import { createCreatorProfile, isHandleFree } from '@/lib/creator-profile';
+import { isHandleFree } from '@/lib/creator-profile';
 import { isReservedUsername, USERNAME_PATTERN } from '@/lib/usernames';
 import { calculateAge } from '@/lib/utils';
 
@@ -45,10 +43,6 @@ const registerSchema = z.object({
     .regex(/[0-9]/, 'Debe contener numeros'),
   birthDate: z.string().min(1, 'Pon tu fecha de nacimiento'),
   role: z.enum(['USER', 'MODEL']).default('USER'),
-  /** Solo si quiere crear: como aparece en Descubrir. */
-  gender: z
-    .enum(Object.keys(GENDER_LABELS) as [Gender, ...Gender[]])
-    .optional(),
   isAdult: z.literal('on', {
     errorMap: () => ({
       message: 'Tienes que confirmar que eres mayor de edad',
@@ -83,9 +77,6 @@ export async function registerAction(
   }
 
   const data = parsed.data;
-  if (data.role === 'MODEL' && !data.gender) {
-    return { fieldErrors: { gender: ['Elige como te presentas'] } };
-  }
   const birthDate = new Date(data.birthDate);
 
   if (Number.isNaN(birthDate.getTime())) {
@@ -152,10 +143,10 @@ export async function registerAction(
         passwordHash,
         birthDate,
         ageVerified: false, // se confirma con KYC / verificacion documental
-        // Una sola cuenta para todos. Si eligio "crear", abajo se le activa
-        // el modo creadora en el mismo paso (sin segundo formulario).
+        // Una sola cuenta para todos: el modo creadora se activa despues en
+        // /hazte-creadora (un solo paso; el campo "role" del formulario solo
+        // indica la intencion, para llevarla alli tras registrarse).
         role: 'USER',
-        gender: data.gender ?? null,
         status: 'ACTIVE',
         referredById: referrer?.id ?? null,
         recruitedById: recruiter?.id ?? null,
@@ -168,11 +159,6 @@ export async function registerAction(
       return { fieldErrors: { username: ['Ese @usuario ya esta cogido'] } };
     }
     throw error;
-  }
-
-  if (data.role === 'MODEL' && data.gender) {
-    // Su nombre de creadora empieza siendo su alias; lo cambia en Ajustes.
-    await createCreatorProfile(user.id, { stageName: username, gender: data.gender });
   }
 
   if (bonus > 0) {

@@ -5,9 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   AtSign,
-  Camera,
   Check,
-  Heart,
   Dices,
   Eye,
   EyeOff,
@@ -15,6 +13,7 @@ import {
   Loader2,
   Lock,
   ShieldAlert,
+  Sparkles,
   VenetianMask,
   X,
   type LucideIcon,
@@ -25,7 +24,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { GENDER_LABELS } from '@/lib/constants';
 import { USERNAME_PATTERN } from '@/lib/usernames';
 import { cn } from '@/lib/utils';
 import {
@@ -113,10 +111,9 @@ export function RegisterForm({
   next?: string | null;
 }) {
   const router = useRouter();
-  // Una sola cuenta para todos. Quien elige "crear" sale de aqui ya como
-  // creadora (sin segundo formulario) y aterriza en su panel.
-  const [wantsCreator, setWantsCreator] = useState(defaultRole === 'MODEL');
-  const [gender, setGender] = useState('');
+  // Una sola cuenta para todos. Si viene de "trabaja con nosotros"
+  // (?role=model), tras registrarse va directa a activar el modo creadora.
+  const wantsCreator = defaultRole === 'MODEL';
   const [state, formAction, isPending] = useActionState(
     registerAction,
     initialState,
@@ -140,7 +137,7 @@ export function RegisterForm({
       // A los fans se les pregunta que les gusta para su Descubrir.
       router.push(
         wantsCreator
-          ? '/dashboard/model'
+          ? '/hazte-creadora'
           : `/bienvenida${next ? `?next=${encodeURIComponent(next)}` : ''}`,
       );
       router.refresh();
@@ -240,59 +237,15 @@ export function RegisterForm({
         </div>
 
         <form action={formAction} className="flex flex-col gap-5 px-6 py-6">
-          {/* Que viene a hacer: una sola cuenta, pero asi no hay segundo registro */}
-          <fieldset className="space-y-2">
-            <legend className="mb-2 text-sm font-medium">¿Que quieres hacer?</legend>
-            <input type="hidden" name="role" value={wantsCreator ? 'MODEL' : 'USER'} />
-            <div className="grid grid-cols-2 gap-2">
-              <RoleCard
-                icon={Heart}
-                title="Ver y conocer"
-                text="Sigue a creadoras y habla con ellas"
-                active={!wantsCreator}
-                onClick={() => setWantsCreator(false)}
-              />
-              <RoleCard
-                icon={Camera}
-                title="Crear y ganar"
-                text="Sube contenido y cobra por ello"
-                active={wantsCreator}
-                onClick={() => setWantsCreator(true)}
-              />
+          {wantsCreator && (
+            <div className="flex gap-2 rounded-xl border border-primary/30 bg-primary/5 p-3 text-xs text-muted-foreground">
+              <Sparkles className="h-4 w-4 shrink-0 text-primary" />
+              <span>
+                Crea tu cuenta y despues solo pulsas «Activar modo creadora».
+                Tu @usuario sera tambien tu @ de creadora.
+              </span>
             </div>
-            {wantsCreator && (
-              <div className="space-y-2 pt-2">
-                <p className="text-sm font-medium">Te presentas como</p>
-                <input type="hidden" name="gender" value={gender} />
-                <div className="flex flex-wrap gap-2">
-                  {Object.entries(GENDER_LABELS).map(([value, label]) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => setGender(value)}
-                      className={cn(
-                        'rounded-full border px-3 py-1.5 text-sm transition-colors',
-                        gender === value
-                          ? 'border-primary bg-primary/15 text-foreground'
-                          : 'border-border/60 text-muted-foreground hover:text-foreground',
-                      )}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                <p
-                  className={cn(
-                    'text-xs',
-                    fieldError('gender') ? 'text-destructive' : 'text-muted-foreground',
-                  )}
-                >
-                  {fieldError('gender') ??
-                    'Tu perfil queda listo al crear la cuenta. Podras usar la app como fan tambien.'}
-                </p>
-              </div>
-            )}
-          </fieldset>
+          )}
 
           {/* @usuario */}
           <div className="space-y-1.5">
@@ -555,19 +508,11 @@ export function RegisterForm({
             variant="brand"
             size="lg"
             className="h-12 w-full"
-            disabled={
-              isPending || isMinor || usernameStatus === 'taken' || (wantsCreator && !gender)
-            }
+            disabled={isPending || isMinor || usernameStatus === 'taken'}
           >
             {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-            {wantsCreator ? 'Crear mi cuenta de creadora' : 'Crear cuenta'}
+            Crear cuenta
           </Button>
-          {wantsCreator && (
-            <p className="-mt-2 text-center text-xs text-muted-foreground">
-              Para cobrar verificaras tu identidad despues, desde tu panel. Tus fans solo
-              veran tu alias.
-            </p>
-          )}
 
           <p className="text-center text-sm text-muted-foreground">
             ¿Ya tienes cuenta?{' '}
@@ -581,38 +526,6 @@ export function RegisterForm({
         </form>
       </CardContent>
     </Card>
-  );
-}
-
-function RoleCard({
-  icon: Icon,
-  title,
-  text,
-  active,
-  onClick,
-}: {
-  icon: LucideIcon;
-  title: string;
-  text: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={cn(
-        'flex flex-col items-start rounded-xl border p-3 text-left transition-colors',
-        active
-          ? 'border-primary bg-primary/10 ring-1 ring-primary'
-          : 'border-border/60 hover:border-border',
-      )}
-    >
-      <Icon className={cn('h-5 w-5', active ? 'text-primary' : 'text-muted-foreground')} />
-      <span className="mt-2 text-sm font-semibold">{title}</span>
-      <span className="text-xs leading-tight text-muted-foreground">{text}</span>
-    </button>
   );
 }
 
