@@ -122,12 +122,16 @@ export default async function TeamPage() {
         </p>
         <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
           <li>
-            Ve tu bandeja desde su cuenta, en Mensajes. Tu sigues viendo todo y en cada mensaje
-            sale quien lo escribio. El fan no lo ve.
+            Ve tu bandeja desde su cuenta, en Mensajes. Tu sigues viendo todo y en cada mensaje sale
+            quien lo escribio. El fan no lo ve.
           </li>
           <li>Cuenta como venta suya cada archivo de pago que envie y el fan desbloquee.</li>
-          <li>Su % se descuenta solo de lo que tu ganas en esa venta. Maximo {MAX_CHATTER_PERCENT}%.</li>
-          <li>Puedes cambiar el % o quitarlo cuando quieras. Los cambios valen para ventas nuevas.</li>
+          <li>
+            Su % se descuenta solo de lo que tu ganas en esa venta. Maximo {MAX_CHATTER_PERCENT}%.
+          </li>
+          <li>
+            Puedes cambiar el % o quitarlo cuando quieras. Los cambios valen para ventas nuevas.
+          </li>
         </ul>
       </section>
     </div>

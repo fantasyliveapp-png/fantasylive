@@ -90,7 +90,9 @@ export default async function ChatterTeamPage() {
                 </Avatar>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-medium">{t.model.stageName}</span>
-                  <span className="block text-xs text-muted-foreground">Cobras el {t.percent}%</span>
+                  <span className="block text-xs text-muted-foreground">
+                    Cobras el {t.percent}%
+                  </span>
                 </span>
                 <LeaveTeamButton id={t.id} />
                 <Link

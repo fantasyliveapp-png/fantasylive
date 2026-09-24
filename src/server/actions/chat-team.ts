@@ -135,7 +135,10 @@ export async function updateChatterPercentAction(input: {
     }
     if (member.status === 'REMOVED') return { ok: false, error: 'Ya no esta en tu equipo.' };
 
-    await prisma.chatAssistant.update({ where: { id: member.id }, data: { percent: percent.data } });
+    await prisma.chatAssistant.update({
+      where: { id: member.id },
+      data: { percent: percent.data },
+    });
     await createNotification(prisma, {
       userId: member.userId,
       type: 'TEAM_INVITE',

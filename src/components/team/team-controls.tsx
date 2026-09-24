@@ -46,7 +46,10 @@ export function InviteChatterForm({ maxPercent }: { maxPercent: number }) {
       onSubmit={(e) => {
         e.preventDefault();
         if (!username.trim()) return;
-        run(() => inviteChatterAction({ username, percent }), () => setUsername(''));
+        run(
+          () => inviteChatterAction({ username, percent }),
+          () => setUsername(''),
+        );
       }}
     >
       <div className="relative">
@@ -61,7 +64,12 @@ export function InviteChatterForm({ maxPercent }: { maxPercent: number }) {
         />
       </div>
       <PercentPicker value={percent} onChange={setPercent} max={maxPercent} />
-      <Button type="submit" variant="brand" className="w-full" disabled={isPending || !username.trim()}>
+      <Button
+        type="submit"
+        variant="brand"
+        className="w-full"
+        disabled={isPending || !username.trim()}
+      >
         {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
         Invitar
       </Button>
@@ -94,8 +102,8 @@ function PercentPicker({
         className="w-full accent-[hsl(var(--primary))]"
       />
       <span className="block text-xs text-muted-foreground">
-        De lo que tu ganas en cada venta que haga en tus chats. Ejemplo: vende algo de $10, tu
-        ganas $6 y le tocan {`$${((6 * value) / 100).toFixed(2)}`}.
+        De lo que tu ganas en cada venta que haga en tus chats. Ejemplo: vende algo de $10, tu ganas
+        $6 y le tocan {`$${((6 * value) / 100).toFixed(2)}`}.
       </span>
     </label>
   );
@@ -113,6 +121,7 @@ export function MemberControls({
 }) {
   const { run, isPending } = useRun();
   const [editing, setEditing] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [value, setValue] = useState(percent);
 
   if (editing) {
@@ -128,7 +137,10 @@ export function MemberControls({
             variant="brand"
             disabled={isPending || value === percent}
             onClick={() =>
-              run(() => updateChatterPercentAction({ id, percent: value }), () => setEditing(false))
+              run(
+                () => updateChatterPercentAction({ id, percent: value }),
+                () => setEditing(false),
+              )
             }
           >
             Guardar
@@ -143,19 +155,23 @@ export function MemberControls({
       <Button size="sm" variant="secondary" onClick={() => setEditing(true)}>
         Cambiar %
       </Button>
-      <Button
-        size="sm"
-        variant="ghost"
-        disabled={isPending}
-        onClick={() => {
-          if (window.confirm('¿Quitar a esta persona de tu equipo? Dejara de ver tus mensajes.')) {
-            run(() => removeChatterAction(id));
-          }
-        }}
-      >
-        <Trash2 className="h-4 w-4" />
-        Quitar
-      </Button>
+      {confirming ? (
+        <Button
+          size="sm"
+          variant="destructive"
+          disabled={isPending}
+          onClick={() => run(() => removeChatterAction(id))}
+          onBlur={() => setConfirming(false)}
+        >
+          <Trash2 className="h-4 w-4" />
+          Si, quitar
+        </Button>
+      ) : (
+        <Button size="sm" variant="ghost" onClick={() => setConfirming(true)}>
+          <Trash2 className="h-4 w-4" />
+          Quitar
+        </Button>
+      )}
     </div>
   );
 }
@@ -190,15 +206,20 @@ export function InviteResponse({ id }: { id: string }) {
 /** Chatter: salir de un equipo. */
 export function LeaveTeamButton({ id }: { id: string }) {
   const { run, isPending } = useRun();
-  return (
+  const [confirming, setConfirming] = useState(false);
+  return confirming ? (
     <Button
       size="sm"
-      variant="ghost"
+      variant="destructive"
       disabled={isPending}
-      onClick={() => {
-        if (window.confirm('¿Dejar de llevar sus mensajes?')) run(() => leaveTeamAction(id));
-      }}
+      onClick={() => run(() => leaveTeamAction(id))}
+      onBlur={() => setConfirming(false)}
     >
+      <LogOut className="h-4 w-4" />
+      Si, salir
+    </Button>
+  ) : (
+    <Button size="sm" variant="ghost" onClick={() => setConfirming(true)}>
       <LogOut className="h-4 w-4" />
       Salir
     </Button>

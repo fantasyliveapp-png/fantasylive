@@ -14,6 +14,7 @@ import {
   sendMessageAttachmentAction,
   unlockMessageAttachmentAction,
 } from '@/server/actions/messages';
+import { VaultPicker } from '@/components/vault/vault-picker';
 import { cn, relativeTime } from '@/lib/utils';
 
 export interface MessageAttachmentView {
@@ -49,12 +50,16 @@ export function MessageThread({
   canSend,
   disabledReason,
   isModel = false,
+  isOwner = isModel,
 }: {
   conversationId: string;
   messages: MessageRow[];
   canSend: boolean;
   disabledReason?: string;
+  /** Lado de la creadora (ella o su equipo de chat). */
   isModel?: boolean;
+  /** La propia creadora (no su chatter). */
+  isOwner?: boolean;
 }) {
   const router = useRouter();
   const [body, setBody] = useState('');
@@ -270,6 +275,13 @@ export function MessageThread({
               >
                 <Paperclip className="h-4 w-4" />
               </Button>
+            )}
+            {isModel && (
+              <VaultPicker
+                conversationId={conversationId}
+                isOwner={isOwner}
+                onSent={() => router.refresh()}
+              />
             )}
             <textarea
               value={body}

@@ -587,6 +587,12 @@ model ModelProfile {
   /// Destacada por el equipo hasta esta fecha: sale mas en Descubrir.
   featuredUntil DateTime?
 
+  /// Boveda: precio sugerido (tokens) de cada nivel de contenido de pago.
+  vaultPriceLevel1  Int @default(30)
+  vaultPriceLevel2  Int @default(60)
+  vaultPriceLevel3  Int @default(100)
+  vaultPriceSpecial Int @default(200)
+
   stageName String
   slug      String  @unique
   headline  String?
@@ -721,6 +727,8 @@ model ModelProfile {
   visits           ProfileVisit[]
   greetings        AutoGreetingLog[]
   chatAssistants   ChatAssistant[]
+  vaultFolders     VaultFolder[]
+  vaultItems       VaultItem[]
 
   @@index([isOnline, isVipEnabled])
   @@index([gender, tier])
@@ -967,13 +975,17 @@ model MessageAttachment {
   mimeType    String
   sizeBytes   Int?
   priceTokens Int    @default(0)
+  /// Enviado desde la Boveda (para saber que ya se le envio / que ya compro).
+  vaultItemId String?
 
   createdAt DateTime @default(now())
 
   message      Message                   @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  vaultItem    VaultItem?                @relation(fields: [vaultItemId], references: [id], onDelete: SetNull)
   unlocks      MessageAttachmentUnlock[]
   transactions Transaction[]
 
+  @@index([vaultItemId])
   @@map("message_attachments")
 }
 
@@ -1853,4 +1865,51 @@ model ChatAssistant {
   @@unique([modelId, userId])
   @@index([userId, status])
   @@map("chat_assistants")
+}
+
+/// Seccion de la Boveda: para enganchar (siempre gratis) o nivel de pago.
+enum VaultSection {
+  TEASER
+  LEVEL_1
+  LEVEL_2
+  LEVEL_3
+  SPECIAL
+}
+
+/// Carpeta propia de la creadora dentro de su Boveda ("Lenceria", "Ducha"...).
+model VaultFolder {
+  id        String   @id @default(cuid())
+  modelId   String
+  name      String
+  createdAt DateTime @default(now())
+
+  model ModelProfile @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  items VaultItem[]
+
+  @@unique([modelId, name])
+  @@map("vault_folders")
+}
+
+/// BOVEDA: contenido privado de la creadora, listo para enviar por chat
+/// (ella o su equipo de chat) sin que el archivo salga de la plataforma.
+model VaultItem {
+  id         String       @id @default(cuid())
+  modelId    String
+  section    VaultSection
+  folderId   String?
+  storageKey String
+  mimeType   String
+  sizeBytes  Int?
+  /// Nota corta para quien envia ("lenceria roja").
+  note       String?
+  /// Precio propio; null = el del nivel. Los de TEASER siempre van gratis.
+  priceTokens Int?
+  createdAt  DateTime     @default(now())
+
+  model       ModelProfile        @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  folder      VaultFolder?        @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  attachments MessageAttachment[]
+
+  @@index([modelId, section, createdAt])
+  @@map("vault_items")
 }

@@ -77,6 +77,17 @@ export function buildPostKey(params: {
   return `models/${params.modelId}/posts/${params.postId}/${id}${suffix}.${ext}`;
 }
 
+/** Boveda de la creadora (privada). Ej: models/<modelId>/vault/<uuid>.jpg */
+export function buildVaultKey(params: { modelId: string; filename: string }): string {
+  const ext = params.filename.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'bin';
+  return `models/${params.modelId}/vault/${crypto.randomUUID()}.${ext}`;
+}
+
+/** La clave es de la Boveda de ESTA creadora (y no una ruta inventada). */
+export function isVaultKeyOf(modelId: string, key: string): boolean {
+  return new RegExp(`^models/${modelId}/vault/[0-9a-f-]{36}\\.[a-z0-9]+$`).test(key);
+}
+
 /** Ej: models/<modelId>/greeting/<uuid>.jpg */
 export function buildGreetingKey(params: {
   modelId: string;

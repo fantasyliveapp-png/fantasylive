@@ -327,6 +327,7 @@ async function ConversationView({
         canSend={canSend}
         disabledReason={reason}
         isModel={iAmCreator}
+        isOwner={conversation.role === 'creator'}
       />
     </div>
   );

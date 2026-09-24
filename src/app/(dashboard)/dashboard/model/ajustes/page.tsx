@@ -12,6 +12,7 @@ import {
   Pencil,
   ShieldBan,
   UsersRound,
+  Gem,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -38,10 +39,11 @@ export const dynamic = 'force-dynamic';
  */
 export default async function SettingsPage() {
   const { user, profile } = await requireModel();
-  const [legacyPacks, account, teamSize] = await Promise.all([
+  const [legacyPacks, account, teamSize, vaultCount] = await Promise.all([
     prisma.contentPackage.count({ where: { modelId: profile.id } }),
     prisma.user.findUniqueOrThrow({ where: { id: user.id }, select: { messagePrivacy: true } }),
     prisma.chatAssistant.count({ where: { modelId: profile.id, status: 'ACTIVE' } }),
+    prisma.vaultItem.count({ where: { modelId: profile.id } }),
   ]);
 
   const kycOk = profile.kycStatus === 'APPROVED';
@@ -166,7 +168,17 @@ export default async function SettingsPage() {
         </p>
       </Group>
 
-      <Group title="Tu equipo de chat">
+      <Group title="Vender por chat">
+        <Row
+          href="/dashboard/model/boveda"
+          icon={Gem}
+          title="Boveda"
+          hint={
+            vaultCount > 0
+              ? `${vaultCount} ${vaultCount === 1 ? 'archivo listo' : 'archivos listos'} para enviar por chat`
+              : 'Guarda fotos y videos para enviarlos por chat'
+          }
+        />
         <Row
           href="/dashboard/model/equipo"
           icon={UsersRound}
