@@ -33,6 +33,8 @@ export interface MessageRow {
   /// mensajeria se cobra y el usuario tiene que saber que no le responde una
   /// persona.
   isAiGenerated: boolean;
+  /** Solo en el lado de la creadora: que chatter lo escribio (null = ella). */
+  writtenBy?: string | null;
   attachment: MessageAttachmentView | null;
 }
 
@@ -204,6 +206,7 @@ export function MessageThread({
                       IA
                     </span>
                   )}
+                  {m.writtenBy && <span className="font-medium">{m.writtenBy} ·</span>}
                   {relativeTime(m.createdAt)}
                 </p>
               </div>

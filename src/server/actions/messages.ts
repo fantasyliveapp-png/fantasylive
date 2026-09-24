@@ -9,6 +9,7 @@ import { createNotification } from '@/lib/notifications';
 import { prisma } from '@/lib/prisma';
 import { checkNoContactInfo } from '@/lib/content-filter';
 import { isBlockedBetween } from '@/lib/chat';
+import { activeAssistant, activeAssistantIds, getChatRole } from '@/lib/chat-team';
 import { GEO_BLOCKED_MESSAGE, isBlockedForViewer } from '@/lib/geo';
 import {
   buildMessageAttachmentKey,
@@ -159,16 +160,18 @@ export async function sendMessageAction(input: {
     const conversation = await prisma.conversation.findUnique({
       where: { id: input.conversationId },
       include: {
-        model: { select: { userId: true, slug: true, blockedCountries: true } },
+        model: {
+          select: { id: true, userId: true, slug: true, stageName: true, blockedCountries: true },
+        },
       },
     });
     if (!conversation) return { ok: false, error: 'Conversacion no encontrada.' };
 
-    const isCustomer = conversation.userId === user.id;
-    const isModel = conversation.model.userId === user.id;
-    if (!isCustomer && !isModel) {
-      return { ok: false, error: 'No tenes acceso a esta conversacion.' };
-    }
+    // El chatter del equipo escribe en nombre de la creadora.
+    const role = await getChatRole(conversation, user.id);
+    if (!role) return { ok: false, error: 'No tenes acceso a esta conversacion.' };
+    const isCustomer = role === 'fan';
+    const isModel = !isCustomer;
 
     // El bloqueo por pais tambien corta las conversaciones ya abiertas: si la
     // modelo bloquea el pais despues, el cliente deja de poder escribirle.
@@ -205,7 +208,8 @@ export async function sendMessageAction(input: {
       prisma.message.create({
         data: {
           conversationId: conversation.id,
-          senderId: user.id,
+          senderId: isModel ? conversation.model.userId : user.id,
+          writtenById: role === 'assistant' ? user.id : null,
           body: body.data,
         },
       }),
@@ -218,13 +222,19 @@ export async function sendMessageAction(input: {
       }),
     ]);
 
-    await createNotification(prisma, {
-      userId: isCustomer ? conversation.model.userId : conversation.userId,
-      type: 'NEW_MESSAGE',
-      title: `${user.name ?? 'Alguien'} te escribio un mensaje`,
-      // Directo al hilo, desde el lado de quien lo recibe.
-      link: `/mensajes/${conversation.id}`,
-    });
+    // Si escribe el fan, se enteran la creadora y su equipo de chat.
+    const recipients = isCustomer
+      ? [conversation.model.userId, ...(await activeAssistantIds(conversation.model.id))]
+      : [conversation.userId];
+    for (const recipient of recipients) {
+      await createNotification(prisma, {
+        userId: recipient,
+        type: 'NEW_MESSAGE',
+        title: `${isModel ? conversation.model.stageName : (user.name ?? 'Alguien')} te escribio un mensaje`,
+        // Directo al hilo, desde el lado de quien lo recibe.
+        link: `/mensajes/${conversation.id}`,
+      });
+    }
 
     // Solo contesta a lo que escribe el cliente. Si el que escribe es el dueno
     // del perfil, no hay nada que responder.
@@ -252,10 +262,11 @@ export async function requestMessageAttachmentUploadUrlAction(input: {
 
     const conversation = await prisma.conversation.findUnique({
       where: { id: input.conversationId },
-      include: { model: { select: { userId: true } } },
+      include: { model: { select: { id: true, userId: true } } },
     });
     if (!conversation) return { ok: false, error: 'Conversacion no encontrada.' };
-    if (conversation.model.userId !== user.id) {
+    const role = await getChatRole(conversation, user.id);
+    if (role !== 'creator' && role !== 'assistant') {
       return { ok: false, error: 'Solo la modelo puede adjuntar archivos.' };
     }
 
@@ -299,19 +310,30 @@ export async function sendMessageAttachmentAction(input: {
 
     const conversation = await prisma.conversation.findUnique({
       where: { id: input.conversationId },
-      include: { model: { select: { userId: true, slug: true } } },
+      include: { model: { select: { id: true, userId: true, slug: true, stageName: true } } },
     });
     if (!conversation) return { ok: false, error: 'Conversacion no encontrada.' };
-    if (conversation.model.userId !== user.id) {
+    const role = await getChatRole(conversation, user.id);
+    if (role !== 'creator' && role !== 'assistant') {
       return { ok: false, error: 'Solo la modelo puede adjuntar archivos.' };
+    }
+    // Solo archivos subidos a ESTE chat (la clave lleva el id de la conversacion).
+    if (!input.storageKey.startsWith(`messages/${conversation.id}/`)) {
+      return { ok: false, error: 'Archivo no valido.' };
+    }
+    const bodyText = input.body?.trim() || null;
+    if (bodyText) {
+      const contactError = checkNoContactInfo(bodyText);
+      if (contactError) return { ok: false, error: contactError };
     }
 
     await prisma.$transaction(async (tx) => {
       const message = await tx.message.create({
         data: {
           conversationId: conversation.id,
-          senderId: user.id,
-          body: input.body?.trim() || null,
+          senderId: conversation.model.userId,
+          writtenById: role === 'assistant' ? user.id : null,
+          body: bodyText,
         },
         select: { id: true },
       });
@@ -336,8 +358,8 @@ export async function sendMessageAttachmentAction(input: {
         type: 'NEW_MESSAGE',
         title:
           input.priceTokens > 0
-            ? `${user.name ?? 'Alguien'} te envio un archivo de pago`
-            : `${user.name ?? 'Alguien'} te envio un archivo`,
+            ? `${conversation.model.stageName} te envio un archivo de pago`
+            : `${conversation.model.stageName} te envio un archivo`,
         link: `/mensajes/${conversation.id}`,
       });
     });
@@ -365,7 +387,7 @@ export async function unlockMessageAttachmentAction(
             conversation: {
               include: {
                 model: {
-                  select: { userId: true, slug: true, blockedCountries: true },
+                  select: { id: true, userId: true, slug: true, blockedCountries: true },
                 },
               },
             },
@@ -392,6 +414,13 @@ export async function unlockMessageAttachmentAction(
     });
     if (already) return { ok: true, message: 'Ya desbloqueaste este archivo.' };
 
+    // Lo envio un chatter que sigue en el equipo: la venta es suya y cobra
+    // su % de la parte de la creadora.
+    const writtenById = attachment.message.writtenById;
+    const assistant = writtenById
+      ? await activeAssistant(conversation.model.id, writtenById)
+      : null;
+
     await prisma.$transaction(async (tx) => {
       await transferWithCommission(tx, {
         fromUserId: user.id,
@@ -402,6 +431,7 @@ export async function unlockMessageAttachmentAction(
         description: 'Desbloqueo de archivo adjunto',
         conversationId: conversation.id,
         messageAttachmentId: attachment.id,
+        assistant: assistant ?? undefined,
       });
 
       await tx.messageAttachmentUnlock.create({
@@ -418,6 +448,14 @@ export async function unlockMessageAttachmentAction(
         title: `${user.name ?? 'Alguien'} desbloqueo tu archivo por ${attachment.priceTokens} tokens`,
         link: '/mensajes',
       });
+      if (assistant) {
+        await createNotification(tx, {
+          userId: assistant.userId,
+          type: 'MESSAGE_ATTACHMENT_UNLOCKED',
+          title: `Venta: ${user.name ?? 'un fan'} desbloqueo tu archivo por ${attachment.priceTokens} tokens`,
+          link: `/mensajes/${conversation.id}`,
+        });
+      }
     });
 
     revalidatePath(`/mensajes/${conversation.id}`);

@@ -129,6 +129,9 @@ enum TransactionType {
   PAYOUT_FEE
   /// Programa de referidos: % de lo que genera una creadora invitada (+)
   REFERRAL_EARNING
+  /// Chatter del equipo de una creadora: su % de lo que vendio en el chat,
+  /// sacado de la parte de ella (+)
+  CHATTER_EARNING
 }
 
 /// Quien puede escribirle a una cuenta (ajuste de privacidad).
@@ -258,6 +261,8 @@ enum NotificationType {
   ANNOUNCEMENT
   /// El equipo ha respondido a tu consulta de soporte
   SUPPORT_REPLY
+  /// Una creadora te invita a llevar sus mensajes (chatter)
+  TEAM_INVITE
 }
 
 enum LiveStreamStatus {
@@ -346,6 +351,9 @@ model User {
   recruiterAccount Recruiter?       @relation("RecruiterAccount")
   supportTickets   SupportTicket[]
   supportMessages  SupportMessage[]
+  /// Creadoras para las que lleva los mensajes (chatter).
+  chatAssistantOf  ChatAssistant[] @relation("ChatAssistantAccount")
+  messagesWritten  Message[]       @relation("MessageWrittenBy")
   postImpressions  PostImpression[]
   postHides        PostHide[]
 
@@ -712,6 +720,7 @@ model ModelProfile {
   streams          LiveStream[]
   visits           ProfileVisit[]
   greetings        AutoGreetingLog[]
+  chatAssistants   ChatAssistant[]
 
   @@index([isOnline, isVipEnabled])
   @@index([gender, tier])
@@ -928,6 +937,10 @@ model Message {
   // Puede ir vacio si el mensaje es solo un archivo adjunto.
   body String?
 
+  /// Chatter que lo escribio en nombre de la creadora (senderId sigue siendo
+  /// la creadora). Solo lo ven ella y el equipo, nunca el fan.
+  writtenById String?
+
   /// true si lo genero el asistente de un perfil isAi. La interfaz lo etiqueta
   /// para que el usuario sepa siempre que no le contesta una persona.
   isAiGenerated Boolean @default(false)
@@ -936,6 +949,7 @@ model Message {
 
   conversation Conversation       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender       User               @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  writtenBy    User?              @relation("MessageWrittenBy", fields: [writtenById], references: [id], onDelete: SetNull)
   attachment   MessageAttachment?
 
   @@index([conversationId, createdAt])
@@ -1810,4 +1824,33 @@ model SupportMessage {
 
   @@index([ticketId, createdAt])
   @@map("support_messages")
+}
+
+enum ChatAssistantStatus {
+  INVITED
+  ACTIVE
+  REMOVED
+}
+
+/// EQUIPO DE CHAT: una creadora delega sus mensajes en otra cuenta (chatter).
+/// El chatter escribe en su nombre y cobra su % de lo que vende en el chat,
+/// sacado de la parte de ella (la plataforma cobra lo mismo de siempre).
+model ChatAssistant {
+  id      String @id @default(cuid())
+  modelId String
+  userId  String
+  /// % de la parte de la creadora en las ventas que hace el chatter (0-50).
+  percent Int
+  status  ChatAssistantStatus @default(INVITED)
+
+  createdAt  DateTime  @default(now())
+  acceptedAt DateTime?
+  endedAt    DateTime?
+
+  model ModelProfile @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  user  User         @relation("ChatAssistantAccount", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([modelId, userId])
+  @@index([userId, status])
+  @@map("chat_assistants")
 }

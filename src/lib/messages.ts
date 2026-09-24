@@ -8,6 +8,9 @@ interface MessageWithAttachment {
   createdAt: Date;
   senderId: string;
   isAiGenerated: boolean;
+  /** Chatter que lo escribio en nombre de la creadora. */
+  writtenById?: string | null;
+  writtenBy?: { username: string | null } | null;
   attachment: {
     id: string;
     mimeType: string;
@@ -23,6 +26,8 @@ interface MessageWithAttachment {
 export async function buildMessageRows(
   messages: MessageWithAttachment[],
   viewerId: string,
+  /** Lado de la creadora (ella o su equipo): ve quien escribio cada mensaje. */
+  showAuthor = false,
 ): Promise<MessageRow[]> {
   const paidAttachmentIds = messages
     .filter(
@@ -65,6 +70,14 @@ export async function buildMessageRows(
         createdAt: m.createdAt.toISOString(),
         isMine: m.senderId === viewerId,
         isAiGenerated: m.isAiGenerated,
+        writtenBy:
+          showAuthor && m.writtenById !== undefined
+            ? m.writtenBy?.username
+              ? `@${m.writtenBy.username}`
+              : m.writtenById
+                ? 'Equipo'
+                : null
+            : null,
         attachment,
       };
     }),

@@ -74,6 +74,14 @@ export default async function AdminChatPage({
                           <Bot className="h-3 w-3" /> IA
                         </span>
                       )}
+                      {m.writtenBy && (
+                        <Link
+                          href={`/admin/users/${m.writtenBy.id}`}
+                          className="ml-1 text-amber-500 hover:underline"
+                        >
+                          escrito por chatter @{m.writtenBy.username ?? 'sin usuario'}
+                        </Link>
+                      )}
                     </span>
                     <div
                       className={cn(

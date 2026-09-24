@@ -141,7 +141,13 @@ export async function getUnreadChatCount(
 }
 
 /** Todos los chats de una cuenta, de los dos tipos, en una sola lista. */
-export async function getInbox(userId: string, modelProfileId: string | null): Promise<InboxThread[]> {
+export async function getInbox(
+  userId: string,
+  modelProfileId: string | null,
+  /** Solo los chats con fans de la creadora (bandeja de su equipo de chat). */
+  opts: { onlyCreatorChats?: boolean } = {},
+): Promise<InboxThread[]> {
+  const all = !opts.onlyCreatorChats;
   const lastMessage = {
     orderBy: { createdAt: 'desc' as const },
     take: 1,
@@ -149,7 +155,7 @@ export async function getInbox(userId: string, modelProfileId: string | null): P
 
   const [peer, asFan, asCreator] = await Promise.all([
     prisma.peerChat.findMany({
-      where: { OR: [{ userAId: userId }, { userBId: userId }] },
+      where: all ? { OR: [{ userAId: userId }, { userBId: userId }] } : { id: '' },
       orderBy: { lastMessageAt: 'desc' },
       take: 60,
       select: {
@@ -166,7 +172,7 @@ export async function getInbox(userId: string, modelProfileId: string | null): P
       },
     }),
     prisma.conversation.findMany({
-      where: { userId },
+      where: all ? { userId } : { id: '' },
       orderBy: { lastMessageAt: 'desc' },
       take: 60,
       select: {

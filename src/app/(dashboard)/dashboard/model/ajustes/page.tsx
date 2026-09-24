@@ -11,6 +11,7 @@ import {
   MessageSquareHeart,
   Pencil,
   ShieldBan,
+  UsersRound,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -37,9 +38,10 @@ export const dynamic = 'force-dynamic';
  */
 export default async function SettingsPage() {
   const { user, profile } = await requireModel();
-  const [legacyPacks, account] = await Promise.all([
+  const [legacyPacks, account, teamSize] = await Promise.all([
     prisma.contentPackage.count({ where: { modelId: profile.id } }),
     prisma.user.findUniqueOrThrow({ where: { id: user.id }, select: { messagePrivacy: true } }),
+    prisma.chatAssistant.count({ where: { modelId: profile.id, status: 'ACTIVE' } }),
   ]);
 
   const kycOk = profile.kycStatus === 'APPROVED';
@@ -162,6 +164,19 @@ export default async function SettingsPage() {
           Los fans que pagan por abrir chat contigo siempre pueden escribirte
           (lo controlas en &laquo;Mensajes de fans&raquo;). Esto es para chats gratis.
         </p>
+      </Group>
+
+      <Group title="Tu equipo de chat">
+        <Row
+          href="/dashboard/model/equipo"
+          icon={UsersRound}
+          title="Mi equipo"
+          hint={
+            teamSize > 0
+              ? `${teamSize} ${teamSize === 1 ? 'persona lleva' : 'personas llevan'} tus mensajes`
+              : 'Invita a alguien para que conteste tus mensajes por ti'
+          }
+        />
       </Group>
 
       <Group title="Cuentas bloqueadas">

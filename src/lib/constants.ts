@@ -144,6 +144,7 @@ export const TRANSACTION_TYPE_LABELS: Record<TransactionType, string> = {
   POST_EARNING: 'Ganancia por publicacion',
   PAYOUT_FEE: 'Comision de retiro',
   REFERRAL_EARNING: 'Referidos (embajadora)',
+  CHATTER_EARNING: 'Ventas como chatter',
 };
 
 /** Cantidades rapidas del boton de regalo durante una llamada */

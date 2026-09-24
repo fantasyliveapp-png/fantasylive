@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { config } from '@/lib/config';
+import { getChattersForAdmin } from '@/lib/chat-team';
 import { prisma } from '@/lib/prisma';
 import { FOUNDER_SPOTS } from '@/lib/referrals';
 import { tokensToPayoutCents, withdrawableTokens } from '@/lib/tokens';
@@ -14,7 +15,7 @@ const DAY = 24 * 60 * 60 * 1000;
 
 /** Contadores de lo pendiente (menu lateral y bandeja del resumen). */
 export async function getAdminCounts() {
-  const [kyc, reports, payouts, recruiterWallets, live, support] = await Promise.all([
+  const [kyc, reports, payouts, recruiterWallets, live, support, chatters] = await Promise.all([
     prisma.kycVerification.count({ where: { status: 'PENDING' } }),
     prisma.report.count({
       where: { status: { in: ['OPEN', 'UNDER_REVIEW', 'ESCALATED'] } },
@@ -34,11 +35,16 @@ export async function getAdminCounts() {
     }),
     prisma.liveStream.count({ where: { status: 'LIVE' } }),
     prisma.supportTicket.count({ where: { status: 'OPEN' } }),
+    getChattersForAdmin(),
   ]);
+  // Chatters que no son creadoras (a esas se les paga a mano) y ya llegan al minimo.
+  const chattersToPay = chatters.filter(
+    (c) => !c.isCreator && c.pendingTokens >= config.economy.minPayoutTokens,
+  ).length;
   const recruitersToPay = recruiterWallets.filter(
     (r) => r.user.wallet && withdrawableTokens(r.user.wallet) >= config.economy.minPayoutTokens,
   ).length;
-  return { kyc, reports, payouts, recruitersToPay, live, support };
+  return { kyc, reports, payouts, recruitersToPay, chattersToPay, live, support };
 }
 
 export type DayPoint = { day: string; revenueCents: number; signups: number };
@@ -239,6 +245,7 @@ const AUDIT_LABELS: Record<string, string> = {
   RECRUITER_CREATED: 'Creo un reclutador',
   RECRUITER_UPDATED: 'Cambio las condiciones de un reclutador',
   RECRUITER_PAID: 'Anoto un pago a un reclutador',
+  CHATTER_PAID: 'Anoto un pago a un chatter',
   SEED_EXECUTED: 'Datos de prueba cargados',
   POST_REMOVED: 'Retiro una publicacion',
   POST_RESTORED: 'Restauro una publicacion',

@@ -9,6 +9,7 @@ import {
   Crown,
   Flag,
   Handshake,
+  MessagesSquare,
   LifeBuoy,
   PhoneCall,
   Radio,
@@ -74,6 +75,13 @@ export default async function AdminDashboardPage() {
       icon: Handshake,
       count: o.counts.recruitersToPay,
       title: 'Pagos a reclutadores',
+      detail: 'Ya llegaron al minimo de pago semanal',
+    },
+    {
+      href: '/admin/chatters',
+      icon: MessagesSquare,
+      count: o.counts.chattersToPay,
+      title: 'Pagos a chatters',
       detail: 'Ya llegaron al minimo de pago semanal',
     },
   ];

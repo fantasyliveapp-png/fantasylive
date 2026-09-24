@@ -9,6 +9,7 @@ import { SafetyMenu } from '@/components/social/safety-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { requireUser } from '@/lib/auth/guards';
 import { isBlockedBetween } from '@/lib/chat';
+import { getChatRole } from '@/lib/chat-team';
 import { buildMessageRows } from '@/lib/messages';
 import { prisma } from '@/lib/prisma';
 import { initials } from '@/lib/utils';
@@ -50,11 +51,13 @@ function ChatHeader({
   image,
   profileHref,
   safety,
+  backHref = '/mensajes',
 }: {
   name: string;
   image: string | null;
   profileHref: string | null;
   safety: React.ReactNode;
+  backHref?: string;
 }) {
   const who = (
     <>
@@ -67,7 +70,7 @@ function ChatHeader({
   );
   return (
     <header className="sticky top-16 z-20 -mx-6 md:top-0 flex items-center gap-3 border-b border-border/60 bg-background/90 px-6 py-3 backdrop-blur-xl">
-      <Link href="/mensajes" className="rounded-full p-1.5 hover:bg-muted" aria-label="Volver">
+      <Link href={backHref} className="rounded-full p-1.5 hover:bg-muted" aria-label="Volver">
         <ArrowLeft className="h-5 w-5" />
       </Link>
       {profileHref ? (
@@ -216,20 +219,28 @@ async function getConversation(id: string, viewerId: string) {
       model: {
         select: { id: true, userId: true, slug: true, stageName: true, avatarUrl: true },
       },
-      messages: { orderBy: { createdAt: 'asc' }, include: { attachment: true } },
+      messages: {
+        orderBy: { createdAt: 'asc' },
+        include: { attachment: true, writtenBy: { select: { username: true } } },
+      },
     },
   });
   if (!conversation) return null;
-  if (conversation.userId !== viewerId && conversation.model.userId !== viewerId) return null;
-  return conversation;
+  // Fan, creadora o alguien de su equipo de chat.
+  const role = await getChatRole(conversation, viewerId);
+  if (!role) return null;
+  return { ...conversation, role };
 }
 
 async function ConversationView({
   viewerId,
   ...conversation
 }: NonNullable<Awaited<ReturnType<typeof getConversation>>> & { viewerId: string }) {
-  const iAmCreator = conversation.model.userId === viewerId;
-  const messages = await buildMessageRows(conversation.messages, viewerId);
+  // El chatter ve el chat como si fuera ella (sus mensajes, a la derecha).
+  const iAmCreator = conversation.role !== 'fan';
+  const isAssistant = conversation.role === 'assistant';
+  const sideId = iAmCreator ? conversation.model.userId : viewerId;
+  const messages = await buildMessageRows(conversation.messages, sideId, iAmCreator);
 
   // Quien esta al otro lado.
   const card = iAmCreator
@@ -248,8 +259,8 @@ async function ConversationView({
 
   const waitingAccept = conversation.startedByModel && conversation.acceptedAt === null;
   const [blocked, blockedByMe, wallet] = await Promise.all([
-    isBlockedBetween(viewerId, card.id),
-    iBlocked(viewerId, card.id),
+    isBlockedBetween(sideId, card.id),
+    iBlocked(sideId, card.id),
     iAmCreator
       ? null
       : prisma.wallet.findUnique({ where: { userId: viewerId }, select: { balance: true } }),
@@ -276,19 +287,28 @@ async function ConversationView({
 
   return (
     <div className="container max-w-2xl space-y-4 py-4">
+      {isAssistant && (
+        <p className="rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+          Escribes como <strong className="text-foreground">{conversation.model.stageName}</strong>. El
+          fan no ve que eres del equipo.
+        </p>
+      )}
       <ChatHeader
         name={card.name}
         image={card.image}
         profileHref={card.profileHref}
+        backHref={isAssistant ? `/mensajes?equipo=${conversation.model.id}` : '/mensajes'}
         safety={
-          <SafetyMenu
-            targetUserId={card.id}
-            targetName={card.name}
-            context={`conversation:${conversation.id}`}
-            reportLabel="Denunciar chat"
-            initialBlocked={blockedByMe}
-            isAuthenticated
-          />
+          isAssistant ? null : (
+            <SafetyMenu
+              targetUserId={card.id}
+              targetName={card.name}
+              context={`conversation:${conversation.id}`}
+              reportLabel="Denunciar chat"
+              initialBlocked={blockedByMe}
+              isAuthenticated
+            />
+          )
         }
       />
 
