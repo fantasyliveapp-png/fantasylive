@@ -305,11 +305,15 @@ export async function publishPostAction(
         id: true,
         body: true,
         isPublished: true,
+        removedAt: true,
         poll: { select: { id: true, endsAt: true } },
         _count: { select: { assets: true } },
       },
     });
     if (!post) return { ok: false, error: 'Publicacion no encontrada.' };
+    if (post.removedAt) {
+      return { ok: false, error: 'Esta publicacion fue retirada por moderacion y no se puede publicar.' };
+    }
     if (post.isPublished) return { ok: true, message: 'Ya estaba publicada.' };
     if (post._count.assets === 0 && !post.body && !post.poll) {
       return { ok: false, error: 'Anade texto o al menos un archivo.' };

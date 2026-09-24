@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { requireAdmin } from '@/lib/auth/guards';
 import { prisma } from '@/lib/prisma';
 
-export const metadata: Metadata = { title: 'Usuarios y modelos' };
+export const metadata: Metadata = { title: 'Usuarios y creadoras' };
 export const dynamic = 'force-dynamic';
 
 const PAGE_SIZE = 30;

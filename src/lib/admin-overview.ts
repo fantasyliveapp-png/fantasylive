@@ -14,7 +14,7 @@ const DAY = 24 * 60 * 60 * 1000;
 
 /** Contadores de lo pendiente (menu lateral y bandeja del resumen). */
 export async function getAdminCounts() {
-  const [kyc, reports, payouts, recruiterWallets] = await Promise.all([
+  const [kyc, reports, payouts, recruiterWallets, live] = await Promise.all([
     prisma.kycVerification.count({ where: { status: 'PENDING' } }),
     prisma.report.count({
       where: { status: { in: ['OPEN', 'UNDER_REVIEW', 'ESCALATED'] } },
@@ -32,11 +32,12 @@ export async function getAdminCounts() {
         },
       },
     }),
+    prisma.liveStream.count({ where: { status: 'LIVE' } }),
   ]);
   const recruitersToPay = recruiterWallets.filter(
     (r) => r.user.wallet && withdrawableTokens(r.user.wallet) >= config.economy.minPayoutTokens,
   ).length;
-  return { kyc, reports, payouts, recruitersToPay };
+  return { kyc, reports, payouts, recruitersToPay, live };
 }
 
 export type DayPoint = { day: string; revenueCents: number; signups: number };
@@ -238,6 +239,11 @@ const AUDIT_LABELS: Record<string, string> = {
   RECRUITER_UPDATED: 'Cambio las condiciones de un reclutador',
   RECRUITER_PAID: 'Anoto un pago a un reclutador',
   SEED_EXECUTED: 'Datos de prueba cargados',
+  POST_REMOVED: 'Retiro una publicacion',
+  POST_RESTORED: 'Restauro una publicacion',
+  COMMENT_DELETED: 'Borro un comentario',
+  LIVE_ENDED_BY_ADMIN: 'Corto un directo',
+  CHAT_VIEWED: 'Abrio un chat privado',
 };
 
 export function auditLabel(action: string) {

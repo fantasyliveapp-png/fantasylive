@@ -10,6 +10,9 @@ import {
   BadgeCheck,
   Flag,
   Handshake,
+  Images,
+  MessageCircle,
+  Radio,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -34,6 +37,8 @@ export type AdminCounts = {
   reports: number;
   payouts: number;
   recruitersToPay: number;
+  /** Directos en el aire ahora mismo. */
+  live: number;
 };
 
 type NavLink = {
@@ -69,6 +74,14 @@ const NAV: { title?: string; links: NavLink[] }[] = [
         icon: Wallet,
         count: 'payouts',
       },
+    ],
+  },
+  {
+    title: 'Supervisar',
+    links: [
+      { href: '/admin/content', label: 'Contenido', icon: Images },
+      { href: '/admin/chats', label: 'Mensajes', icon: MessageCircle },
+      { href: '/admin/live', label: 'Directos', icon: Radio, count: 'live' },
     ],
   },
   {
@@ -304,8 +317,11 @@ export function AdminTabs({
   basePath,
   current,
   tabs,
+  param = 'status',
 }: {
   basePath: string;
+  /** Parametro de la URL que cambia cada pestana. */
+  param?: string;
   /** Valor actual de `?status` ('' = la pestana por defecto). */
   current: string;
   tabs: { value: string; label: string }[];
@@ -317,7 +333,7 @@ export function AdminTabs({
         return (
           <Link
             key={t.value || 'default'}
-            href={t.value ? `${basePath}?status=${t.value}` : basePath}
+            href={t.value ? `${basePath}?${param}=${t.value}` : basePath}
             className={cn(
               '-mb-px shrink-0 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors',
               active

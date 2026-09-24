@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  ShieldAlert,
   TrendingUp,
   Bell,
   Check,
@@ -55,6 +56,7 @@ const TYPE_ICON: Record<NotificationType, typeof Bell> = {
   NEW_POST: ImageIcon,
   GIFT_RECEIVED: Gift,
   POST_INSIGHT: TrendingUp,
+  MODERATION: ShieldAlert,
 };
 
 /**

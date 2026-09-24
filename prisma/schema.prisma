@@ -252,6 +252,8 @@ enum NotificationType {
   GIFT_RECEIVED
   /// Como va una publicacion propia (fase de prueba superada, hitos de vistas)
   POST_INSIGHT
+  /// Aviso del equipo de moderacion (p. ej. publicacion retirada)
+  MODERATION
 }
 
 enum LiveStreamStatus {
@@ -1426,18 +1428,22 @@ model Post {
   priceTokens Int     @default(0)
   isPublished Boolean @default(true)
 
-  likeCount    Int    @default(0)
-  commentCount Int    @default(0)
-  unlockCount  Int    @default(0)
+  likeCount     Int       @default(0)
+  commentCount  Int       @default(0)
+  unlockCount   Int       @default(0)
   /// Personas distintas que la han visto en el feed (ver PostImpression).
-  viewCount    Int    @default(0)
-  tokensEarned Int    @default(0)
+  viewCount     Int       @default(0)
+  tokensEarned  Int       @default(0)
+  /// Retirada por moderacion: deja de verse y la creadora no puede
+  /// volver a publicarla.
+  removedAt     DateTime?
+  removedReason String?
   /// Tiempo total que la han mirado (ms, max 60 s por persona).
-  watchMs      BigInt @default(0)
+  watchMs       BigInt    @default(0)
   /// Personas que vieron el video (casi) entero.
-  completions  Int    @default(0)
+  completions   Int       @default(0)
   /// Personas que la pasaron de largo (menos de 1,5 s en pantalla).
-  skips        Int    @default(0)
+  skips         Int       @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

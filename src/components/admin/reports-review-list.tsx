@@ -182,9 +182,12 @@ export function ReportsReviewList({ reports }: { reports: ReportRow[] }) {
                       Reportado
                     </p>
                     <div className="mt-1 flex items-center gap-2">
-                      <p className="text-sm font-medium">
+                      <Link
+                        href={`/admin/users/${report.reported.id}`}
+                        className="text-sm font-medium hover:underline"
+                      >
                         {report.reported.name ?? 'Usuario'}
-                      </p>
+                      </Link>
                       {report.reported.status !== 'ACTIVE' && (
                         <Badge variant="destructive" className="text-[10px]">
                           {report.reported.status}
@@ -209,15 +212,30 @@ export function ReportsReviewList({ reports }: { reports: ReportRow[] }) {
                 {report.context && (
                   <p className="text-xs text-muted-foreground">
                     Denunciado desde:{' '}
-                    <span className="font-medium text-foreground">
-                      {report.context === 'profile'
-                        ? 'su perfil'
-                        : report.context.startsWith('post:')
+                    {(() => {
+                      const [kind, id] = report.context.split(':');
+                      const href =
+                        kind === 'post'
+                          ? `/admin/content/${id}`
+                          : kind === 'chat'
+                            ? `/admin/chats/peer/${id}`
+                            : kind === 'conversation'
+                              ? `/admin/chats/fan/${id}`
+                              : `/admin/users/${report.reported.id}`;
+                      const label =
+                        kind === 'post'
                           ? 'una publicacion'
-                          : report.context.startsWith('chat:')
+                          : kind === 'chat'
                             ? 'un chat entre personas'
-                            : 'un chat con creadora'}
-                    </span>
+                            : kind === 'conversation'
+                              ? 'un chat con creadora'
+                              : 'su perfil';
+                      return (
+                        <Link href={href} className="font-medium text-primary hover:underline">
+                          {label} (ver)
+                        </Link>
+                      );
+                    })()}
                   </p>
                 )}
 
