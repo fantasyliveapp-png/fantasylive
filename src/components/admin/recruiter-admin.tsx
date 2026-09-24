@@ -226,6 +226,9 @@ export function RecruiterRow({
             <div className="rounded-xl bg-muted/40 p-2">
               <p className="text-muted-foreground">Por pagar</p>
               <p className="font-bold text-state-connected">{formatMoney(r.totals.pendingCents)}</p>
+              <p className="text-[10px] text-muted-foreground">
+                Recibe {formatMoney(r.totals.payNowCents)} (−10%)
+              </p>
             </div>
           </div>
 
@@ -297,7 +300,7 @@ export function RecruiterRow({
               }
               onClick={() => {
                 const note = window.prompt(
-                  `Anotar pago de ${formatMoney(r.totals.pendingCents)} a @${r.account.username}. Como se le pago (referencia):`,
+                  `Pagale ${formatMoney(r.totals.payNowCents)} a @${r.account.username} (su saldo de ${formatMoney(r.totals.pendingCents)} menos el 10% de retiro). Como se le pago (referencia):`,
                 );
                 if (note === null) return;
                 run(() => payRecruiterAction({ id: r.id, note }));

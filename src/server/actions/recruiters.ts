@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { config } from '@/lib/config';
 import { prisma } from '@/lib/prisma';
-import { applyLedgerEntry, tokensToPayoutCents, withdrawableTokens } from '@/lib/tokens';
+import { applyLedgerEntry, splitPayoutFee, tokensToPayoutCents, withdrawableTokens } from '@/lib/tokens';
 import { formatMoney } from '@/lib/utils';
 
 /**
@@ -188,7 +188,9 @@ export async function payRecruiterAction(input: {
         error: `Aun no llega al minimo de pago (${formatMoney(tokensToPayoutCents(config.economy.minPayoutTokens))}).`,
       };
     }
-    const cents = tokensToPayoutCents(tokens);
+    // Igual que las creadoras: se descuenta la comision de retiro (10%).
+    const { feeTokens, netTokens } = splitPayoutFee(tokens);
+    const cents = tokensToPayoutCents(netTokens);
 
     await prisma.$transaction(async (tx) => {
       await applyLedgerEntry(tx, {
@@ -197,7 +199,8 @@ export async function payRecruiterAction(input: {
         tokens,
         amountCents: cents,
         currency: 'USD',
-        description: `Pago a reclutador (${formatMoney(cents)})${input.note ? `: ${input.note.slice(0, 200)}` : ''}`,
+        platformFeeTokens: feeTokens,
+        description: `Pago a reclutador (${formatMoney(cents)}, comision de retiro ${formatMoney(tokensToPayoutCents(feeTokens))})${input.note ? `: ${input.note.slice(0, 200)}` : ''}`,
       });
       await tx.auditLog.create({
         data: {
@@ -205,13 +208,16 @@ export async function payRecruiterAction(input: {
           action: 'RECRUITER_PAID',
           entityType: 'Recruiter',
           entityId: recruiter.id,
-          metadata: { tokens, cents, note: input.note ?? null },
+          metadata: { tokens, feeTokens, netTokens, cents, note: input.note ?? null },
         },
       });
     });
 
     revalidatePath('/admin/reclutadores');
-    return { ok: true, message: `Pago de ${formatMoney(cents)} anotado.` };
+    return {
+      ok: true,
+      message: `Paga ${formatMoney(cents)} (su saldo menos el ${config.economy.payoutFeePercent}% de retiro). Anotado.`,
+    };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
   }

@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { prisma } from '@/lib/prisma';
-import { tokensToPayoutCents, withdrawableTokens } from '@/lib/tokens';
+import { splitPayoutFee, tokensToPayoutCents, withdrawableTokens } from '@/lib/tokens';
 
 /** En que punto esta cada persona que trajo un reclutador. */
 export type RecruitStatus = 'registered' | 'verifying' | 'active' | 'out_of_quota';
@@ -32,6 +32,8 @@ export interface RecruiterOverview {
     verified: number;
     earnedCents: number;
     pendingCents: number;
+    /** Lo que recibe si se le paga hoy: su saldo menos la comision de retiro. */
+    payNowCents: number;
     paidCents: number;
   };
 }
@@ -103,6 +105,12 @@ export async function getRecruiterOverview(recruiterId: string): Promise<Recruit
   });
 
   const wallet = recruiter.user.wallet;
+  const pendingTokens = wallet ? withdrawableTokens(wallet) : 0;
+  // Lo que de verdad se le pago (ya sin la comision de retiro).
+  const paid = await prisma.transaction.aggregate({
+    where: { userId: recruiter.userId, type: 'PAYOUT' },
+    _sum: { amountCents: true },
+  });
   return {
     id: recruiter.id,
     code: recruiter.code,
@@ -121,8 +129,9 @@ export async function getRecruiterOverview(recruiterId: string): Promise<Recruit
       registered: recruits.length,
       verified: recruits.filter((r) => r.status === 'active').length,
       earnedCents: tokensToPayoutCents(earnedTokens),
-      pendingCents: tokensToPayoutCents(wallet ? withdrawableTokens(wallet) : 0),
-      paidCents: tokensToPayoutCents(wallet?.lifetimeWithdrawn ?? 0),
+      pendingCents: tokensToPayoutCents(pendingTokens),
+      payNowCents: tokensToPayoutCents(splitPayoutFee(pendingTokens).netTokens),
+      paidCents: paid._sum.amountCents ?? 0,
     },
   };
 }

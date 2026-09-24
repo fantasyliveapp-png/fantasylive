@@ -75,7 +75,13 @@ export default async function RecruiterPage() {
       <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Stat icon={Users} label="Registradas" value={String(r.totals.registered)} />
         <Stat icon={BadgeCheck} label="Verificadas" value={String(r.totals.verified)} />
-        <Stat icon={Wallet} label="Por cobrar" value={formatMoney(r.totals.pendingCents)} highlight />
+        <Stat
+          icon={Wallet}
+          label="Por cobrar"
+          value={formatMoney(r.totals.pendingCents)}
+          hint={`Recibes ${formatMoney(r.totals.payNowCents)} (−10% al cobrar)`}
+          highlight
+        />
         <Stat icon={Wallet} label="Ya cobrado" value={formatMoney(r.totals.paidCents)} />
       </section>
 
@@ -111,7 +117,10 @@ export default async function RecruiterPage() {
           <ShieldCheck className="h-4 w-4 text-primary" /> Como cobras y normas
         </p>
         <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
-          <li>Te pagamos lo acumulado cada semana, a partir de {formatMoney(minPayoutCents)}.</li>
+          <li>
+            Te pagamos lo acumulado cada semana, a partir de {formatMoney(minPayoutCents)}. Al
+            cobrar se descuenta un 10%, igual que a las creadoras.
+          </li>
           <li>Cada creadora cuenta cuando verifica su identidad y hace su primera venta.</li>
           <li>Nada de spam, nada dirigido a menores y no te hagas pasar por FantasyLive.</li>
           <li>Si se incumplen las normas, se pausa la cuenta y se pierde lo pendiente.</li>
@@ -125,11 +134,13 @@ function Stat({
   icon: Icon,
   label,
   value,
+  hint,
   highlight,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string;
+  hint?: string;
   highlight?: boolean;
 }) {
   return (
@@ -141,6 +152,7 @@ function Stat({
       <p className={cn('mt-1 font-heading text-2xl leading-none', highlight && 'text-state-connected')}>
         {value}
       </p>
+      {hint && <p className="mt-1 text-[10px] text-muted-foreground">{hint}</p>}
     </div>
   );
 }

@@ -54,13 +54,22 @@ export async function getMonthlyFinance(months = 12): Promise<MonthRow[]> {
     prisma.$queryRaw<{ m: string; fee: bigint | null }[]>`
       SELECT to_char(date_trunc('month', "createdAt"), 'YYYY-MM') AS m, SUM("platformFeeTokens") AS fee
       FROM transactions
-      WHERE "createdAt" >= ${since}
+      WHERE "createdAt" >= ${since} AND type <> 'PAYOUT'
       GROUP BY 1`,
+    // Retiros pagados: los de creadoras (al marcarse PAID) y los pagos a
+    // reclutadores (se anotan ya pagados, sin solicitud de retiro).
     prisma.$queryRaw<{ m: string; cents: bigint | null; fee: bigint | null }[]>`
-      SELECT to_char(date_trunc('month', "paidAt"), 'YYYY-MM') AS m,
-             SUM("amountCents") AS cents, SUM("feeTokens") AS fee
-      FROM payout_requests
-      WHERE status = 'PAID' AND "paidAt" >= ${since}
+      SELECT m, SUM(cents) AS cents, SUM(fee) AS fee FROM (
+        SELECT to_char(date_trunc('month', "paidAt"), 'YYYY-MM') AS m,
+               "amountCents" AS cents, "feeTokens" AS fee
+        FROM payout_requests
+        WHERE status = 'PAID' AND "paidAt" >= ${since}
+        UNION ALL
+        SELECT to_char(date_trunc('month', "createdAt"), 'YYYY-MM') AS m,
+               "amountCents" AS cents, "platformFeeTokens" AS fee
+        FROM transactions
+        WHERE type = 'PAYOUT' AND "payoutRequestId" IS NULL AND "createdAt" >= ${since}
+      ) p
       GROUP BY 1`,
   ]);
 
