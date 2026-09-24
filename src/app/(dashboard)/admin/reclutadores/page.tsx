@@ -5,6 +5,7 @@ import { requireAdmin } from '@/lib/auth/guards';
 import { config } from '@/lib/config';
 import { prisma } from '@/lib/prisma';
 import { getRecruiterOverview } from '@/lib/recruiters';
+import { tokensToPayoutCents } from '@/lib/tokens';
 
 export const metadata: Metadata = { title: 'Reclutadores' };
 export const dynamic = 'force-dynamic';
@@ -24,6 +25,8 @@ export default async function RecruitersAdminPage() {
     (r): r is NonNullable<typeof r> => r !== null,
   );
   const baseUrl = config.app.url.replace(/\/$/, '');
+  // Pagos semanales a partir del minimo de retiro ($25).
+  const minPayoutCents = tokensToPayoutCents(config.economy.minPayoutTokens);
 
   return (
     <div className="space-y-6">
@@ -42,7 +45,7 @@ export default async function RecruitersAdminPage() {
       ) : (
         <ul className="space-y-2">
           {overviews.map((r) => (
-            <RecruiterRow key={r.id} r={r} baseUrl={baseUrl} />
+            <RecruiterRow key={r.id} r={r} baseUrl={baseUrl} minPayoutCents={minPayoutCents} />
           ))}
         </ul>
       )}

@@ -8,6 +8,7 @@ import { requireUser } from '@/lib/auth/guards';
 import { config } from '@/lib/config';
 import { prisma } from '@/lib/prisma';
 import { getRecruiterOverview, termsLabel, type RecruitStatus } from '@/lib/recruiters';
+import { tokensToPayoutCents } from '@/lib/tokens';
 import { cn, formatMoney, initials } from '@/lib/utils';
 
 export const metadata: Metadata = { title: 'Panel de reclutador' };
@@ -33,6 +34,7 @@ export default async function RecruiterPage() {
   if (!recruiter) notFound();
   const r = (await getRecruiterOverview(recruiter.id))!;
   const link = `${config.app.url.replace(/\/$/, '')}/reclutar/${r.code}`;
+  const minPayoutCents = tokensToPayoutCents(config.economy.minPayoutTokens);
 
   return (
     <div className="container max-w-2xl space-y-5 py-6">
@@ -109,7 +111,7 @@ export default async function RecruiterPage() {
           <ShieldCheck className="h-4 w-4 text-primary" /> Como cobras y normas
         </p>
         <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
-          <li>Te pagamos lo acumulado una vez al mes, a partir de $50.</li>
+          <li>Te pagamos lo acumulado cada semana, a partir de {formatMoney(minPayoutCents)}.</li>
           <li>Cada creadora cuenta cuando verifica su identidad y hace su primera venta.</li>
           <li>Nada de spam, nada dirigido a menores y no te hagas pasar por FantasyLive.</li>
           <li>Si se incumplen las normas, se pausa la cuenta y se pierde lo pendiente.</li>

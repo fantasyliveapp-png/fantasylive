@@ -151,7 +151,16 @@ export function CreateRecruiterForm() {
 }
 
 /** Un reclutador: resumen, a quien trajo, cambiar condiciones, pausar y pagar. */
-export function RecruiterRow({ r, baseUrl }: { r: RecruiterOverview; baseUrl: string }) {
+export function RecruiterRow({
+  r,
+  baseUrl,
+  minPayoutCents,
+}: {
+  r: RecruiterOverview;
+  baseUrl: string;
+  /** Minimo para poder pagarle (el mismo que el de las creadoras). */
+  minPayoutCents: number;
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [percent, setPercent] = useState(String(r.commissionPercent));
@@ -280,7 +289,12 @@ export function RecruiterRow({ r, baseUrl }: { r: RecruiterOverview; baseUrl: st
             <Button
               size="sm"
               variant="brand"
-              disabled={isPending || r.totals.pendingCents <= 0}
+              disabled={isPending || r.totals.pendingCents < minPayoutCents}
+              title={
+                r.totals.pendingCents < minPayoutCents
+                  ? `Se le paga a partir de ${formatMoney(minPayoutCents)}`
+                  : undefined
+              }
               onClick={() => {
                 const note = window.prompt(
                   `Anotar pago de ${formatMoney(r.totals.pendingCents)} a @${r.account.username}. Como se le pago (referencia):`,

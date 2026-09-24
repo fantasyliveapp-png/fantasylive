@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
+import { config } from '@/lib/config';
 import { prisma } from '@/lib/prisma';
 import { applyLedgerEntry, tokensToPayoutCents, withdrawableTokens } from '@/lib/tokens';
 import { formatMoney } from '@/lib/utils';
@@ -180,6 +181,13 @@ export async function payRecruiterAction(input: {
     const wallet = recruiter.user.wallet;
     const tokens = wallet ? withdrawableTokens(wallet) : 0;
     if (tokens <= 0) return { ok: false, error: 'No tiene nada pendiente de pago.' };
+    // Mismo minimo que los retiros de las creadoras ($25).
+    if (tokens < config.economy.minPayoutTokens) {
+      return {
+        ok: false,
+        error: `Aun no llega al minimo de pago (${formatMoney(tokensToPayoutCents(config.economy.minPayoutTokens))}).`,
+      };
+    }
     const cents = tokensToPayoutCents(tokens);
 
     await prisma.$transaction(async (tx) => {
