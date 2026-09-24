@@ -77,6 +77,7 @@ export async function adminRemovePostAction(input: {
         type: 'MODERATION',
         title: 'Hemos retirado una de tus publicaciones',
         body: `Motivo: ${reason}. Si crees que es un error, escribe a soporte.`,
+        link: '/soporte',
       });
     });
 
@@ -196,6 +197,7 @@ export async function adminEndStreamAction(input: {
       type: 'MODERATION',
       title: 'Hemos cortado tu directo',
       body: `Motivo: ${reason}. Si crees que es un error, escribe a soporte.`,
+      link: '/soporte',
     });
 
     revalidatePath('/admin/live');

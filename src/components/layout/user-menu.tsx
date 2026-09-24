@@ -16,6 +16,7 @@ import {
   Sparkles,
   SlidersHorizontal,
   UserRound,
+  LifeBuoy,
 } from 'lucide-react';
 import type { Role } from '@prisma/client';
 
@@ -183,6 +184,11 @@ export function UserMenu({
         <DropdownMenuItem asChild>
           <Link href={profileSlug ? '/dashboard/model/ajustes' : '/dashboard/settings'}>
             <Settings /> Ajustes
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/soporte">
+            <LifeBuoy /> Soporte
           </Link>
         </DropdownMenuItem>
         {/* En el movil el globo no cabe arriba: el idioma va aqui. */}

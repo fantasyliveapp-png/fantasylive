@@ -254,6 +254,10 @@ enum NotificationType {
   POST_INSIGHT
   /// Aviso del equipo de moderacion (p. ej. publicacion retirada)
   MODERATION
+  /// Aviso general del equipo a todos (o a un grupo)
+  ANNOUNCEMENT
+  /// El equipo ha respondido a tu consulta de soporte
+  SUPPORT_REPLY
 }
 
 enum LiveStreamStatus {
@@ -340,6 +344,8 @@ model User {
   recruitedBy      Recruiter?       @relation("RecruitedBy", fields: [recruitedById], references: [id], onDelete: SetNull)
   /// Si esta cuenta es de un reclutador, sus condiciones.
   recruiterAccount Recruiter?       @relation("RecruiterAccount")
+  supportTickets   SupportTicket[]
+  supportMessages  SupportMessage[]
   postImpressions  PostImpression[]
   postHides        PostHide[]
 
@@ -569,7 +575,9 @@ model ModelProfile {
 
   /// "Fundadora" n.o 1-100: de las 100 primeras creadoras verificadas. Su %
   /// por invitar creadoras es para siempre (las demas, 12 meses).
-  founderNumber Int? @unique
+  founderNumber Int?      @unique
+  /// Destacada por el equipo hasta esta fecha: sale mas en Descubrir.
+  featuredUntil DateTime?
 
   stageName String
   slug      String  @unique
@@ -1743,4 +1751,63 @@ model Recruiter {
   creators User[] @relation("RecruitedBy")
 
   @@map("recruiters")
+}
+
+/// AVISO A TODOS: mensaje del equipo que llega como notificacion a un grupo.
+model Announcement {
+  id          String   @id @default(cuid())
+  /// all | fans | creators | founders
+  audience    String
+  title       String
+  body        String?
+  link        String?
+  sentCount   Int      @default(0)
+  createdById String
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("announcements")
+}
+
+enum SupportStatus {
+  /// Esperando respuesta del equipo
+  OPEN
+  /// El equipo respondio; esperando a la persona
+  ANSWERED
+  CLOSED
+}
+
+/// SOPORTE: una consulta de un usuario al equipo, con su conversacion.
+model SupportTicket {
+  id        String        @id @default(cuid())
+  userId    String
+  /// cuenta | pagos | retiros | contenido | verificacion | otro
+  category  String
+  subject   String
+  status    SupportStatus @default(OPEN)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages SupportMessage[]
+
+  @@index([status, updatedAt])
+  @@index([userId, updatedAt])
+  @@map("support_tickets")
+}
+
+model SupportMessage {
+  id        String   @id @default(cuid())
+  ticketId  String
+  authorId  String
+  /// true = lo escribio el equipo
+  fromStaff Boolean  @default(false)
+  body      String
+  createdAt DateTime @default(now())
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
+  @@map("support_messages")
 }

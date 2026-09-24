@@ -67,7 +67,7 @@ const DEBIT_TYPES: TransactionType[] = [
 ];
 
 /** Tipos de movimiento que representan ingresos de una modelo. */
-const EARNING_TYPES: TransactionType[] = [
+export const EARNING_TYPES: TransactionType[] = [
   'CALL_EARNING',
   'CONTENT_EARNING',
   'TIP_EARNING',

@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ShieldAlert,
+  Megaphone,
+  LifeBuoy,
   TrendingUp,
   Bell,
   Check,
@@ -57,6 +59,8 @@ const TYPE_ICON: Record<NotificationType, typeof Bell> = {
   GIFT_RECEIVED: Gift,
   POST_INSIGHT: TrendingUp,
   MODERATION: ShieldAlert,
+  ANNOUNCEMENT: Megaphone,
+  SUPPORT_REPLY: LifeBuoy,
 };
 
 /**

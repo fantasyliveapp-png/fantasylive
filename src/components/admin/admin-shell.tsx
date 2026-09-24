@@ -9,7 +9,12 @@ import {
   ArrowUpRight,
   BadgeCheck,
   Flag,
+  ChartColumn,
+  Filter,
   Handshake,
+  LifeBuoy,
+  Megaphone,
+  Sparkles,
   Images,
   MessageCircle,
   Radio,
@@ -39,6 +44,8 @@ export type AdminCounts = {
   recruitersToPay: number;
   /** Directos en el aire ahora mismo. */
   live: number;
+  /** Consultas de soporte esperando respuesta. */
+  support: number;
 };
 
 type NavLink = {
@@ -50,30 +57,14 @@ type NavLink = {
 };
 
 const NAV: { title?: string; links: NavLink[] }[] = [
-  {
-    links: [{ href: '/admin', label: 'Resumen', icon: LayoutDashboard, exact: true }],
-  },
+  { links: [{ href: '/admin', label: 'Resumen', icon: LayoutDashboard, exact: true }] },
   {
     title: 'Por revisar',
     links: [
-      {
-        href: '/admin/kyc',
-        label: 'Verificaciones',
-        icon: BadgeCheck,
-        count: 'kyc',
-      },
-      {
-        href: '/admin/reports',
-        label: 'Reportes',
-        icon: Flag,
-        count: 'reports',
-      },
-      {
-        href: '/admin/payouts',
-        label: 'Retiros',
-        icon: Wallet,
-        count: 'payouts',
-      },
+      { href: '/admin/kyc', label: 'Verificaciones', icon: BadgeCheck, count: 'kyc' },
+      { href: '/admin/reports', label: 'Reportes', icon: Flag, count: 'reports' },
+      { href: '/admin/payouts', label: 'Retiros', icon: Wallet, count: 'payouts' },
+      { href: '/admin/soporte', label: 'Soporte', icon: LifeBuoy, count: 'support' },
     ],
   },
   {
@@ -88,17 +79,23 @@ const NAV: { title?: string; links: NavLink[] }[] = [
     title: 'Comunidad',
     links: [
       { href: '/admin/users', label: 'Usuarios y creadoras', icon: Users },
+      { href: '/admin/embudo', label: 'Embudo de creadoras', icon: Filter },
+      { href: '/admin/destacadas', label: 'Destacadas', icon: Sparkles },
       {
         href: '/admin/reclutadores',
         label: 'Reclutadores',
         icon: Handshake,
         count: 'recruitersToPay',
       },
+      { href: '/admin/avisos', label: 'Avisos', icon: Megaphone },
     ],
   },
   {
     title: 'Dinero',
-    links: [{ href: '/admin/transactions', label: 'Transacciones', icon: Receipt }],
+    links: [
+      { href: '/admin/finanzas', label: 'Finanzas', icon: ChartColumn },
+      { href: '/admin/transactions', label: 'Transacciones', icon: Receipt },
+    ],
   },
 ];
 
@@ -122,7 +119,7 @@ export function AdminShell({
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const current = ALL_LINKS.find((l) => isActive(pathname, l));
-  const totalPending = counts.kyc + counts.reports + counts.payouts + counts.recruitersToPay;
+  const totalPending = counts.kyc + counts.reports + counts.payouts + counts.recruitersToPay + counts.support;
 
   // Al navegar desde el menu del movil, se cierra solo.
   useEffect(() => setOpen(false), [pathname]);

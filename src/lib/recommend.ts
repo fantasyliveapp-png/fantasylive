@@ -232,6 +232,8 @@ interface Candidate {
     isLive: boolean;
     followersCount: number;
     createdAt: Date;
+    /** Destacada por el equipo (admin) ahora mismo. */
+    featured: boolean;
   };
   hasMedia: boolean;
   hasVideo: boolean;
@@ -310,6 +312,8 @@ function scoreCandidates(params: {
     const creatorAgeDays = (now - c.model.createdAt.getTime()) / 86_400_000;
     if (creatorAgeDays < 30) score += 0.2;
     if (c.model.followersCount < 50) score += 0.1;
+    // Destacada por el equipo: empujon claro, pero sin tapar los gustos.
+    if (c.model.featured) score += 0.6;
 
     const isLive = c.model.isLive;
     if (tastes && hasTastes(tastes)) score += tasteScore(tastes, { ...c.model, isLive });
@@ -425,6 +429,7 @@ export async function getForYouFeed(params: {
             isOnline: true,
             followersCount: true,
             createdAt: true,
+            featuredUntil: true,
             streams: { where: { status: 'LIVE' }, select: { id: true }, take: 1 },
           },
         },
@@ -463,6 +468,7 @@ export async function getForYouFeed(params: {
         isLive: p.model.streams.length > 0,
         followersCount: p.model.followersCount,
         createdAt: p.model.createdAt,
+        featured: Boolean(p.model.featuredUntil && p.model.featuredUntil > new Date()),
       },
       hasMedia: p.assets.length > 0,
       hasVideo: p.assets.some((a) => a.mimeType.startsWith('video/')),
@@ -558,6 +564,7 @@ export async function getSuggestedCreators(params: {
       isOnline: true,
       followersCount: true,
       createdAt: true,
+      featuredUntil: true,
       streams: { where: { status: 'LIVE' }, select: { id: true }, take: 1 },
     },
   });
@@ -572,6 +579,7 @@ export async function getSuggestedCreators(params: {
         tasteScore(params.tastes, { ...m, isLive: m.streams.length > 0 }) +
         (m.isOnline ? 0.1 : 0) +
         ((now - m.createdAt.getTime()) / 86_400_000 < 30 ? 0.15 : 0) +
+        (m.featuredUntil && m.featuredUntil.getTime() > now ? 0.5 : 0) +
         Math.random() * 0.1,
     }))
     .sort((a, b) => b.score - a.score);

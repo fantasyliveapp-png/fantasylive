@@ -9,6 +9,7 @@ import {
   Crown,
   Flag,
   Handshake,
+  LifeBuoy,
   PhoneCall,
   Radio,
   Wallet,
@@ -60,6 +61,13 @@ export default async function AdminDashboardPage() {
       count: o.counts.payouts,
       title: 'Retiros de creadoras',
       detail: `${formatMoney(o.payoutsPendingCents)} por pagar en total`,
+    },
+    {
+      href: '/admin/soporte',
+      icon: LifeBuoy,
+      count: o.counts.support,
+      title: 'Consultas de soporte',
+      detail: 'Fans y creadoras esperando respuesta',
     },
     {
       href: '/admin/reclutadores',

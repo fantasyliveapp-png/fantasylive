@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft, Crown, ExternalLink, Flag, MessageCircle } from 'lucide-react';
 
 import { AdminPageHeader } from '@/components/admin/admin-shell';
+import { FeatureButtons } from '@/components/admin/admin-tools';
 import { Empty, Panel, PersonLink, Pill } from '@/components/admin/admin-ui';
 import { UserModerationButtons } from '@/components/admin/supervision-actions';
 import { adminMediaUrl, getAdminChats, personOf } from '@/lib/admin-supervision';
@@ -67,6 +68,7 @@ export default async function AdminUserPage({ params }: { params: Promise<{ id: 
           avatarUrl: true,
           kycStatus: true,
           founderNumber: true,
+          featuredUntil: true,
           isOnline: true,
           postsCount: true,
           totalTokensEarned: true,
@@ -241,6 +243,24 @@ export default async function AdminUserPage({ params }: { params: Promise<{ id: 
               />
             </dl>
           </Panel>
+
+          {mp?.kycStatus === 'APPROVED' && (
+            <Panel
+              title="Destacar en Descubrir"
+              aside={
+                mp.featuredUntil && mp.featuredUntil > new Date()
+                  ? `hasta ${formatDate(mp.featuredUntil)}`
+                  : undefined
+              }
+            >
+              <div className="px-5 py-4">
+                <FeatureButtons
+                  modelId={mp.id}
+                  featured={Boolean(mp.featuredUntil && mp.featuredUntil > new Date())}
+                />
+              </div>
+            </Panel>
+          )}
 
           <Panel title="Dinero">
             <dl className="divide-y divide-white/[0.06] text-sm">
