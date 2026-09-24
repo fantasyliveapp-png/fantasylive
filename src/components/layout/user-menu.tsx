@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { signOut } from 'next-auth/react';
 import {
@@ -17,10 +18,12 @@ import {
   SlidersHorizontal,
   UserRound,
   LifeBuoy,
+  Smartphone,
 } from 'lucide-react';
 import type { Role } from '@prisma/client';
 
 import { LanguageSubMenu } from '@/components/layout/language-switcher';
+import { isStandalone, openInstallApp } from '@/components/pwa/install-app';
 import { SIDEBAR_LABEL, SIDEBAR_ROW } from '@/components/layout/sidebar-row';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -65,6 +68,10 @@ export function UserMenu({
   trigger = 'avatar',
   isRecruiter = false,
 }: UserMenuProps) {
+  // Ya instalada como app: no se ofrece instalarla.
+  const [installed, setInstalled] = useState(true);
+  useEffect(() => setInstalled(isStandalone()), []);
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -191,6 +198,11 @@ export function UserMenu({
             <LifeBuoy /> Soporte
           </Link>
         </DropdownMenuItem>
+        {!installed && (
+          <DropdownMenuItem onSelect={() => openInstallApp()}>
+            <Smartphone /> Instalar app
+          </DropdownMenuItem>
+        )}
         {/* En el movil el globo no cabe arriba: el idioma va aqui. */}
         <LanguageSubMenu className={trigger === 'avatar' ? 'sm:hidden' : undefined} />
 

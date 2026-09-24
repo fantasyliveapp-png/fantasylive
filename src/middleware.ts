@@ -71,7 +71,8 @@ export const config = {
      * Todo salvo:
      * - api (rutas propias con su propia auth)
      * - _next/static, _next/image, favicon, assets publicos
+     * - la app instalable: service worker y su ficha (manifest)
      */
-    '/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
+    '/((?!api|_next/static|_next/image|favicon.ico|sw\\.js|offline\\.html|manifest\\.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
   ],
 };
