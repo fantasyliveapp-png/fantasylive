@@ -141,6 +141,17 @@ export async function sendAnnouncementAction(input: {
       });
     }
 
+    // Tambien al movil de quien tenga los avisos activados (en segundo plano:
+    // pueden ser miles y el admin no tiene que esperar).
+    void import('@/lib/push')
+      .then(({ sendPush }) =>
+        sendPush(
+          users.map((u) => u.id),
+          { title: d.title, body: d.body || undefined, url: d.link || '/', tag: 'aviso' },
+        ),
+      )
+      .catch(() => undefined);
+
     const a = await prisma.announcement.create({
       data: {
         audience: d.audience,

@@ -22,6 +22,7 @@ import {
 import type { NotificationType } from '@prisma/client';
 
 import { SIDEBAR_LABEL, SIDEBAR_ROW } from '@/components/layout/sidebar-row';
+import { PushToggle } from '@/components/pwa/push';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -202,6 +203,7 @@ export function NotificationBell({ label }: { label?: string } = {}) {
             })
           )}
         </div>
+        <PushToggle className="border-t border-border" />
       </DropdownMenuContent>
     </DropdownMenu>
   );

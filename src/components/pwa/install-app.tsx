@@ -26,6 +26,12 @@ const MIN_VISITS = 3;
 const SNOOZE_MS = 14 * 24 * 3600 * 1000;
 export const INSTALL_OPEN_EVENT = 'fl:install-open';
 
+// Para que la invitacion a activar avisos no salga a la vez que esta.
+let bannerOpen = false;
+export function installBannerOpen() {
+  return bannerOpen;
+}
+
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
@@ -138,7 +144,9 @@ export function InstallApp() {
     return () => window.removeEventListener(INSTALL_OPEN_EVENT, onOpen);
   }, [deferred]);
 
-  if (!open || !mode || pathname?.startsWith('/admin')) return null;
+  const visible = Boolean(open && mode && !pathname?.startsWith('/admin'));
+  bannerOpen = visible;
+  if (!visible) return null;
 
   function dismiss() {
     write(DISMISS_KEY, String(Date.now()));

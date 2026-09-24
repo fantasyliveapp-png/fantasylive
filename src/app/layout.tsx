@@ -3,6 +3,7 @@ import { Toaster } from 'sonner';
 
 import { AgeGate } from '@/components/age-gate';
 import { InstallApp } from '@/components/pwa/install-app';
+import { PushPrompt } from '@/components/pwa/push';
 import { AuthProvider } from '@/components/providers/auth-provider';
 import { I18nProvider } from '@/components/providers/i18n-provider';
 import { JoinPromptProvider } from '@/components/providers/join-prompt';
@@ -61,6 +62,7 @@ export default async function RootLayout({
             <AgeGate />
             <JoinPromptProvider>{children}</JoinPromptProvider>
             <InstallApp />
+            <PushPrompt />
             <Toaster
               position="top-center"
               theme="dark"

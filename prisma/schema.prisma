@@ -346,6 +346,7 @@ model User {
   recruiterAccount Recruiter?       @relation("RecruiterAccount")
   supportTickets   SupportTicket[]
   supportMessages  SupportMessage[]
+  pushSubscriptions PushSubscription[]
   postImpressions  PostImpression[]
   postHides        PostHide[]
 
@@ -1869,4 +1870,22 @@ model VaultItem {
 
   @@index([modelId, section, createdAt])
   @@map("vault_items")
+}
+
+/// Movil u ordenador donde la persona activo los avisos (Web Push). Uno por
+/// navegador; se borra solo cuando el servicio de avisos dice que ya no vale.
+model PushSubscription {
+  id         String   @id @default(cuid())
+  userId     String
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
 }
