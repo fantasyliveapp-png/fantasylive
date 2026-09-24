@@ -6,7 +6,7 @@ import { GEO_BLOCKED_MESSAGE, isBlockedForViewer } from '@/lib/geo';
 import { prisma } from '@/lib/prisma';
 import { getObjectBuffer } from '@/lib/storage';
 import { getActiveSubscription } from '@/lib/subscriptions';
-import { watermarkLabel, watermarkSvg } from '@/lib/watermark';
+import { SHOW_WATERMARK, watermarkLabel, watermarkSvg } from '@/lib/watermark';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -96,9 +96,11 @@ export async function GET(
     const { data, info } = await base.toBuffer({ resolveWithObject: true });
 
     const output = await sharp(data)
-      .composite([
-        { input: Buffer.from(watermarkSvg(info.width, info.height, label)), top: 0, left: 0 },
-      ])
+      .composite(
+        SHOW_WATERMARK
+          ? [{ input: Buffer.from(watermarkSvg(info.width, info.height, label)), top: 0, left: 0 }]
+          : [],
+      )
       .jpeg({ quality: 86, mozjpeg: true })
       .toBuffer();
 

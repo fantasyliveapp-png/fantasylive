@@ -41,6 +41,7 @@ import type { FeedPost } from '@/lib/posts';
 import { markCompleted, useViewTracking } from '@/lib/impressions-client';
 import { postAspectRatio } from '@/lib/post-formats';
 import { cn, formatTokens, initials, relativeTime } from '@/lib/utils';
+import { SHOW_WATERMARK } from '@/lib/watermark';
 
 interface CommentRow {
   id: string;
@@ -366,7 +367,7 @@ export function PostCard({
                     disablePictureInPicture={Boolean(post.watermark)}
                     className="h-full w-full object-cover"
                   />
-                  {post.watermark && <VideoWatermark label={post.watermark} />}
+                  {SHOW_WATERMARK && post.watermark && <VideoWatermark label={post.watermark} />}
                 </>
               ) : (
                 /* eslint-disable-next-line @next/next/no-img-element */

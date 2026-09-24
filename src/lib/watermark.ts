@@ -6,6 +6,13 @@
  * quitarla. Es tenue para no estropear la foto, pero sobrevive a capturas.
  */
 
+/**
+ * Apagada: las fotos y videos de pago se ven limpios, sin el @ de quien los
+ * mira. Siguen protegidos (sin clic derecho ni descarga, y solo quien pago
+ * puede abrirlos). Poner a true para volver a marcarlos.
+ */
+export const SHOW_WATERMARK = false;
+
 /** Texto de la marca para una cuenta. */
 export function watermarkLabel(username: string | null, userId: string): string {
   const ref = userId.slice(-6).toUpperCase();
