@@ -61,14 +61,17 @@ export const config = {
     platformCommissionPercent,
     /** Porcentaje que se lleva la modelo. Derivado, nunca se configura aparte. */
     modelRevenueSharePercent: 100 - platformCommissionPercent,
-    signupBonusTokens: num(process.env.SIGNUP_BONUS_TOKENS, 25),
+    // 0 por defecto: regalar tokens cuesta dinero real cuando se gastan con
+    // una creadora (ella cobra), y atrae cuentas falsas.
+    signupBonusTokens: num(process.env.SIGNUP_BONUS_TOKENS, 0),
     /**
      * Duracion maxima de una llamada SIN tarifa (la prueba gratuita del modo
      * aleatorio). Al agotarse, el servidor corta la llamada y ofrece seguir
      * por chat. 0 desactiva el limite.
      */
     freeCallSeconds: num(process.env.FREE_CALL_SECONDS, 300),
-    minPayoutTokens: num(process.env.MIN_PAYOUT_TOKENS, 500),
+    // 250 tokens = $25 (a $0,10 por token).
+    minPayoutTokens: num(process.env.MIN_PAYOUT_TOKENS, 250),
     /**
      * Comision de retiro (%). Se descuenta de los tokens que la creadora
      * solicita, no del saldo restante: pide 1000, se le abonan 900.

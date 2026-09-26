@@ -41,8 +41,14 @@ export const es = {
     dashboard: 'Mi panel',
     login: 'Entrar',
     register: 'Crear cuenta',
+    /** Version corta del boton de registro (movil) */
+    join: 'Únete',
     logout: 'Salir',
     settings: 'Ajustes',
+    profile: 'Perfil',
+    create: 'Crear',
+    myProfile: 'Ver mi perfil',
+    editProfile: 'Editar perfil',
   },
   home: {
     heroTitle: 'Conoce gente real, sin guiones',

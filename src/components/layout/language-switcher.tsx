@@ -9,6 +9,9 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useI18n } from '@/components/providers/i18n-provider';
@@ -16,7 +19,7 @@ import { LOCALES, LOCALE_FLAGS, LOCALE_LABELS } from '@/lib/i18n/locales';
 import { setLocaleAction } from '@/server/actions/i18n';
 import { cn } from '@/lib/utils';
 
-export function LanguageSwitcher({ className }: { className?: string }) {
+function useChooseLocale() {
   const router = useRouter();
   const { locale, t } = useI18n();
   const [isPending, startTransition] = useTransition();
@@ -30,6 +33,36 @@ export function LanguageSwitcher({ className }: { className?: string }) {
       router.refresh();
     });
   }
+  return { locale, t, isPending, choose };
+}
+
+/**
+ * El idioma como submenu, para el menu de la cuenta: en el movil el boton
+ * del globo no cabe en la barra de arriba junto al nombre FantasyLive.
+ */
+export function LanguageSubMenu({ className }: { className?: string }) {
+  const { locale, t, choose } = useChooseLocale();
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger className={cn('gap-2', className)}>
+        <Globe className="h-4 w-4" />
+        {t('common.language')}
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent className="w-44">
+        {LOCALES.map((option) => (
+          <DropdownMenuItem key={option} onClick={() => choose(option)} className="gap-2">
+            <span aria-hidden>{LOCALE_FLAGS[option]}</span>
+            <span className="flex-1">{LOCALE_LABELS[option]}</span>
+            {option === locale && <Check className="h-4 w-4 text-primary" />}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  );
+}
+
+export function LanguageSwitcher({ className }: { className?: string }) {
+  const { locale, t, isPending, choose } = useChooseLocale();
 
   return (
     <DropdownMenu>

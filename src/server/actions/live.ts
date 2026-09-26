@@ -22,6 +22,7 @@ import {
   liveRoomName,
 } from '@/lib/live';
 import { closeRoom, countRoomParticipants } from '@/lib/livekit';
+import { assertCreatorVerified } from '@/lib/creator-kyc';
 import { prisma } from '@/lib/prisma';
 import { maybeSendAutoGreeting } from '@/lib/greeting';
 import { recordProfileVisit } from '@/lib/visits';
@@ -87,6 +88,7 @@ export async function startStreamAction(input: {
 > {
   try {
     const { user, profile } = await requireLiveModel();
+    await assertCreatorVerified({ modelId: profile.id });
 
     const parsed = startSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: 'Datos del directo invalidos.' };
@@ -290,6 +292,7 @@ export async function regenerateStreamKeyAction(): Promise<
 > {
   try {
     const { profile } = await requireLiveModel();
+    await assertCreatorVerified({ modelId: profile.id });
     const streamKey = generateStreamKey();
 
     await prisma.modelProfile.update({

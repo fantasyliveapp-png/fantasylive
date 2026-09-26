@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a0a0b">
+<title>Sin conexion | FantasyLive</title>
+<!-- Pagina autosuficiente: el service worker la ensena sin internet, asi que
+     no puede depender de CSS ni JS de la app (no estarian guardados). -->
+<style>
+  html,body{margin:0;height:100%;background:#0a0a0b;color:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  main{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:32px;text-align:center;box-sizing:border-box}
+  img{width:72px;height:72px;border-radius:18px}
+  h1{margin:0;font-size:22px;letter-spacing:.06em;text-transform:uppercase}
+  p{margin:6px 0 0;max-width:280px;color:#a1a1aa;font-size:14px;line-height:1.5}
+  a{display:inline-block;background:#bf2741;color:#fff;text-decoration:none;font-weight:600;font-size:14px;padding:10px 20px;border-radius:999px}
+</style>
+</head>
+<body>
+<main>
+  <img src="data:image/png;base64,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" alt="">
+  <div>
+    <h1>Sin conexion</h1>
+    <p>Parece que no tienes internet. Revisa tu conexion y vuelve a intentarlo.</p>
+  </div>
+  <a href="/">Reintentar</a>
+</main>
+</body>
+</html>

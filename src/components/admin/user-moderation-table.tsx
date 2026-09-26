@@ -234,19 +234,12 @@ export function UserModerationTable({
                     </Avatar>
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
-                        {user.slug ? (
-                          <Link
-                            href={`/models/${user.slug}`}
-                            target="_blank"
-                            className="truncate text-sm font-medium hover:underline"
-                          >
-                            {user.stageName ?? user.name}
-                          </Link>
-                        ) : (
-                          <span className="truncate text-sm font-medium">
-                            {user.name ?? 'Sin nombre'}
-                          </span>
-                        )}
+                        <Link
+                          href={`/admin/users/${user.id}`}
+                          className="truncate text-sm font-medium hover:underline"
+                        >
+                          {user.stageName ?? user.name ?? 'Sin nombre'}
+                        </Link>
                         {user.isVip && <Crown className="h-3.5 w-3.5 text-primary" />}
                         {user.isOnline && (
                           <span className="live-dot !h-2 !w-2" />

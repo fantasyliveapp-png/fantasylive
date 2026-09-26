@@ -6,6 +6,7 @@ import type {
 
 import { prisma } from '@/lib/prisma';
 import { config } from '@/lib/config';
+import { payReferrers, referralSplit } from '@/lib/referrals';
 
 export class InsufficientTokensError extends Error {
   constructor(
@@ -19,7 +20,36 @@ export class InsufficientTokensError extends Error {
   }
 }
 
+/**
+ * Se intenta retirar mas de lo GANADO. Los tokens comprados (y los de
+ * regalo o devoluciones) solo sirven para gastar dentro de la plataforma.
+ */
+export class NotWithdrawableError extends Error {
+  constructor(
+    public required: number,
+    public withdrawable: number,
+  ) {
+    super(
+      `Solo puedes retirar tokens ganados: tienes ${withdrawable} para retirar.`,
+    );
+    this.name = 'NotWithdrawableError';
+  }
+}
+
 type Tx = Prisma.TransactionClient;
+
+/*
+ * SALDO COMPRADO vs GANADO
+ *
+ * `balance` es todo lo que se puede gastar. `pendingEarnings` es la parte de
+ * ese saldo que viene de ganancias (siempre <= balance) y es lo UNICO que se
+ * puede retirar. El resto (compras, bono de bienvenida, devoluciones,
+ * ajustes) solo se gasta dentro de la plataforma.
+ *
+ * Al gastar se consumen primero los tokens comprados; las ganancias solo
+ * bajan si ya no queda saldo comprado. Asi una creadora que tambien compra
+ * no pierde lo que puede retirar.
+ */
 
 /** Tipos de movimiento que restan saldo al usuario. */
 const DEBIT_TYPES: TransactionType[] = [
@@ -37,7 +67,7 @@ const DEBIT_TYPES: TransactionType[] = [
 ];
 
 /** Tipos de movimiento que representan ingresos de una modelo. */
-const EARNING_TYPES: TransactionType[] = [
+export const EARNING_TYPES: TransactionType[] = [
   'CALL_EARNING',
   'CONTENT_EARNING',
   'TIP_EARNING',
@@ -46,6 +76,7 @@ const EARNING_TYPES: TransactionType[] = [
   'MESSAGE_UNLOCK_EARNING',
   'MESSAGE_ATTACHMENT_EARNING',
   'POST_EARNING',
+  'REFERRAL_EARNING',
 ];
 
 export interface LedgerEntry {
@@ -93,6 +124,11 @@ export async function getBalance(userId: string): Promise<number> {
   return wallet?.balance ?? 0;
 }
 
+/** Tokens que se pueden retirar: solo los ganados. */
+export function withdrawableTokens(wallet: { balance: number; pendingEarnings: number }) {
+  return Math.max(0, Math.min(wallet.pendingEarnings, wallet.balance));
+}
+
 export async function getWalletSummary(userId: string) {
   const wallet = await prisma.wallet.findUnique({ where: { userId } });
   return (
@@ -134,14 +170,44 @@ export async function applyLedgerEntry(
 
   let balanceAfter: number;
 
-  if (isDebit) {
+  if (entry.type === 'PAYOUT') {
+    // Retiro: SOLO de lo ganado. Filtro atomico sobre ambos saldos.
+    const updated = await tx.wallet.updateMany({
+      where: {
+        userId: entry.userId,
+        balance: { gte: amount },
+        pendingEarnings: { gte: amount },
+      },
+      data: {
+        balance: { decrement: amount },
+        pendingEarnings: { decrement: amount },
+        lifetimeWithdrawn: { increment: amount },
+      },
+    });
+
+    if (updated.count === 0) {
+      const wallet = await tx.wallet.findUnique({
+        where: { userId: entry.userId },
+        select: { balance: true, pendingEarnings: true },
+      });
+      throw new NotWithdrawableError(
+        amount,
+        Math.min(wallet?.pendingEarnings ?? 0, wallet?.balance ?? 0),
+      );
+    }
+
+    const wallet = await tx.wallet.findUniqueOrThrow({
+      where: { userId: entry.userId },
+      select: { balance: true },
+    });
+    balanceAfter = wallet.balance;
+  } else if (isDebit) {
     // updateMany con filtro de saldo => atomico, no permite quedar en negativo
     const updated = await tx.wallet.updateMany({
       where: { userId: entry.userId, balance: { gte: amount } },
       data: {
         balance: { decrement: amount },
-        lifetimeSpent: { increment: entry.type === 'PAYOUT' ? 0 : amount },
-        lifetimeWithdrawn: { increment: entry.type === 'PAYOUT' ? amount : 0 },
+        lifetimeSpent: { increment: amount },
       },
     });
 
@@ -152,6 +218,13 @@ export async function applyLedgerEntry(
       });
       throw new InsufficientTokensError(amount, wallet?.balance ?? 0);
     }
+
+    // Primero se gasta lo comprado: las ganancias solo bajan cuando ya no
+    // cabe en el saldo que queda (pendingEarnings <= balance siempre).
+    await tx.$executeRaw`
+      UPDATE wallets
+      SET "pendingEarnings" = LEAST("pendingEarnings", balance)
+      WHERE "userId" = ${entry.userId} AND "pendingEarnings" > balance`;
 
     const wallet = await tx.wallet.findUniqueOrThrow({
       where: { userId: entry.userId },
@@ -252,7 +325,12 @@ export async function transferWithCommission(
     metadata?: Prisma.InputJsonValue;
   },
 ) {
-  const { platformFeeTokens, modelTokens } = splitEarnings(params.tokens);
+  // Reparto con las reglas de referidos (fan propio / embajadora).
+  const { platformFeeTokens, modelTokens, referrers } = await referralSplit(tx, {
+    payerId: params.fromUserId,
+    earnerId: params.toUserId,
+    tokens: params.tokens,
+  });
 
   const debit = await applyLedgerEntry(tx, {
     userId: params.fromUserId,
@@ -294,12 +372,31 @@ export async function transferWithCommission(
     });
   }
 
+  // Quien trajo a esta creadora (embajadora o reclutador) cobra su %.
+  await payReferrers(tx, referrers, {
+    description: params.description,
+    fromCreatorUserId: params.toUserId,
+    applyLedgerEntry,
+  });
+
   return { platformFeeTokens, modelTokens, debit, credit };
 }
 
 /** Convierte tokens ganados a centavos pagaderos a la modelo. */
 export function tokensToPayoutCents(tokens: number): number {
   return Math.round(tokens * config.economy.modelPayoutCentsPerToken);
+}
+
+/**
+ * Lo que de verdad le llega a la creadora por N tokens ganados: su valor en
+ * dolares YA descontada la comision de retiro. Es lo que se le ensena en su
+ * panel, para que el numero que ve sea el que cobra.
+ */
+export function tokensToNetPayoutCents(tokens: number): number {
+  return Math.round(
+    (tokens * config.economy.modelPayoutCentsPerToken * (100 - config.economy.payoutFeePercent)) /
+      100,
+  );
 }
 
 /** Valor de venta de N tokens en centavos (lo que paga el usuario). */

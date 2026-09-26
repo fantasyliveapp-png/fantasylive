@@ -2,12 +2,16 @@
 
 import { AuthError } from 'next-auth';
 import bcrypt from 'bcryptjs';
+import { cookies } from 'next/headers';
 import { z } from 'zod';
 
 import { signIn, signOut } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { REF_COOKIE } from '@/lib/referrals';
 import { config } from '@/lib/config';
-import { calculateAge, slugify } from '@/lib/utils';
+import { isHandleFree } from '@/lib/creator-profile';
+import { isReservedUsername, USERNAME_PATTERN } from '@/lib/usernames';
+import { calculateAge } from '@/lib/utils';
 
 export interface ActionState {
   error?: string;
@@ -15,28 +19,52 @@ export interface ActionState {
   fieldErrors?: Record<string, string[]>;
 }
 
-const registerSchema = z
-  .object({
-    email: z.string().email('Email invalido'),
-    password: z
-      .string()
-      .min(8, 'Minimo 8 caracteres')
-      .regex(/[A-Za-z]/, 'Debe contener letras')
-      .regex(/[0-9]/, 'Debe contener numeros'),
-    confirmPassword: z.string(),
-    name: z.string().min(2, 'Nombre demasiado corto').max(60),
-    birthDate: z.string().min(1, 'La fecha de nacimiento es obligatoria'),
-    gender: z.string().optional(),
-    country: z.string().optional(),
-    role: z.enum(['USER', 'MODEL']).default('USER'),
-    acceptTerms: z.literal('on', {
-      errorMap: () => ({ message: 'Debes aceptar los terminos' }),
+const usernameSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(3, 'Minimo 3 caracteres')
+  .max(30, 'Maximo 30 caracteres')
+  .regex(USERNAME_PATTERN, 'Solo letras, numeros, punto, guion y guion bajo')
+  .refine((u) => !isReservedUsername(u), 'Ese nombre no esta disponible');
+
+/**
+ * Registro ANONIMO: solo se pide un @usuario (un alias, no el nombre real),
+ * un email privado que nadie ve y la fecha de nacimiento, que tampoco se
+ * muestra y solo sirve para comprobar que es mayor de edad.
+ */
+const registerSchema = z.object({
+  username: usernameSchema,
+  email: z.string().email('Email invalido'),
+  password: z
+    .string()
+    .min(8, 'Minimo 8 caracteres')
+    .regex(/[A-Za-z]/, 'Debe contener letras')
+    .regex(/[0-9]/, 'Debe contener numeros'),
+  birthDate: z.string().min(1, 'Pon tu fecha de nacimiento'),
+  role: z.enum(['USER', 'MODEL']).default('USER'),
+  isAdult: z.literal('on', {
+    errorMap: () => ({
+      message: 'Tienes que confirmar que eres mayor de edad',
     }),
-  })
-  .refine((d) => d.password === d.confirmPassword, {
-    message: 'Las contrasenas no coinciden',
-    path: ['confirmPassword'],
-  });
+  }),
+  acceptTerms: z.literal('on', {
+    errorMap: () => ({ message: 'Debes aceptar los terminos' }),
+  }),
+});
+
+/** Para el formulario: si un @usuario esta libre mientras se escribe. */
+export async function checkUsernameAction(
+  raw: string,
+): Promise<{ available: boolean; error?: string }> {
+  const parsed = usernameSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { available: false, error: parsed.error.issues[0]?.message };
+  }
+  return (await isHandleFree(parsed.data))
+    ? { available: true }
+    : { available: false, error: 'Ya esta cogido' };
+}
 
 export async function registerAction(
   _prev: ActionState,
@@ -58,8 +86,15 @@ export async function registerAction(
   const age = calculateAge(birthDate);
   if (age < config.app.minAge) {
     return {
-      error: `Debes tener al menos ${config.app.minAge} años para registrarte.`,
+      fieldErrors: {
+        birthDate: [
+          `Tienes que tener ${config.app.minAge} años o mas para entrar.`,
+        ],
+      },
     };
+  }
+  if (age > 110) {
+    return { fieldErrors: { birthDate: ['Revisa el año de nacimiento'] } };
   }
 
   const email = data.email.toLowerCase().trim();
@@ -71,27 +106,60 @@ export async function registerAction(
   const passwordHash = await bcrypt.hash(data.password, 10);
   const bonus = config.economy.signupBonusTokens;
 
-  // Username unico a partir del nombre
-  let username = slugify(data.name) || `user${Date.now().toString(36)}`;
-  if (await prisma.user.findUnique({ where: { username } })) {
-    username = `${username}-${Math.random().toString(36).slice(2, 6)}`;
+  // Referidos: quien le trajo (cookie de /r/<slug> o /reclutar/<code>).
+  // "r:<id>" = reclutador; si no, el id de la creadora que invito.
+  const refValue = (await cookies()).get(REF_COOKIE)?.value ?? '';
+  const recruiter = refValue.startsWith('r:')
+    ? await prisma.recruiter.findFirst({
+        where: { id: refValue.slice(2), active: true },
+        select: { id: true },
+      })
+    : null;
+  const referrer =
+    refValue && !refValue.startsWith('r:')
+      ? await prisma.user.findFirst({
+          where: {
+            id: refValue,
+            status: 'ACTIVE',
+            modelProfile: { kycStatus: 'APPROVED' },
+          },
+          select: { id: true },
+        })
+      : null;
+
+  const username = data.username;
+  if (!(await isHandleFree(username))) {
+    return { fieldErrors: { username: ['Ese @usuario ya esta cogido'] } };
   }
 
-  const user = await prisma.user.create({
-    data: {
-      email,
-      name: data.name.trim(),
-      username,
-      passwordHash,
-      birthDate,
-      ageVerified: false, // se confirma con KYC / verificacion documental
-      gender: (data.gender as any) || null,
-      country: data.country || null,
-      role: data.role,
-      status: 'ACTIVE',
-      wallet: { create: { balance: bonus } },
-    },
-  });
+  let user;
+  try {
+    user = await prisma.user.create({
+      data: {
+        email,
+        // Anonimo: el nombre visible es el propio alias hasta que lo cambie.
+        name: username,
+        username,
+        passwordHash,
+        birthDate,
+        ageVerified: false, // se confirma con KYC / verificacion documental
+        // Una sola cuenta para todos: el modo creadora se activa despues en
+        // /hazte-creadora (un solo paso; el campo "role" del formulario solo
+        // indica la intencion, para llevarla alli tras registrarse).
+        role: 'USER',
+        status: 'ACTIVE',
+        referredById: referrer?.id ?? null,
+        recruitedById: recruiter?.id ?? null,
+        wallet: { create: { balance: bonus } },
+      },
+    });
+  } catch (error) {
+    // Dos personas pidiendo el mismo alias a la vez: gana la primera.
+    if ((error as { code?: string }).code === 'P2002') {
+      return { fieldErrors: { username: ['Ese @usuario ya esta cogido'] } };
+    }
+    throw error;
+  }
 
   if (bonus > 0) {
     await prisma.transaction.create({
@@ -105,27 +173,6 @@ export async function registerAction(
     });
   }
 
-  // Alta como modelo: crea perfil borrador pendiente de KYC
-  if (data.role === 'MODEL') {
-    let slug = slugify(data.name);
-    if (await prisma.modelProfile.findUnique({ where: { slug } })) {
-      slug = `${slug}-${Math.random().toString(36).slice(2, 6)}`;
-    }
-    await prisma.modelProfile.create({
-      data: {
-        userId: user.id,
-        stageName: data.name.trim(),
-        slug,
-        gender: (data.gender as any) || 'FEMALE',
-        orientation: 'STRAIGHT',
-        country: data.country || null,
-        kycStatus: 'NOT_SUBMITTED',
-        acceptsBookings: false,
-        isVipEnabled: false,
-      },
-    });
-  }
-
   try {
     await signIn('credentials', {
       email,
@@ -134,8 +181,7 @@ export async function registerAction(
     });
   } catch {
     return {
-      success:
-        'Cuenta creada correctamente. Inicia sesion para continuar.',
+      success: 'Cuenta creada correctamente. Inicia sesion para continuar.',
     };
   }
 
@@ -169,7 +215,9 @@ export async function loginAction(
       if (error.type === 'CredentialsSignin') {
         return { error: 'Email o contrasena incorrectos.' };
       }
-      return { error: error.cause?.err?.message ?? 'No se pudo iniciar sesion.' };
+      return {
+        error: error.cause?.err?.message ?? 'No se pudo iniciar sesion.',
+      };
     }
     throw error;
   }

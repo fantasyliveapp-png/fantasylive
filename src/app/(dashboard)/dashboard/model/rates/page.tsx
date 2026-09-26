@@ -1,11 +1,10 @@
 import type { Metadata } from 'next';
 
 import { RatesForm } from '@/components/model/rates-form';
-import { ProfileForm } from '@/components/model/profile-form';
 import { requireModel } from '@/lib/auth/guards';
 import { config } from '@/lib/config';
 
-export const metadata: Metadata = { title: 'Tarifas y perfil' };
+export const metadata: Metadata = { title: 'Precios y herramientas' };
 export const dynamic = 'force-dynamic';
 
 export default async function RatesPage() {
@@ -14,9 +13,11 @@ export default async function RatesPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Tarifas y perfil</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Precios y herramientas</h1>
         <p className="mt-2 text-muted-foreground">
-          Define cuanto cobras por minuto y como te ven los usuarios.
+          Activa como quieres cobrar (suscripcion, mensajes, citas, sala VIP) y a
+          que precio. Lo que dejes apagado no aparece en tu perfil ni en tu
+          Bandeja.
         </p>
       </div>
 
@@ -34,17 +35,6 @@ export default async function RatesPage() {
         kycApproved={profile.kycStatus === 'APPROVED'}
         modelSharePercent={config.economy.modelRevenueSharePercent}
         payoutCentsPerToken={config.economy.modelPayoutCentsPerToken}
-      />
-
-      <ProfileForm
-        stageName={profile.stageName}
-        headline={profile.headline ?? ''}
-        bio={profile.bio ?? ''}
-        languages={profile.languages}
-        tags={profile.tags}
-        avatarUrl={profile.avatarUrl ?? ''}
-        coverUrl={profile.coverUrl ?? ''}
-        slug={profile.slug}
       />
     </div>
   );

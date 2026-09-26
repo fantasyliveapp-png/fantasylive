@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Crown, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { cn } from '@/lib/utils';
 import { setOnlineStatusAction } from '@/server/actions/model';
 
 export function OnlineToggle({
@@ -14,16 +15,26 @@ export function OnlineToggle({
   isAvailableForVip,
   isVipEnabled,
   canStream,
+  variant = 'compact',
 }: {
   isOnline: boolean;
   isAvailableForVip: boolean;
   isVipEnabled: boolean;
   canStream: boolean;
+  /** "hero": boton grande para el inicio del panel. */
+  variant?: 'compact' | 'hero';
 }) {
   const router = useRouter();
   const [online, setOnline] = useState(isOnline);
   const [vip, setVip] = useState(isAvailableForVip);
   const [isPending, startTransition] = useTransition();
+
+  // Hay dos interruptores en pantalla (menu lateral e inicio): al cambiar uno,
+  // el refresh trae el estado nuevo y el otro se pone al dia.
+  useEffect(() => {
+    setOnline(isOnline);
+    setVip(isAvailableForVip);
+  }, [isOnline, isAvailableForVip]);
 
   function update(nextOnline: boolean, nextVip: boolean) {
     setOnline(nextOnline);
@@ -45,6 +56,67 @@ export function OnlineToggle({
         toast.error(result.error ?? 'No se pudo cambiar el estado');
       }
     });
+  }
+
+  if (variant === 'hero') {
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => update(!online, !online ? vip : false)}
+          disabled={isPending || !canStream}
+          className={cn(
+            'flex items-center gap-2.5 rounded-full border py-2 pl-2 pr-4 text-sm font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-60',
+            online
+              ? 'border-state-connected/50 bg-state-connected/15 text-foreground'
+              : 'border-border bg-muted/60 text-muted-foreground hover:text-foreground',
+          )}
+          aria-pressed={online}
+        >
+          {/* Interruptor dibujado: se entiende sin leer. */}
+          <span
+            className={cn(
+              'relative h-6 w-11 rounded-full transition-colors',
+              online ? 'bg-state-connected' : 'bg-muted-foreground/40',
+            )}
+          >
+            <span
+              className={cn(
+                'absolute top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-white shadow transition-all',
+                online ? 'left-[22px]' : 'left-0.5',
+              )}
+            >
+              {isPending && <Loader2 className="h-3 w-3 animate-spin text-black" />}
+            </span>
+          </span>
+          {online ? 'Estas en linea' : 'Estas desconectada'}
+        </button>
+
+        {isVipEnabled && online && (
+          <button
+            type="button"
+            onClick={() => update(online, !vip)}
+            disabled={isPending || !canStream}
+            className={cn(
+              'flex items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-medium transition-colors',
+              vip
+                ? 'border-primary/60 bg-primary/15 text-foreground'
+                : 'border-border text-muted-foreground hover:text-foreground',
+            )}
+            aria-pressed={vip}
+          >
+            <Crown className="h-3.5 w-3.5 text-primary" />
+            {vip ? 'Recibiendo VIP' : 'Aceptar VIP'}
+          </button>
+        )}
+
+        {!canStream && (
+          <p className="w-full text-xs text-muted-foreground">
+            Verifica tu identidad para poder conectarte.
+          </p>
+        )}
+      </div>
+    );
   }
 
   return (

@@ -7,12 +7,15 @@ import { authConfig } from '@/lib/auth/auth.config';
 const { auth } = NextAuth(authConfig);
 
 const PROTECTED_PREFIXES = [
+  '/bienvenida',
   '/dashboard',
   '/wallet',
   '/bookings',
   '/call',
   '/random',
   '/vip',
+  '/hazte-creadora',
+  '/mensajes',
 ];
 
 const MODEL_PREFIXES = ['/dashboard/model'];
@@ -49,7 +52,8 @@ export default auth((req) => {
       (user as any).role !== 'MODEL' &&
       (user as any).role !== 'ADMIN'
     ) {
-      return NextResponse.redirect(new URL('/403', req.nextUrl.origin));
+      // Sin modo creadora: se le ofrece activarlo en vez de un 403.
+      return NextResponse.redirect(new URL('/hazte-creadora', req.nextUrl.origin));
     }
 
     // Ya autenticado: fuera de login/register
@@ -67,7 +71,8 @@ export const config = {
      * Todo salvo:
      * - api (rutas propias con su propia auth)
      * - _next/static, _next/image, favicon, assets publicos
+     * - la app instalable: service worker y su ficha (manifest)
      */
-    '/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
+    '/((?!api|_next/static|_next/image|favicon.ico|sw\\.js|offline\\.html|manifest\\.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
   ],
 };

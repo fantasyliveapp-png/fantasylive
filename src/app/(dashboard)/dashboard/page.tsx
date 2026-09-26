@@ -157,7 +157,7 @@ export default async function UserDashboardPage() {
           description="Creadoras que segui pagando"
         />
         <QuickAction
-          href="/dashboard/messages"
+          href="/mensajes"
           icon={MessageCircle}
           title="Mensajes"
           description="Tus conversaciones"

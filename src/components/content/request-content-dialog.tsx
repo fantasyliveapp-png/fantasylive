@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { createContentRequestAction } from '@/server/actions/content-requests';
+import { useJoinPrompt } from '@/components/providers/join-prompt';
 
 export function RequestContentDialog({
   modelId,
@@ -27,13 +28,14 @@ export function RequestContentDialog({
   isAuthenticated: boolean;
 }) {
   const router = useRouter();
+  const joinPrompt = useJoinPrompt();
   const [open, setOpen] = useState(false);
   const [description, setDescription] = useState('');
   const [isPending, startTransition] = useTransition();
 
   function openDialog() {
     if (!isAuthenticated) {
-      router.push(`/login?callbackUrl=/models/${slug}`);
+      joinPrompt('para pedirle contenido a medida');
       return;
     }
     setOpen(true);

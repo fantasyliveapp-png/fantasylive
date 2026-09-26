@@ -1,0 +1,160 @@
+import type { Metadata } from 'next';
+
+import { AdminPageHeader, AdminTabs } from '@/components/admin/admin-shell';
+import { ShieldCheck } from 'lucide-react';
+
+import { ReportsReviewList } from '@/components/admin/reports-review-list';
+import { Card, CardContent } from '@/components/ui/card';
+import { requireAdmin } from '@/lib/auth/guards';
+import { prisma } from '@/lib/prisma';
+
+export const metadata: Metadata = { title: 'Reportes y disputas' };
+export const dynamic = 'force-dynamic';
+
+export default async function AdminReportsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string }>;
+}) {
+  await requireAdmin();
+  const { status } = await searchParams;
+
+  const reports = await prisma.report.findMany({
+    where: status
+      ? { status: status as any }
+      : { status: { in: ['OPEN', 'UNDER_REVIEW', 'ESCALATED'] } },
+    orderBy: [{ createdAt: 'desc' }],
+    take: 60,
+    include: {
+      reporter: { select: { id: true, name: true, email: true } },
+      reported: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          status: true,
+          modelProfile: { select: { stageName: true, slug: true } },
+        },
+      },
+      session: {
+        select: {
+          id: true,
+          type: true,
+          billedSeconds: true,
+          tokensSpent: true,
+          createdAt: true,
+        },
+      },
+    },
+  });
+
+  // Denuncias de chats: los ultimos mensajes van con la denuncia para que el
+  // equipo pueda revisarla sin pedir capturas.
+  const evidence = new Map<string, { from: string; body: string; at: string }[]>();
+  await Promise.all(
+    reports.map(async (r) => {
+      const [kind, id] = (r.context ?? '').split(':');
+      if (!id) return;
+      const rows =
+        kind === 'chat'
+          ? await prisma.peerMessage.findMany({
+              where: { chatId: id },
+              orderBy: { createdAt: 'desc' },
+              take: 12,
+              select: { body: true, createdAt: true, senderId: true },
+            })
+          : kind === 'conversation'
+            ? (
+                await prisma.message.findMany({
+                  where: { conversationId: id },
+                  orderBy: { createdAt: 'desc' },
+                  take: 12,
+                  select: { body: true, createdAt: true, senderId: true },
+                })
+              ).map((m) => ({ ...m, body: m.body ?? '[archivo adjunto]' }))
+            : [];
+      if (rows.length === 0) return;
+      evidence.set(
+        r.id,
+        rows.reverse().map((m) => ({
+          from:
+            m.senderId === r.reportedId
+              ? 'Denunciada'
+              : m.senderId === r.reporterId
+                ? 'Denunciante'
+                : 'Otra persona',
+          body: m.body,
+          at: m.createdAt.toISOString(),
+        })),
+      );
+    }),
+  );
+
+  return (
+    <div className="space-y-8">
+      <AdminPageHeader
+        title="Reportes y disputas"
+        description={
+          <>
+            Resuelve incidencias de llamadas, reembolsa tokens y aplica sanciones. Los reportes por
+            sospecha de menores tienen prioridad absoluta.
+          </>
+        }
+        tabs={
+          <AdminTabs
+            basePath="/admin/reports"
+            current={status ?? ''}
+            tabs={[
+              { value: '', label: 'Abiertos' },
+              { value: 'RESOLVED', label: 'Resueltos' },
+              { value: 'DISMISSED', label: 'Descartados' },
+            ]}
+          />
+        }
+      />
+
+      {reports.length === 0 ? (
+        <Card>
+          <CardContent className="py-16 text-center">
+            <ShieldCheck className="mx-auto h-8 w-8 text-emerald-500" />
+            <p className="mt-3 font-medium">No hay reportes abiertos</p>
+            <p className="mt-1 text-sm text-muted-foreground">Todo esta bajo control.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <ReportsReviewList
+          reports={reports.map((r) => ({
+            id: r.id,
+            reason: r.reason,
+            status: r.status,
+            details: r.details,
+            context: r.context,
+            evidence: evidence.get(r.id) ?? [],
+            createdAt: r.createdAt.toISOString(),
+            reporter: {
+              id: r.reporter.id,
+              name: r.reporter.name,
+              email: r.reporter.email,
+            },
+            reported: {
+              id: r.reported.id,
+              name: r.reported.modelProfile?.stageName ?? r.reported.name,
+              email: r.reported.email,
+              status: r.reported.status,
+              slug: r.reported.modelProfile?.slug ?? null,
+            },
+            session: r.session
+              ? {
+                  id: r.session.id,
+                  type: r.session.type,
+                  billedSeconds: r.session.billedSeconds,
+                  tokensSpent: r.session.tokensSpent,
+                  createdAt: r.session.createdAt.toISOString(),
+                }
+              : null,
+          }))}
+        />
+      )}
+    </div>
+  );
+}

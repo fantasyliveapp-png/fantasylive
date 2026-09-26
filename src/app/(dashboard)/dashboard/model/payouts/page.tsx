@@ -17,7 +17,7 @@ import { config } from '@/lib/config';
 import { PAYOUT_STATUS_LABELS } from '@/lib/constants';
 import { PAYOUT_METHOD_LABELS } from '@/lib/payout-methods';
 import { prisma } from '@/lib/prisma';
-import { getWalletSummary, tokensToPayoutCents } from '@/lib/tokens';
+import { getWalletSummary, tokensToNetPayoutCents, withdrawableTokens } from '@/lib/tokens';
 import { formatDateTime, formatMoney, formatTokens } from '@/lib/utils';
 
 export const metadata: Metadata = { title: 'Retiros' };
@@ -50,8 +50,12 @@ export default async function PayoutsPage() {
   );
 
   const centsPerToken = config.economy.modelPayoutCentsPerToken;
-  const availableCents = tokensToPayoutCents(wallet.balance);
-  const withdrawnCents = tokensToPayoutCents(wallet.lifetimeWithdrawn);
+  // Solo lo GANADO se puede retirar; lo comprado es para gastar aqui.
+  const withdrawable = withdrawableTokens(wallet);
+  const purchased = wallet.balance - withdrawable;
+  // Lo que le llega de verdad, ya descontado el % de retiro.
+  const availableCents = tokensToNetPayoutCents(withdrawable);
+  const withdrawnCents = tokensToNetPayoutCents(wallet.lifetimeWithdrawn);
 
   return (
     <div className="space-y-8">
@@ -73,13 +77,17 @@ export default async function PayoutsPage() {
       <div className="grid gap-4 sm:grid-cols-3">
         <SummaryCard
           icon={<Coins className="h-4 w-4 text-token" />}
-          label="Tokens disponibles"
-          value={formatTokens(wallet.balance)}
-          hint={`${formatMoney(centsPerToken)} por token`}
+          label="Tokens ganados"
+          value={formatTokens(withdrawable)}
+          hint={
+            purchased > 0
+              ? `+${formatTokens(purchased)} comprados (no retirables)`
+              : `${formatMoney(centsPerToken)} por token`
+          }
         />
         <SummaryCard
           icon={<DollarSign className="h-4 w-4 text-emerald-400" />}
-          label="Equivale a"
+          label="Te llegan"
           value={formatMoney(availableCents)}
           hint={`Retirado hasta hoy: ${formatMoney(withdrawnCents)}`}
           highlight
@@ -93,7 +101,7 @@ export default async function PayoutsPage() {
       </div>
 
       <PayoutRequestForm
-        balance={wallet.balance}
+        balance={withdrawable}
         minTokens={config.economy.minPayoutTokens}
         centsPerToken={centsPerToken}
         feePercent={config.economy.payoutFeePercent}

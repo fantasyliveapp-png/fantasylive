@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Radio } from 'lucide-react';
 
-import { FeedTabs } from '@/components/feed/feed-tabs';
 import { LiveCard } from '@/components/live/live-card';
 import { ModelCard } from '@/components/models/model-card';
 import { Button } from '@/components/ui/button';
@@ -58,8 +57,6 @@ export default async function LivePage() {
 
   return (
     <div className="container max-w-6xl py-6">
-      <FeedTabs />
-
       <div className="mb-6 flex items-center gap-3">
         <Radio className="h-5 w-5 text-primary" />
         <h1 className="text-2xl font-bold tracking-tight">

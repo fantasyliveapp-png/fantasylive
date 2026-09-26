@@ -30,7 +30,7 @@ export async function markAllNotificationsReadAction(): Promise<NotificationActi
   try {
     const user = await getAuthedUserOrThrow();
     await prisma.notification.updateMany({
-      where: { userId: user.id, isRead: false },
+      where: { userId: user.id, isRead: false, createdAt: { lte: new Date() } },
       data: { isRead: true },
     });
     revalidatePath('/');

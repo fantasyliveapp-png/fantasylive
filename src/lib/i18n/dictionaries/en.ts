@@ -43,8 +43,14 @@ export const en: Dictionary = {
     dashboard: 'Dashboard',
     login: 'Log in',
     register: 'Sign up',
+    /** Version corta del boton de registro (movil) */
+    join: 'Join',
     logout: 'Log out',
     settings: 'Settings',
+    profile: 'Profile',
+    create: 'Create',
+    myProfile: 'View my profile',
+    editProfile: 'Edit profile',
   },
   home: {
     heroTitle: 'Meet real people, no scripts',

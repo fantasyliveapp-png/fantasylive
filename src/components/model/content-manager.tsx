@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState, useTransition } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   ChevronLeft,
@@ -28,7 +29,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -39,20 +39,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
 import {
   attachContentAssetAction,
-  createContentPackageAction,
   deleteContentPackageAction,
   removeContentAssetAction,
   requestContentUploadUrlAction,
@@ -93,7 +81,6 @@ export function ContentManager({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [creating, setCreating] = useState(false);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [viewing, setViewing] = useState<PackageRow | null>(null);
@@ -105,44 +92,6 @@ export function ContentManager({
   const [removingAssetId, setRemovingAssetId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const targetPackageRef = useRef<string | null>(null);
-
-  // Formulario de creacion
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [type, setType] = useState<ContentType>('PHOTO');
-  const [price, setPrice] = useState(50);
-  const [previewUrl, setPreviewUrl] = useState('');
-  const [subscriberOnly, setSubscriberOnly] = useState(false);
-
-  function create() {
-    if (title.trim().length < 3) {
-      toast.error('El titulo debe tener al menos 3 caracteres.');
-      return;
-    }
-
-    startTransition(async () => {
-      const result = await createContentPackageAction({
-        title: title.trim(),
-        description: description.trim() || undefined,
-        type,
-        priceTokens: price,
-        previewUrl: previewUrl.trim() || undefined,
-        subscriberOnly,
-      });
-
-      if (result.ok) {
-        toast.success('Paquete creado. Ahora sube los archivos.');
-        setCreating(false);
-        setTitle('');
-        setDescription('');
-        setPreviewUrl('');
-        setSubscriberOnly(false);
-        router.refresh();
-      } else {
-        toast.error(result.error ?? 'No se pudo crear el paquete');
-      }
-    });
-  }
 
   function togglePublish(pkg: PackageRow) {
     startTransition(async () => {
@@ -307,10 +256,13 @@ export function ContentManager({
         <p className="text-sm text-muted-foreground">
           {packages.length} paquete{packages.length === 1 ? '' : 's'}
         </p>
-        <Button variant="brand" onClick={() => setCreating(true)}>
-          <Plus className="h-4 w-4" />
-          Nuevo paquete
-        </Button>
+        {/* Ya no se crean packs: todo se publica en el feed desde el estudio. */}
+        <Link href="/dashboard/model/posts?nuevo=1">
+          <Button variant="brand">
+            <Plus className="h-4 w-4" />
+            Nueva publicacion
+          </Button>
+        </Link>
       </div>
 
       {!storageReady && (
@@ -325,10 +277,17 @@ export function ContentManager({
         <Card>
           <CardContent className="py-16 text-center">
             <Images className="mx-auto h-8 w-8 text-muted-foreground" />
-            <p className="mt-3 font-medium">Aun no tienes contenido</p>
+            <p className="mt-3 font-medium">No tienes packs antiguos</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Crea tu primer paquete y empieza a vender.
+              Ahora todo se publica en el feed: una sesion completa es una
+              publicacion con varias fotos o videos.
             </p>
+            <Link href="/dashboard/model/posts?nuevo=1" className="mt-4 inline-block">
+              <Button variant="brand" size="sm">
+                <Plus className="h-4 w-4" />
+                Nueva publicacion
+              </Button>
+            </Link>
           </CardContent>
         </Card>
       ) : (
@@ -485,107 +444,6 @@ export function ContentManager({
           })}
         </div>
       )}
-
-      {/* Dialogo de creacion */}
-      <Dialog open={creating} onOpenChange={setCreating}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Nuevo paquete de contenido</DialogTitle>
-            <DialogDescription>
-              Define el precio en tokens. Pon 0 para que sea gratuito y sirva de
-              escaparate.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="pkgTitle">Titulo</Label>
-              <Input
-                id="pkgTitle"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                maxLength={80}
-                placeholder="Sesion de fotos en estudio"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="pkgDesc">Descripcion</Label>
-              <Textarea
-                id="pkgDesc"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                maxLength={600}
-                placeholder="Que incluye este paquete..."
-              />
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Tipo</Label>
-                <Select value={type} onValueChange={(v) => setType(v as ContentType)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="PHOTO">Fotos</SelectItem>
-                    <SelectItem value="VIDEO">Video</SelectItem>
-                    <SelectItem value="BUNDLE">Pack mixto</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="pkgPrice">Precio (tokens)</Label>
-                <Input
-                  id="pkgPrice"
-                  type="number"
-                  min={0}
-                  value={price}
-                  onChange={(e) => setPrice(Number(e.target.value))}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="pkgPreview">URL de la miniatura</Label>
-              <Input
-                id="pkgPreview"
-                value={previewUrl}
-                onChange={(e) => setPreviewUrl(e.target.value)}
-                placeholder="https://... (se muestra borrosa si esta bloqueado)"
-              />
-            </div>
-
-            <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-3">
-              <div>
-                <Label htmlFor="pkgSubOnly">Exclusivo para suscriptores</Label>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {subscriptionEnabled
-                    ? 'Se incluye gratis con la suscripcion; no se vende suelto.'
-                    : 'Activa la suscripcion mensual en Tarifas para usar esto.'}
-                </p>
-              </div>
-              <Switch
-                id="pkgSubOnly"
-                checked={subscriberOnly}
-                disabled={!subscriptionEnabled}
-                onCheckedChange={setSubscriberOnly}
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setCreating(false)}>
-              Cancelar
-            </Button>
-            <Button variant="brand" onClick={create} disabled={isPending}>
-              {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              Crear paquete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Visor de archivos del paquete, estilo carrusel */}
       <Dialog open={Boolean(viewing)} onOpenChange={(o) => !o && setViewing(null)}>

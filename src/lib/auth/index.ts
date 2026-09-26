@@ -84,7 +84,10 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
  */
 const TOKEN_REFRESH_MS = 5 * 60 * 1000;
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+// `unstable_update` refresca el token desde el servidor (el callback jwt de
+// abajo relee rol y perfil de la BD, sin fiarse de lo que se le pase). Se usa
+// al activar el modo creadora para que el panel se abra sin volver a entrar.
+export const { handlers, auth, signIn, signOut, unstable_update: refreshSession } = NextAuth({
   ...authConfig,
   adapter: PrismaAdapter(prisma) as any,
   providers,
@@ -136,7 +139,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     /** Crea monedero + bono de bienvenida para altas via OAuth */
     async createUser({ user }) {
       if (!user.id) return;
-      const bonus = Number(process.env.SIGNUP_BONUS_TOKENS ?? 25);
+      const bonus = Number(process.env.SIGNUP_BONUS_TOKENS ?? 0);
       await prisma.wallet.upsert({
         where: { userId: user.id },
         create: {

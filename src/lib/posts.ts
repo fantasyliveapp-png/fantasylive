@@ -4,6 +4,7 @@ import type { PostVisibility, Prisma } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
 import { resolveAssetUrl } from '@/lib/storage';
+import { watermarkLabel } from '@/lib/watermark';
 
 /**
  * FEED SOCIAL
@@ -26,22 +27,45 @@ export interface FeedAsset {
   height: number | null;
 }
 
+export interface FeedPoll {
+  id: string;
+  question: string;
+  /** ISO. null = sin fecha de cierre. */
+  endsAt: string | null;
+  isClosed: boolean;
+  totalVotes: number;
+  options: { id: string; text: string; votes: number }[];
+  /** Opcion que ha votado quien mira, si ha votado. */
+  myOptionId: string | null;
+}
+
 export interface FeedPost {
   id: string;
   createdAt: string;
+  /** ISO. Publicacion programada que aun no ha salido (solo la ve su duena). */
+  scheduledFor: string | null;
   body: string | null;
   visibility: PostVisibility;
   priceTokens: number;
   likeCount: number;
   commentCount: number;
   unlockCount: number;
+  /** Personas distintas que la han visto. Solo para su duena. */
+  views: number | null;
   isLiked: boolean;
   /** Puede ver los archivos originales */
   isUnlocked: boolean;
   /** La publicacion es de quien la esta mirando */
   isOwner: boolean;
+  /**
+   * Contenido de pago desbloqueado por un fan: texto de su marca de agua
+   * (las fotos ya vienen marcadas del servidor; en los videos se superpone).
+   */
+  watermark: string | null;
   model: {
     id: string;
+    /** Cuenta de la creadora (para denunciar o bloquear desde la publicacion). */
+    userId?: string;
     slug: string;
     stageName: string;
     avatarUrl: string | null;
@@ -52,6 +76,16 @@ export interface FeedPost {
     subscriptionPriceTokens: number;
   };
   assets: FeedAsset[];
+  poll: FeedPoll | null;
+}
+
+/**
+ * Publicaciones visibles ahora mismo. Una publicacion PROGRAMADA es una
+ * publicada con `createdAt` en el futuro: asi el orden del feed es el de su
+ * salida y no hace falta ningun proceso que la "active" a su hora.
+ */
+export function livePostWhere(): Prisma.PostWhereInput {
+  return { isPublished: true, createdAt: { lte: new Date() } };
 }
 
 /** `select` compartido por todas las consultas de feed. */
@@ -63,6 +97,7 @@ export const feedPostSelect = {
   likeCount: true,
   commentCount: true,
   unlockCount: true,
+  viewCount: true,
   createdAt: true,
   modelId: true,
   model: {
@@ -80,6 +115,18 @@ export const feedPostSelect = {
         where: { status: 'LIVE' as const },
         select: { id: true },
         take: 1,
+      },
+    },
+  },
+  poll: {
+    select: {
+      id: true,
+      question: true,
+      endsAt: true,
+      totalVotes: true,
+      options: {
+        orderBy: { sortOrder: 'asc' as const },
+        select: { id: true, text: true, voteCount: true },
       },
     },
   },
@@ -114,7 +161,9 @@ export async function buildFeedPosts(
   const postIds = posts.map((p) => p.id);
   const modelIds = [...new Set(posts.map((p) => p.modelId))];
 
-  const [unlocks, likes, subscriptions] = viewerId
+  const pollIds = posts.flatMap((p) => (p.poll ? [p.poll.id] : []));
+
+  const [unlocks, likes, subscriptions, pollVotes] = viewerId
     ? await Promise.all([
         prisma.postUnlock.findMany({
           where: { userId: viewerId, postId: { in: postIds } },
@@ -133,12 +182,25 @@ export async function buildFeedPosts(
           },
           select: { modelId: true },
         }),
+        pollIds.length > 0
+          ? prisma.postPollVote.findMany({
+              where: { userId: viewerId, pollId: { in: pollIds } },
+              select: { pollId: true, optionId: true },
+            })
+          : Promise.resolve([]),
       ])
-    : [[], [], []];
+    : [[], [], [], []];
 
   const unlockedPosts = new Set(unlocks.map((u) => u.postId));
   const likedPosts = new Set(likes.map((l) => l.postId));
   const subscribedModels = new Set(subscriptions.map((s) => s.modelId));
+  const myVotes = new Map(pollVotes.map((v) => [v.pollId, v.optionId]));
+  const now = new Date();
+
+  const viewerAccount = viewerId
+    ? await prisma.user.findUnique({ where: { id: viewerId }, select: { username: true } })
+    : null;
+  const viewerLabel = viewerId ? watermarkLabel(viewerAccount?.username ?? null, viewerId) : null;
 
   return Promise.all(
     posts.map(async (post) => {
@@ -150,15 +212,21 @@ export async function buildFeedPosts(
         (post.visibility === 'LOCKED' && unlockedPosts.has(post.id)) ||
         (post.visibility === 'SUBSCRIBERS' && subscribedModels.has(post.modelId));
 
+      // De pago y visto por un fan: las fotos pasan por la ruta que les pone
+      // su marca de agua; el original sin marca solo lo ve la creadora.
+      const isProtected = isUnlocked && !isOwner && post.visibility !== 'PUBLIC';
+
       const assets = await Promise.all(
         post.assets.map(async (asset) => ({
           id: asset.id,
           mimeType: asset.mimeType,
           width: asset.width,
           height: asset.height,
-          url: isUnlocked
-            ? await resolveAssetUrl(asset.storageKey, { isPublic: false })
-            : null,
+          url: !isUnlocked
+            ? null
+            : isProtected && asset.mimeType.startsWith('image/')
+              ? `/api/posts/${post.id}/media/${asset.id}`
+              : await resolveAssetUrl(asset.storageKey, { isPublic: false }),
           previewUrl: asset.previewKey
             ? await resolveAssetUrl(asset.previewKey, { isPublic: true })
             : null,
@@ -168,17 +236,21 @@ export async function buildFeedPosts(
       return {
         id: post.id,
         createdAt: post.createdAt.toISOString(),
+        scheduledFor: post.createdAt > now ? post.createdAt.toISOString() : null,
         body: post.body,
         visibility: post.visibility,
         priceTokens: post.priceTokens,
         likeCount: post.likeCount,
         commentCount: post.commentCount,
         unlockCount: post.unlockCount,
+        views: isOwner ? post.viewCount : null,
         isLiked: likedPosts.has(post.id),
         isUnlocked,
         isOwner,
+        watermark: isProtected ? viewerLabel : null,
         model: {
           id: post.model.id,
+          userId: post.model.userId,
           slug: post.model.slug,
           stageName: post.model.stageName,
           avatarUrl: post.model.avatarUrl,
@@ -189,35 +261,24 @@ export async function buildFeedPosts(
           subscriptionPriceTokens: post.model.subscriptionPriceTokens,
         },
         assets,
+        poll: post.poll
+          ? {
+              id: post.poll.id,
+              question: post.poll.question,
+              endsAt: post.poll.endsAt?.toISOString() ?? null,
+              isClosed: Boolean(post.poll.endsAt && post.poll.endsAt <= now),
+              totalVotes: post.poll.totalVotes,
+              options: post.poll.options.map((o) => ({
+                id: o.id,
+                text: o.text,
+                votes: o.voteCount,
+              })),
+              myOptionId: myVotes.get(post.poll.id) ?? null,
+            }
+          : null,
       } satisfies FeedPost;
     }),
   );
-}
-
-/**
- * Publicaciones del feed de descubrimiento.
- *
- * Excluye los perfiles que bloquean el pais del visitante (el filtro llega ya
- * resuelto desde getVisibilityContext) y los que no tienen el KYC aprobado.
- */
-export async function getDiscoverFeed(params: {
-  viewerId: string | null;
-  geoFilter: Prisma.ModelProfileWhereInput;
-  take?: number;
-  cursor?: string | null;
-}): Promise<FeedPost[]> {
-  const posts = await prisma.post.findMany({
-    where: {
-      isPublished: true,
-      model: { kycStatus: 'APPROVED', ...params.geoFilter },
-    },
-    orderBy: { createdAt: 'desc' },
-    take: params.take ?? 20,
-    ...(params.cursor ? { cursor: { id: params.cursor }, skip: 1 } : {}),
-    select: feedPostSelect,
-  });
-
-  return buildFeedPosts(posts, params.viewerId);
 }
 
 /** Publicaciones solo de las creadoras a las que sigue el visitante. */
@@ -235,7 +296,7 @@ export async function getFollowingFeed(params: {
 
   const posts = await prisma.post.findMany({
     where: {
-      isPublished: true,
+      ...livePostWhere(),
       modelId: { in: follows.map((f) => f.modelId) },
       model: { ...params.geoFilter },
     },
@@ -253,9 +314,14 @@ export async function getModelPosts(params: {
   modelId: string;
   viewerId: string | null;
   take?: number;
+  /** La duena ve tambien sus publicaciones programadas. */
+  includeScheduled?: boolean;
 }): Promise<FeedPost[]> {
   const posts = await prisma.post.findMany({
-    where: { modelId: params.modelId, isPublished: true },
+    where: {
+      modelId: params.modelId,
+      ...(params.includeScheduled ? { isPublished: true } : livePostWhere()),
+    },
     orderBy: { createdAt: 'desc' },
     take: params.take ?? 12,
     select: feedPostSelect,

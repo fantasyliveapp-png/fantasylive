@@ -2,8 +2,11 @@ import type { Metadata, Viewport } from 'next';
 import { Toaster } from 'sonner';
 
 import { AgeGate } from '@/components/age-gate';
+import { InstallApp } from '@/components/pwa/install-app';
+import { PushPrompt } from '@/components/pwa/push';
 import { AuthProvider } from '@/components/providers/auth-provider';
 import { I18nProvider } from '@/components/providers/i18n-provider';
+import { JoinPromptProvider } from '@/components/providers/join-prompt';
 import { config } from '@/lib/config';
 import { fontVariables } from '@/lib/fonts';
 import { getLocale } from '@/lib/i18n/server';
@@ -21,7 +24,14 @@ export const metadata: Metadata = {
   // existiendo en areas privadas, aunque la superficie publica ya no lo
   // muestre. No es solo cosmetica de marketing.
   robots: { index: false, follow: false },
-  other: { rating: 'adult, RTA-5042-1996-1400-1577-RTA' },
+  other: {
+    rating: 'adult, RTA-5042-1996-1400-1577-RTA',
+    // iPhone con iOS antiguo: abrirla a pantalla completa al instalarla.
+    'apple-mobile-web-app-capable': 'yes',
+  },
+  // App instalable en iPhone ("Anadir a pantalla de inicio").
+  appleWebApp: { capable: true, title: config.app.name, statusBarStyle: 'black' },
+  formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {
@@ -50,7 +60,9 @@ export default async function RootLayout({
         <I18nProvider locale={locale}>
           <AuthProvider>
             <AgeGate />
-            {children}
+            <JoinPromptProvider>{children}</JoinPromptProvider>
+            <InstallApp />
+            <PushPrompt />
             <Toaster
               position="top-center"
               theme="dark"

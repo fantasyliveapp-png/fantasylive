@@ -4,12 +4,14 @@ import {
   Compass,
   LayoutDashboard,
   Radio,
+  Search,
   Shield,
   Users,
   Video,
 } from 'lucide-react';
 
 import { Logo } from '@/components/brand/logo';
+import { FeedTabs } from '@/components/feed/feed-tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { LanguageSwitcher } from '@/components/layout/language-switcher';
@@ -17,12 +19,17 @@ import { NotificationBell } from '@/components/layout/notification-bell';
 import { UserMenu } from '@/components/layout/user-menu';
 import { getCurrentUser } from '@/lib/auth/guards';
 import { getT } from '@/lib/i18n/server';
+import { getOwnUsername, getProfileShortcut } from '@/lib/profile-shortcut';
 import { getWalletSummary } from '@/lib/tokens';
 import { formatTokens } from '@/lib/utils';
 
 export async function Navbar() {
   const [user, t] = await Promise.all([getCurrentUser(), getT()]);
-  const wallet = user ? await getWalletSummary(user.id) : null;
+  const [wallet, profile, username] = await Promise.all([
+    user ? getWalletSummary(user.id) : null,
+    getProfileShortcut(user?.modelProfileId),
+    getOwnUsername(user?.id),
+  ]);
 
   // El feed y los directos van primero: son el modo de descubrimiento
   // principal, y el catalogo pasa a ser una vista mas.
@@ -36,10 +43,13 @@ export async function Navbar() {
   ];
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl">
-      <div className="container flex h-16 items-center justify-between gap-4">
-        <div className="flex items-center gap-8">
-          <Logo />
+    // Desde tablet (md) la navegacion es la barra lateral (SideNav).
+    <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl md:hidden">
+      <div className="container flex h-16 items-center justify-between gap-2 px-4 sm:gap-4 sm:px-6">
+        <div className="flex min-w-0 items-center gap-8">
+          {/* El nombre siempre visible; en movil se ajusta al ancho de la
+              pantalla para que quepan los botones de la derecha. */}
+          <Logo wordmarkClassName="text-[clamp(0.8rem,4vw,1.125rem)]" />
 
           <nav className="hidden items-center gap-1 md:flex">
             {navLinks.map((link) => (
@@ -55,8 +65,15 @@ export async function Navbar() {
           </nav>
         </div>
 
-        <div className="flex items-center gap-2">
-          <LanguageSwitcher />
+        <div className="flex shrink-0 items-center gap-0.5 sm:gap-2">
+          <Link href="/buscar" aria-label="Buscar">
+            <Button variant="ghost" size="icon" className="h-9 w-9">
+              <Search className="h-5 w-5" />
+            </Button>
+          </Link>
+          {/* En movil el idioma va en el menu de la cuenta, o en entrar /
+              crear cuenta si no hay sesion: aqui no cabe junto al nombre. */}
+          <LanguageSwitcher className="hidden sm:inline-flex" />
 
           {user ? (
             <>
@@ -99,30 +116,39 @@ export async function Navbar() {
 
               <NotificationBell />
 
-              <UserMenu
-                name={user.name ?? user.email}
-                email={user.email}
-                image={user.image ?? null}
-                role={user.role}
-                isVip={user.isVip}
-              />
+              {/* En el movil tu foto ya esta en la barra de abajo (Perfil):
+                  el menu de la cuenta va en tu perfil (boton de menu). */}
+              <div className="hidden md:block">
+                <UserMenu
+                  name={profile?.stageName ?? user.name ?? user.email}
+                  email={user.email}
+                  image={profile?.avatarUrl ?? user.image ?? null}
+                  role={user.role}
+                  isVip={user.isVip}
+                  profileSlug={profile?.slug}
+                  username={username}
+                />
+              </div>
             </>
           ) : (
             <>
-              <Link href="/login">
+              {/* En movil "Entrar" ya esta en la barra inferior; aqui desbordaria. */}
+              <Link href="/login" className="hidden sm:block">
                 <Button variant="ghost" size="sm">
                   {t('nav.login')}
                 </Button>
               </Link>
               <Link href="/register">
                 <Button variant="brand" size="sm">
-                  {t('nav.register')}
+                  <span className="sm:hidden">{t('nav.join')}</span>
+                  <span className="hidden sm:inline">{t('nav.register')}</span>
                 </Button>
               </Link>
             </>
           )}
         </div>
       </div>
+      <FeedTabs />
     </header>
   );
 }

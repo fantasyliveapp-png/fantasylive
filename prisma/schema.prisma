@@ -127,6 +127,15 @@ enum TransactionType {
   POST_EARNING // ingreso de la modelo por una publicacion (+)
   /// Comision de retiro (10%): se descuenta al solicitar el payout
   PAYOUT_FEE
+  /// Programa de referidos: % de lo que genera una creadora invitada (+)
+  REFERRAL_EARNING
+}
+
+/// Quien puede escribirle a una cuenta (ajuste de privacidad).
+enum MessagePrivacy {
+  EVERYONE
+  FOLLOWING
+  NOBODY
 }
 
 enum SubscriptionStatus {
@@ -241,6 +250,14 @@ enum NotificationType {
   NEW_POST
   /// Has recibido un regalo en tokens
   GIFT_RECEIVED
+  /// Como va una publicacion propia (fase de prueba superada, hitos de vistas)
+  POST_INSIGHT
+  /// Aviso del equipo de moderacion (p. ej. publicacion retirada)
+  MODERATION
+  /// Aviso general del equipo a todos (o a un grupo)
+  ANNOUNCEMENT
+  /// El equipo ha respondido a tu consulta de soporte
+  SUPPORT_REPLY
 }
 
 enum LiveStreamStatus {
@@ -291,14 +308,47 @@ model User {
   status        UserStatus @default(ACTIVE)
 
   // Perfil / compliance
-  birthDate   DateTime?
-  ageVerified Boolean      @default(false)
-  gender      Gender?
-  orientation Orientation?
-  country     String?
-  city        String?
-  languages   String[]     @default([])
-  bio         String?
+  birthDate       DateTime?
+  ageVerified     Boolean        @default(false)
+  gender          Gender?
+  orientation     Orientation?
+  country         String?
+  city            String?
+  languages       String[]       @default([])
+  bio             String?
+  /// Perfil de fan visible para todos. Privado por defecto: solo se ve el
+  /// nombre y la foto hasta que la persona decide abrirlo.
+  isProfilePublic Boolean        @default(false)
+  /// Quien puede escribirle. Aunque sea "todos", quien no se siguen llega
+  /// como solicitud de mensaje.
+  messagePrivacy  MessagePrivacy @default(EVERYONE)
+
+  // Gustos (preguntas de bienvenida): ordenan su Descubrir.
+  /// A quien quiere ver. Vacio = a todos.
+  preferredGenders Gender[]  @default([])
+  /// Etiquetas que le gustan (las mismas que ponen las creadoras).
+  interests        String[]  @default([])
+  /// Que busca: fotos, directos, chatear, videollamadas.
+  lookingFor       String[]  @default([])
+  /// Cuando respondio (o se salto) las preguntas. null = aun no.
+  onboardedAt      DateTime?
+
+  /// Programa de referidos: la creadora que trajo esta cuenta (por su
+  /// enlace). Si esta cuenta es fan, lo que gaste con ella le deja mas a la
+  /// creadora; si se hace creadora, la que la invito cobra un %.
+  referredById     String?
+  referredBy       User?            @relation("Referrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals        User[]           @relation("Referrals")
+  /// Reclutador que trajo a esta cuenta (solo trae creadoras; cobra un %).
+  recruitedById    String?
+  recruitedBy      Recruiter?       @relation("RecruitedBy", fields: [recruitedById], references: [id], onDelete: SetNull)
+  /// Si esta cuenta es de un reclutador, sus condiciones.
+  recruiterAccount Recruiter?       @relation("RecruiterAccount")
+  supportTickets   SupportTicket[]
+  supportMessages  SupportMessage[]
+  pushSubscriptions PushSubscription[]
+  postImpressions  PostImpression[]
+  postHides        PostHide[]
 
   // Estado de plataforma
   isVip          Boolean   @default(false)
@@ -342,6 +392,13 @@ model User {
   notifications            Notification[]
   postUnlocks              PostUnlock[]
   postLikes                PostLike[]
+  postPollVotes            PostPollVote[]
+  /// Personas (no creadoras) a las que sigue y que le siguen.
+  userFollowing            UserFollow[]              @relation("UserFollowing")
+  userFollowers            UserFollow[]              @relation("UserFollowers")
+  peerChatsA               PeerChat[]                @relation("PeerChatA")
+  peerChatsB               PeerChat[]                @relation("PeerChatB")
+  peerMessages             PeerMessage[]
   postComments             PostComment[]
   profileVisits            ProfileVisit[]
   greetingsReceived        AutoGreetingLog[]
@@ -517,6 +574,18 @@ model ModelProfile {
   id     String @id @default(cuid())
   userId String @unique
 
+  /// "Fundadora" n.o 1-100: de las 100 primeras creadoras verificadas. Su %
+  /// por invitar creadoras es para siempre (las demas, 12 meses).
+  founderNumber Int?      @unique
+  /// Destacada por el equipo hasta esta fecha: sale mas en Descubrir.
+  featuredUntil DateTime?
+
+  /// Boveda: precio sugerido (tokens) de cada nivel de contenido de pago.
+  vaultPriceLevel1  Int @default(30)
+  vaultPriceLevel2  Int @default(60)
+  vaultPriceLevel3  Int @default(100)
+  vaultPriceSpecial Int @default(200)
+
   stageName String
   slug      String  @unique
   headline  String?
@@ -650,6 +719,8 @@ model ModelProfile {
   streams          LiveStream[]
   visits           ProfileVisit[]
   greetings        AutoGreetingLog[]
+  vaultFolders     VaultFolder[]
+  vaultItems       VaultItem[]
 
   @@index([isOnline, isVipEnabled])
   @@index([gender, tier])
@@ -691,6 +762,23 @@ model Review {
   @@unique([modelId, userId])
   @@index([modelId])
   @@map("reviews")
+}
+
+/// Seguir a una persona que no es creadora (red social). Seguir a una
+/// creadora sigue usando `Follow`, que alimenta el feed "Siguiendo".
+model UserFollow {
+  id          String @id @default(cuid())
+  followerId  String
+  followingId String
+
+  createdAt DateTime @default(now())
+
+  follower  User @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followingId])
+  @@map("user_follows")
 }
 
 model Follow {
@@ -779,7 +867,15 @@ model Conversation {
 
   /// Precio pagado para desbloquearla, guardado como referencia
   unlockPriceTokens Int
-  lastMessageAt     DateTime @default(now())
+  lastMessageAt     DateTime  @default(now())
+  /// La abrio la creadora (gratis) en vez del fan.
+  startedByModel    Boolean   @default(false)
+  /// null = solicitud pendiente: la abrio la creadora y el fan aun no la
+  /// acepto ni respondio. Las que abre y paga el fan nacen aceptadas.
+  acceptedAt        DateTime?
+  /// Hasta cuando ha leido cada lado (para el contador de no leidos).
+  userReadAt        DateTime?
+  modelReadAt       DateTime?
 
   createdAt DateTime @default(now())
 
@@ -791,6 +887,46 @@ model Conversation {
   @@unique([userId, modelId])
   @@index([modelId, lastMessageAt])
   @@map("conversations")
+}
+
+/// Chat gratis entre dos cuentas que no es fan -> creadora (fan con fan,
+/// creadora con creadora). userAId < userBId: un solo chat por pareja.
+model PeerChat {
+  id            String    @id @default(cuid())
+  userAId       String
+  userBId       String
+  /// Quien escribio primero.
+  createdById   String
+  /// null = solicitud: quien la recibio aun no la acepto ni respondio.
+  acceptedAt    DateTime?
+  lastMessageAt DateTime  @default(now())
+  /// Hasta cuando ha leido cada persona (para el contador de no leidos).
+  readAtA       DateTime?
+  readAtB       DateTime?
+  createdAt     DateTime  @default(now())
+
+  userA    User          @relation("PeerChatA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB    User          @relation("PeerChatB", fields: [userBId], references: [id], onDelete: Cascade)
+  messages PeerMessage[]
+
+  @@unique([userAId, userBId])
+  @@index([userAId, lastMessageAt])
+  @@index([userBId, lastMessageAt])
+  @@map("peer_chats")
+}
+
+model PeerMessage {
+  id        String   @id @default(cuid())
+  chatId    String
+  senderId  String
+  body      String
+  createdAt DateTime @default(now())
+
+  chat   PeerChat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  sender User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([chatId, createdAt])
+  @@map("peer_messages")
 }
 
 model Message {
@@ -826,13 +962,17 @@ model MessageAttachment {
   mimeType    String
   sizeBytes   Int?
   priceTokens Int    @default(0)
+  /// Enviado desde la Boveda (para saber que ya se le envio / que ya compro).
+  vaultItemId String?
 
   createdAt DateTime @default(now())
 
   message      Message                   @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  vaultItem    VaultItem?                @relation(fields: [vaultItemId], references: [id], onDelete: SetNull)
   unlocks      MessageAttachmentUnlock[]
   transactions Transaction[]
 
+  @@index([vaultItemId])
   @@map("message_attachments")
 }
 
@@ -1233,6 +1373,8 @@ model Report {
   reporterId String
   reportedId String
   sessionId  String?
+  /// Que se denuncio: "profile", "post:<id>", "chat:<id>", "conversation:<id>".
+  context    String?
 
   reason       ReportReason
   details      String?
@@ -1307,21 +1449,35 @@ model Post {
   priceTokens Int     @default(0)
   isPublished Boolean @default(true)
 
-  likeCount    Int @default(0)
-  commentCount Int @default(0)
-  unlockCount  Int @default(0)
-  viewCount    Int @default(0)
-  tokensEarned Int @default(0)
+  likeCount     Int       @default(0)
+  commentCount  Int       @default(0)
+  unlockCount   Int       @default(0)
+  /// Personas distintas que la han visto en el feed (ver PostImpression).
+  viewCount     Int       @default(0)
+  tokensEarned  Int       @default(0)
+  /// Retirada por moderacion: deja de verse y la creadora no puede
+  /// volver a publicarla.
+  removedAt     DateTime?
+  removedReason String?
+  /// Tiempo total que la han mirado (ms, max 60 s por persona).
+  watchMs       BigInt    @default(0)
+  /// Personas que vieron el video (casi) entero.
+  completions   Int       @default(0)
+  /// Personas que la pasaron de largo (menos de 1,5 s en pantalla).
+  skips         Int       @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  model        ModelProfile  @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  model        ModelProfile     @relation(fields: [modelId], references: [id], onDelete: Cascade)
   assets       PostAsset[]
   unlocks      PostUnlock[]
   likes        PostLike[]
   comments     PostComment[]
   transactions Transaction[]
+  poll         PostPoll?
+  impressions  PostImpression[]
+  hides        PostHide[]
 
   @@index([isPublished, createdAt])
   @@index([modelId, createdAt])
@@ -1366,6 +1522,57 @@ model PostUnlock {
   @@unique([userId, postId])
   @@index([postId])
   @@map("post_unlocks")
+}
+
+/// Encuesta de una publicacion (como mucho una por publicacion).
+model PostPoll {
+  id         String    @id @default(cuid())
+  postId     String    @unique
+  question   String
+  /// Cierre de la votacion. Tras esta fecha solo se ven los resultados.
+  endsAt     DateTime?
+  /// Contador desnormalizado: evita sumar votos en cada tarjeta del feed.
+  totalVotes Int       @default(0)
+
+  createdAt DateTime @default(now())
+
+  post    Post             @relation(fields: [postId], references: [id], onDelete: Cascade)
+  options PostPollOption[]
+  votes   PostPollVote[]
+
+  @@map("post_polls")
+}
+
+model PostPollOption {
+  id        String @id @default(cuid())
+  pollId    String
+  text      String
+  sortOrder Int    @default(0)
+  voteCount Int    @default(0)
+
+  poll  PostPoll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  votes PostPollVote[]
+
+  @@index([pollId, sortOrder])
+  @@map("post_poll_options")
+}
+
+/// Un voto por persona y encuesta (el @@unique lo garantiza en la BD).
+model PostPollVote {
+  id       String @id @default(cuid())
+  pollId   String
+  optionId String
+  userId   String
+
+  createdAt DateTime @default(now())
+
+  poll   PostPoll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  option PostPollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([pollId, userId])
+  @@index([optionId])
+  @@map("post_poll_votes")
 }
 
 model PostLike {
@@ -1426,13 +1633,13 @@ model LiveStream {
   /// Clave de emision que se pega en OBS. Secreto: solo la ve su dueña.
   streamKey String?
 
-  viewerCount   Int @default(0)
-  viewerPeak    Int @default(0)
+  viewerCount  Int @default(0)
+  viewerPeak   Int @default(0)
   /// Entradas acumuladas a la sala (no personas distintas: quien recarga
   /// la pagina cuenta otra vez). Las personas distintas salen de ProfileVisit.
-  totalJoins Int @default(0)
-  giftsCount    Int @default(0)
-  tokensEarned  Int @default(0)
+  totalJoins   Int @default(0)
+  giftsCount   Int @default(0)
+  tokensEarned Int @default(0)
 
   startedAt DateTime?
   endedAt   DateTime?
@@ -1496,4 +1703,189 @@ model AutoGreetingLog {
   @@unique([modelId, userId])
   @@index([modelId, createdAt])
   @@map("auto_greeting_logs")
+}
+
+/// Una persona vio una publicacion en el feed (al menos 1 s en pantalla).
+/// Sirve para no repetirle lo ya visto, para medir que tal funciona cada
+/// publicacion (me gusta / vistas) y para repartir la visibilidad.
+model PostImpression {
+  id        String   @id @default(cuid())
+  userId    String
+  postId    String
+  /// Tiempo en pantalla acumulado (ms)
+  dwellMs   Int      @default(0)
+  /// Vio el video (casi) entero
+  completed Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@index([userId, createdAt])
+  @@map("post_impressions")
+}
+
+/// "No me interesa": la publicacion deja de salirle y su creadora baja.
+model PostHide {
+  id        String   @id @default(cuid())
+  userId    String
+  postId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@map("post_hides")
+}
+
+/// RECLUTADOR: alguien que no crea contenido y solo trae creadoras. Lo da de
+/// alta el equipo (desde admin) con las condiciones negociadas con el. Cobra
+/// un % de lo que venden sus creadoras, de la comision de la plataforma.
+model Recruiter {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  /// Codigo de su enlace: /reclutar/<code>
+  code              String   @unique
+  /// % de cada venta de sus creadoras (sale de la comision de la plataforma).
+  commissionPercent Int      @default(3)
+  /// Meses que cobra por cada creadora desde que se hizo creadora. null = siempre.
+  months            Int?     @default(12)
+  /// Cupo negociado: cuantas creadoras le cuentan como maximo. null = sin tope.
+  maxCreators       Int?
+  active            Boolean  @default(true)
+  /// Notas internas de la negociacion (solo admin).
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user     User   @relation("RecruiterAccount", fields: [userId], references: [id], onDelete: Cascade)
+  creators User[] @relation("RecruitedBy")
+
+  @@map("recruiters")
+}
+
+/// AVISO A TODOS: mensaje del equipo que llega como notificacion a un grupo.
+model Announcement {
+  id          String   @id @default(cuid())
+  /// all | fans | creators | founders
+  audience    String
+  title       String
+  body        String?
+  link        String?
+  sentCount   Int      @default(0)
+  createdById String
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("announcements")
+}
+
+enum SupportStatus {
+  /// Esperando respuesta del equipo
+  OPEN
+  /// El equipo respondio; esperando a la persona
+  ANSWERED
+  CLOSED
+}
+
+/// SOPORTE: una consulta de un usuario al equipo, con su conversacion.
+model SupportTicket {
+  id        String        @id @default(cuid())
+  userId    String
+  /// cuenta | pagos | retiros | contenido | verificacion | otro
+  category  String
+  subject   String
+  status    SupportStatus @default(OPEN)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages SupportMessage[]
+
+  @@index([status, updatedAt])
+  @@index([userId, updatedAt])
+  @@map("support_tickets")
+}
+
+model SupportMessage {
+  id        String   @id @default(cuid())
+  ticketId  String
+  authorId  String
+  /// true = lo escribio el equipo
+  fromStaff Boolean  @default(false)
+  body      String
+  createdAt DateTime @default(now())
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
+  @@map("support_messages")
+}
+
+/// Seccion de la Boveda: para enganchar (siempre gratis) o nivel de pago.
+enum VaultSection {
+  TEASER
+  LEVEL_1
+  LEVEL_2
+  LEVEL_3
+  SPECIAL
+}
+
+/// Carpeta propia de la creadora dentro de su Boveda ("Lenceria", "Ducha"...).
+model VaultFolder {
+  id        String   @id @default(cuid())
+  modelId   String
+  name      String
+  createdAt DateTime @default(now())
+
+  model ModelProfile @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  items VaultItem[]
+
+  @@unique([modelId, name])
+  @@map("vault_folders")
+}
+
+/// BOVEDA: contenido privado de la creadora, listo para enviar por chat
+/// (ella o su equipo de chat) sin que el archivo salga de la plataforma.
+model VaultItem {
+  id         String       @id @default(cuid())
+  modelId    String
+  section    VaultSection
+  folderId   String?
+  storageKey String
+  mimeType   String
+  sizeBytes  Int?
+  /// Nota corta para quien envia ("lenceria roja").
+  note       String?
+  /// Precio propio; null = el del nivel. Los de TEASER siempre van gratis.
+  priceTokens Int?
+  createdAt  DateTime     @default(now())
+
+  model       ModelProfile        @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  folder      VaultFolder?        @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  attachments MessageAttachment[]
+
+  @@index([modelId, section, createdAt])
+  @@map("vault_items")
+}
+
+/// Movil u ordenador donde la persona activo los avisos (Web Push). Uno por
+/// navegador; se borra solo cuando el servicio de avisos dice que ya no vale.
+model PushSubscription {
+  id         String   @id @default(cuid())
+  userId     String
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
 }

@@ -10,7 +10,8 @@ import {
   MIN_BILLED_CALL_SECONDS,
   tokensForSeconds,
 } from '@/lib/rates';
-import { applyLedgerEntry, splitEarnings, InsufficientTokensError } from '@/lib/tokens';
+import { payReferrers, referralSplit } from '@/lib/referrals';
+import { applyLedgerEntry, InsufficientTokensError } from '@/lib/tokens';
 
 export interface BillingTickResult {
   ok: boolean;
@@ -227,7 +228,12 @@ export async function processBillingTick(
 
   try {
     const result = await prisma.$transaction(async (tx) => {
-      const { platformFeeTokens, modelTokens } = splitEarnings(tokensDue);
+      // Reparto con las reglas de referidos (fan propio / embajadora).
+      const { platformFeeTokens, modelTokens, referrers } = await referralSplit(tx, {
+        payerId,
+        earnerId,
+        tokens: tokensDue,
+      });
 
       const debit = await applyLedgerEntry(tx, {
         userId: payerId,
@@ -250,6 +256,13 @@ export async function processBillingTick(
           callSessionId: session.id,
         });
       }
+
+      await payReferrers(tx, referrers, {
+        description: `llamada ${session.type}`,
+        fromCreatorUserId: earnerId,
+        applyLedgerEntry,
+        callSessionId: session.id,
+      });
 
       await tx.callBillingTick.create({
         data: {

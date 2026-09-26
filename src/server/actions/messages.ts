@@ -8,6 +8,7 @@ import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { createNotification } from '@/lib/notifications';
 import { prisma } from '@/lib/prisma';
 import { checkNoContactInfo } from '@/lib/content-filter';
+import { isBlockedBetween } from '@/lib/chat';
 import { GEO_BLOCKED_MESSAGE, isBlockedForViewer } from '@/lib/geo';
 import {
   buildMessageAttachmentKey,
@@ -63,6 +64,9 @@ export async function startConversationAction(input: {
     if (await isBlockedForViewer(model.blockedCountries)) {
       return { ok: false, error: GEO_BLOCKED_MESSAGE };
     }
+    if (await isBlockedBetween(user.id, model.userId)) {
+      return { ok: false, error: 'No puedes escribir a esta persona.' };
+    }
 
     const existing = await prisma.conversation.findUnique({
       where: { userId_modelId: { userId: user.id, modelId: input.modelId } },
@@ -72,29 +76,35 @@ export async function startConversationAction(input: {
       return sendMessageAction({ conversationId: existing.id, body: body.data });
     }
 
-    if (!model.messagingEnabled || model.messagePriceTokens <= 0) {
-      return { ok: false, error: 'Esta modelo no tiene mensajeria activada.' };
+    // Con la mensajeria activada ella decide el precio; 0 = gratis.
+    if (!model.messagingEnabled) {
+      return { ok: false, error: 'Esta creadora no tiene los mensajes activados.' };
     }
+    const price = Math.max(0, model.messagePriceTokens);
 
     const conversationId = await prisma.$transaction(async (tx) => {
       const conversation = await tx.conversation.create({
         data: {
           userId: user.id,
           modelId: input.modelId,
-          unlockPriceTokens: model.messagePriceTokens,
+          unlockPriceTokens: price,
+          // La abre (y paga) el fan: no es una solicitud.
+          acceptedAt: new Date(),
         },
         select: { id: true },
       });
 
-      await transferWithCommission(tx, {
-        fromUserId: user.id,
-        toUserId: model.userId,
-        tokens: model.messagePriceTokens,
-        debitType: 'MESSAGE_UNLOCK',
-        creditType: 'MESSAGE_UNLOCK_EARNING',
-        description: 'Desbloqueo de conversacion',
-        conversationId: conversation.id,
-      });
+      if (price > 0) {
+        await transferWithCommission(tx, {
+          fromUserId: user.id,
+          toUserId: model.userId,
+          tokens: price,
+          debitType: 'MESSAGE_UNLOCK',
+          creditType: 'MESSAGE_UNLOCK_EARNING',
+          description: 'Desbloqueo de conversacion',
+          conversationId: conversation.id,
+        });
+      }
 
       await tx.message.create({
         data: {
@@ -108,7 +118,7 @@ export async function startConversationAction(input: {
         userId: model.userId,
         type: 'NEW_MESSAGE',
         title: `${user.name ?? 'Alguien'} te escribio un mensaje`,
-        link: '/dashboard/model/messages',
+        link: `/mensajes/${conversation.id}`,
       });
 
       return conversation.id;
@@ -119,12 +129,11 @@ export async function startConversationAction(input: {
     await maybeReplyAsAi(conversationId);
 
     revalidatePath(`/models/${model.slug}`);
-    revalidatePath('/dashboard/messages');
-    revalidatePath('/dashboard/model/messages');
+    revalidatePath('/mensajes');
     return {
       ok: true,
       conversationId,
-      message: `Conversacion desbloqueada por ${model.messagePriceTokens} tokens.`,
+      message: price > 0 ? `Conversacion desbloqueada por ${price} tokens.` : undefined,
     };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
@@ -167,8 +176,19 @@ export async function sendMessageAction(input: {
     if (isCustomer && (await isBlockedForViewer(conversation.model.blockedCountries))) {
       return { ok: false, error: GEO_BLOCKED_MESSAGE };
     }
+    if (await isBlockedBetween(conversation.userId, conversation.model.userId)) {
+      return { ok: false, error: 'No puedes escribir a esta persona.' };
+    }
 
-    if (isCustomer) {
+    // Chat abierto por la creadora y aun sin aceptar: ella no puede insistir;
+    // si el fan responde, la solicitud queda aceptada.
+    const pendingRequest = conversation.startedByModel && conversation.acceptedAt === null;
+    if (pendingRequest && isModel) {
+      return { ok: false, error: 'Espera a que acepte tu solicitud de mensaje.' };
+    }
+
+    // En los chats gratis (precio 0 o abiertos por ella) no hace falta saldo.
+    if (isCustomer && conversation.unlockPriceTokens > 0) {
       const wallet = await prisma.wallet.findUnique({
         where: { userId: user.id },
         select: { balance: true },
@@ -191,7 +211,10 @@ export async function sendMessageAction(input: {
       }),
       prisma.conversation.update({
         where: { id: conversation.id },
-        data: { lastMessageAt: new Date() },
+        data: {
+          lastMessageAt: new Date(),
+          ...(pendingRequest && isCustomer ? { acceptedAt: new Date() } : {}),
+        },
       }),
     ]);
 
@@ -199,15 +222,16 @@ export async function sendMessageAction(input: {
       userId: isCustomer ? conversation.model.userId : conversation.userId,
       type: 'NEW_MESSAGE',
       title: `${user.name ?? 'Alguien'} te escribio un mensaje`,
-      link: isCustomer ? '/dashboard/model/messages' : '/dashboard/messages',
+      // Directo al hilo, desde el lado de quien lo recibe.
+      link: `/mensajes/${conversation.id}`,
     });
 
     // Solo contesta a lo que escribe el cliente. Si el que escribe es el dueno
     // del perfil, no hay nada que responder.
     if (isCustomer) await maybeReplyAsAi(conversation.id);
 
-    revalidatePath(`/dashboard/messages/${conversation.model.slug}`);
-    revalidatePath(`/dashboard/model/messages/${conversation.id}`);
+    revalidatePath(`/mensajes/${conversation.id}`);
+    revalidatePath(`/mensajes/${conversation.id}`);
     return { ok: true, conversationId: conversation.id };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
@@ -281,13 +305,22 @@ export async function sendMessageAttachmentAction(input: {
     if (conversation.model.userId !== user.id) {
       return { ok: false, error: 'Solo la modelo puede adjuntar archivos.' };
     }
+    // Solo archivos subidos a ESTE chat (la clave lleva el id de la conversacion).
+    if (!input.storageKey.startsWith(`messages/${conversation.id}/`)) {
+      return { ok: false, error: 'Archivo no valido.' };
+    }
+    const bodyText = input.body?.trim() || null;
+    if (bodyText) {
+      const contactError = checkNoContactInfo(bodyText);
+      if (contactError) return { ok: false, error: contactError };
+    }
 
     await prisma.$transaction(async (tx) => {
       const message = await tx.message.create({
         data: {
           conversationId: conversation.id,
           senderId: user.id,
-          body: input.body?.trim() || null,
+          body: bodyText,
         },
         select: { id: true },
       });
@@ -314,12 +347,12 @@ export async function sendMessageAttachmentAction(input: {
           input.priceTokens > 0
             ? `${user.name ?? 'Alguien'} te envio un archivo de pago`
             : `${user.name ?? 'Alguien'} te envio un archivo`,
-        link: `/dashboard/messages/${conversation.model.slug}`,
+        link: `/mensajes/${conversation.id}`,
       });
     });
 
-    revalidatePath(`/dashboard/messages/${conversation.model.slug}`);
-    revalidatePath(`/dashboard/model/messages/${conversation.id}`);
+    revalidatePath(`/mensajes/${conversation.id}`);
+    revalidatePath(`/mensajes/${conversation.id}`);
     return { ok: true, message: 'Archivo enviado.' };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
@@ -392,11 +425,11 @@ export async function unlockMessageAttachmentAction(
         userId: conversation.model.userId,
         type: 'MESSAGE_ATTACHMENT_UNLOCKED',
         title: `${user.name ?? 'Alguien'} desbloqueo tu archivo por ${attachment.priceTokens} tokens`,
-        link: '/dashboard/model/messages',
+        link: '/mensajes',
       });
     });
 
-    revalidatePath(`/dashboard/messages/${conversation.model.slug}`);
+    revalidatePath(`/mensajes/${conversation.id}`);
     return { ok: true, message: 'Archivo desbloqueado.' };
   } catch (error) {
     return { ok: false, error: toMessage(error) };

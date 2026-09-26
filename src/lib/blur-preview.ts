@@ -16,6 +16,9 @@
  * procesar imagenes, y la version reducida nunca pasa por nuestra memoria.
  */
 
+import { applyPostFilter, type PostFilterId } from '@/lib/post-filters';
+import { cropRect, type CropState } from '@/lib/post-formats';
+
 /** Ancho de la miniatura. Suficiente para dar color y forma, nada mas. */
 const PREVIEW_WIDTH = 32;
 
@@ -30,7 +33,7 @@ export interface PreviewResult {
 
 /** Dimensiones reales de un archivo de imagen. */
 export async function readImageSize(
-  file: File,
+  file: Blob,
 ): Promise<{ width: number; height: number } | null> {
   try {
     const bitmap = await createImageBitmap(file);
@@ -49,7 +52,7 @@ export async function readImageSize(
  * un video o un formato raro); quien llama decide si eso bloquea la subida.
  */
 export async function createBlurredPreview(
-  file: File,
+  file: Blob,
 ): Promise<PreviewResult | null> {
   if (!file.type.startsWith('image/')) return null;
 
@@ -82,6 +85,130 @@ export async function createBlurredPreview(
     if (!blob) return null;
 
     return { blob, width, height };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Miniatura difuminada de un VIDEO: se toma un fotograma (al segundo 1, o a
+ * mitad si es mas corto), se dibuja en un canvas y se difumina igual que una
+ * foto. Asi un video de pago tambien se ve borroso en el feed sin mandar el
+ * archivo a nadie. Devuelve null si el navegador no puede leer el video.
+ */
+export async function createVideoPreview(
+  file: Blob,
+  aspectRatio: number,
+): Promise<PreviewResult | null> {
+  const url = URL.createObjectURL(file);
+  try {
+    const video = document.createElement('video');
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = 'auto';
+    video.src = url;
+
+    await new Promise<void>((resolve, reject) => {
+      video.onloadedmetadata = () => resolve();
+      video.onerror = () => reject(new Error('video'));
+    });
+    const at = Math.min(1, (video.duration || 0) / 2);
+    await new Promise<void>((resolve, reject) => {
+      video.onseeked = () => resolve();
+      video.onerror = () => reject(new Error('video'));
+      video.currentTime = at;
+    });
+
+    // Recorte centrado a la proporcion del formato, como se ve en el feed.
+    const width = PREVIEW_WIDTH;
+    const height = Math.max(1, Math.round(width / aspectRatio));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx || !video.videoWidth) return null;
+
+    const scale = Math.max(width / video.videoWidth, height / video.videoHeight);
+    const w = video.videoWidth * scale;
+    const h = video.videoHeight * scale;
+    ctx.filter = `blur(${PREVIEW_BLUR}px)`;
+    ctx.drawImage(video, (width - w) / 2, (height - h) / 2, w, h);
+
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.6),
+    );
+    return blob ? { blob, width, height } : null;
+  } catch {
+    return null;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+/**
+ * Dibuja el recorte (y el filtro) de una imagen ya decodificada en un canvas
+ * de `width` x `height`. Es la unica funcion que genera pixeles de una
+ * publicacion: la usan las miniaturas de filtros, la vista previa y el
+ * archivo final, asi que las tres coinciden.
+ */
+export function renderCropCanvas(
+  bitmap: ImageBitmap,
+  width: number,
+  height: number,
+  crop: CropState,
+  filter: PostFilterId = 'none',
+): HTMLCanvasElement | null {
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(width));
+  canvas.height = Math.max(1, Math.round(height));
+
+  const ctx = canvas.getContext('2d', { willReadFrequently: filter !== 'none' });
+  if (!ctx) return null;
+
+  const rect = cropRect(
+    bitmap.width,
+    bitmap.height,
+    canvas.width,
+    canvas.height,
+    crop,
+  );
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(bitmap, rect.left, rect.top, rect.width, rect.height);
+
+  if (filter !== 'none') {
+    const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    applyPostFilter(pixels, filter);
+    ctx.putImageData(pixels, 0, 0);
+  }
+  return canvas;
+}
+
+/**
+ * Recorta una imagen al formato estandar de publicacion con el encuadre y el
+ * filtro que eligio la creadora, y la devuelve como JPEG de `format.width` x
+ * `format.height`. Devuelve null si el navegador no puede decodificarla.
+ */
+export async function renderCroppedImage(
+  file: Blob,
+  format: { width: number; height: number },
+  crop: CropState,
+  filter: PostFilterId = 'none',
+): Promise<Blob | null> {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const canvas = renderCropCanvas(
+      bitmap,
+      format.width,
+      format.height,
+      crop,
+      filter,
+    );
+    bitmap.close();
+    if (!canvas) return null;
+
+    return await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.9),
+    );
   } catch {
     return null;
   }

@@ -41,6 +41,10 @@ interface ReportRow {
   reason: string;
   status: string;
   details: string | null;
+  /** Que se denuncio: "profile", "post:<id>", "chat:<id>", "conversation:<id>". */
+  context?: string | null;
+  /** Ultimos mensajes del chat denunciado. */
+  evidence?: { from: string; body: string; at: string }[];
   createdAt: string;
   reporter: { id: string; name: string | null; email: string };
   reported: {
@@ -178,9 +182,12 @@ export function ReportsReviewList({ reports }: { reports: ReportRow[] }) {
                       Reportado
                     </p>
                     <div className="mt-1 flex items-center gap-2">
-                      <p className="text-sm font-medium">
+                      <Link
+                        href={`/admin/users/${report.reported.id}`}
+                        className="text-sm font-medium hover:underline"
+                      >
                         {report.reported.name ?? 'Usuario'}
-                      </p>
+                      </Link>
                       {report.reported.status !== 'ACTIVE' && (
                         <Badge variant="destructive" className="text-[10px]">
                           {report.reported.status}
@@ -201,6 +208,53 @@ export function ReportsReviewList({ reports }: { reports: ReportRow[] }) {
                     </p>
                   </div>
                 </div>
+
+                {report.context && (
+                  <p className="text-xs text-muted-foreground">
+                    Denunciado desde:{' '}
+                    {(() => {
+                      const [kind, id] = report.context.split(':');
+                      const href =
+                        kind === 'post'
+                          ? `/admin/content/${id}`
+                          : kind === 'chat'
+                            ? `/admin/chats/peer/${id}`
+                            : kind === 'conversation'
+                              ? `/admin/chats/fan/${id}`
+                              : `/admin/users/${report.reported.id}`;
+                      const label =
+                        kind === 'post'
+                          ? 'una publicacion'
+                          : kind === 'chat'
+                            ? 'un chat entre personas'
+                            : kind === 'conversation'
+                              ? 'un chat con creadora'
+                              : 'su perfil';
+                      return (
+                        <Link href={href} className="font-medium text-primary hover:underline">
+                          {label} (ver)
+                        </Link>
+                      );
+                    })()}
+                  </p>
+                )}
+
+                {report.evidence && report.evidence.length > 0 && (
+                  <div className="max-h-64 space-y-1.5 overflow-y-auto rounded-lg border border-border p-3 text-xs">
+                    {report.evidence.map((m, i) => (
+                      <p key={i}>
+                        <span
+                          className={
+                            m.from === 'Denunciada' ? 'font-semibold text-destructive' : 'font-semibold'
+                          }
+                        >
+                          {m.from}:
+                        </span>{' '}
+                        <span className="text-muted-foreground">{m.body}</span>
+                      </p>
+                    ))}
+                  </div>
+                )}
 
                 {report.details && (
                   <div className="rounded-lg bg-muted/50 p-3">

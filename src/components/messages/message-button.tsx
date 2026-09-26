@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { startConversationAction } from '@/server/actions/messages';
+import { useJoinPrompt } from '@/components/providers/join-prompt';
 
 export function MessageButton({
   modelId,
@@ -31,6 +32,7 @@ export function MessageButton({
   isAuthenticated: boolean;
 }) {
   const router = useRouter();
+  const joinPrompt = useJoinPrompt();
   const [open, setOpen] = useState(false);
   const [body, setBody] = useState('');
   const [isPending, startTransition] = useTransition();
@@ -51,7 +53,7 @@ export function MessageButton({
 
   function openDialog() {
     if (!isAuthenticated) {
-      router.push(`/login?callbackUrl=/models/${slug}`);
+      joinPrompt('para escribirle');
       return;
     }
     setOpen(true);
@@ -67,7 +69,11 @@ export function MessageButton({
       if (result.ok) {
         toast.success(result.message ?? 'Conversacion desbloqueada');
         setOpen(false);
-        router.push(`/dashboard/messages/${slug}`);
+        router.push(
+          result.conversationId
+            ? `/mensajes/${result.conversationId}`
+            : `/dashboard/messages/${slug}`,
+        );
       } else {
         toast.error(result.error ?? 'No se pudo enviar');
       }
@@ -78,7 +84,7 @@ export function MessageButton({
     <>
       <Button variant="outline" size="sm" onClick={openDialog} className="gap-1.5">
         <MessageCircle className="h-4 w-4" />
-        Enviar mensaje · {priceTokens}
+        {priceTokens > 0 ? `Enviar mensaje · ${priceTokens}` : 'Enviar mensaje'}
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -86,10 +92,16 @@ export function MessageButton({
           <DialogHeader>
             <DialogTitle>Abrir conversacion</DialogTitle>
             <DialogDescription>
-              Se descontaran{' '}
-              <strong className="text-token">{priceTokens} tokens</strong> por
-              abrir la conversacion. Despues podes seguir escribiendo mientras
-              tengas saldo en tu monedero.
+              {priceTokens > 0 ? (
+                <>
+                  Se descontaran{' '}
+                  <strong className="text-token">{priceTokens} tokens</strong> por
+                  abrir la conversacion. Despues puedes seguir escribiendo
+                  mientras tengas saldo en tu monedero.
+                </>
+              ) : (
+                'Escribirle es gratis.'
+              )}
             </DialogDescription>
           </DialogHeader>
 
@@ -107,8 +119,8 @@ export function MessageButton({
             </Button>
             <Button variant="token" onClick={submit} disabled={isPending}>
               {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              <Coins className="h-4 w-4" />
-              Pagar {priceTokens} y enviar
+              {priceTokens > 0 && <Coins className="h-4 w-4" />}
+              {priceTokens > 0 ? `Pagar ${priceTokens} y enviar` : 'Enviar'}
             </Button>
           </DialogFooter>
         </DialogContent>

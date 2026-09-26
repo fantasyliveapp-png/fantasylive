@@ -5,6 +5,7 @@ import type { KycStatus, PayoutStatus, ReportStatus } from '@prisma/client';
 
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { prisma } from '@/lib/prisma';
+import { assignFounderNumber } from '@/lib/referrals';
 import { applyLedgerEntry } from '@/lib/tokens';
 import { createDownloadUrl } from '@/lib/storage';
 import { decryptSecret } from '@/lib/crypto';
@@ -96,6 +97,12 @@ export async function reviewKycAction(input: {
         data: { ageVerified: input.decision === 'APPROVED' },
       }),
     ]);
+
+    // Las 100 primeras creadoras verificadas son Fundadoras (referidos: su %
+    // por invitar creadoras es para siempre).
+    if (input.decision === 'APPROVED') {
+      await prisma.$transaction((tx) => assignFounderNumber(tx, kyc.model.id));
+    }
 
     await audit(admin.id, `KYC_${input.decision}`, 'KycVerification', kyc.id, {
       model: kyc.model.stageName,

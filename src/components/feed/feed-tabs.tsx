@@ -12,10 +12,19 @@ import { cn } from '@/lib/utils';
  *
  * Son rutas de verdad y no estado de cliente para que cada pestana se pueda
  * compartir, marcar y renderizar en servidor con sus propias consultas.
+ *
+ * Se pinta DENTRO de la barra superior (que es fija para toda la pagina): si
+ * fuera parte del contenido, su "sticky" acabaria con la lista de
+ * publicaciones y la barra se iria al llegar a las ultimas.
  */
+const FEED_ROUTES = ['/feed', '/feed/siguiendo', '/live'];
+
 export function FeedTabs() {
   const pathname = usePathname();
   const { t } = useI18n();
+
+  // Solo en las tres pestanas (no en /live/<creadora>, que es el reproductor).
+  if (!FEED_ROUTES.includes(pathname)) return null;
 
   const tabs = [
     { href: '/feed', label: t('feed.discover'), icon: Compass },
@@ -24,8 +33,8 @@ export function FeedTabs() {
   ];
 
   return (
-    <nav className="sticky top-16 z-30 -mx-4 mb-5 border-b border-border/60 bg-background/90 px-4 backdrop-blur">
-      <div className="flex gap-1">
+    <nav className="border-t border-border/60">
+      <div className="container flex max-w-2xl gap-1">
         {tabs.map((tab) => {
           const active =
             tab.href === '/feed'

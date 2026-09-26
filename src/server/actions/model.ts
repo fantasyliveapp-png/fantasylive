@@ -4,10 +4,18 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
+import { assertCreatorVerified } from '@/lib/creator-kyc';
 import { prisma } from '@/lib/prisma';
 import { checkNoContactInfo } from '@/lib/content-filter';
+import { changeHandle, isHandleFree } from '@/lib/creator-profile';
+import { isReservedUsername, USERNAME_PATTERN } from '@/lib/usernames';
 import { config } from '@/lib/config';
-import { applyLedgerEntry, splitPayoutFee, tokensToPayoutCents } from '@/lib/tokens';
+import {
+  applyLedgerEntry,
+  splitPayoutFee,
+  tokensToPayoutCents,
+  withdrawableTokens,
+} from '@/lib/tokens';
 import { encryptSecret, maskDestination } from '@/lib/crypto';
 import { normalizeCountryCode } from '@/lib/countries';
 import {
@@ -25,8 +33,11 @@ import {
 import {
   buildContentKey,
   buildKycKey,
+  buildProfileImageKey,
   createUploadUrl,
   deleteObject,
+  isProfileImageKey,
+  profileImageUrl,
 } from '@/lib/storage';
 
 export interface ModelActionResult<T = unknown> {
@@ -49,18 +60,38 @@ async function requireModelProfile() {
 // PERFIL Y TARIFAS
 // ---------------------------------------------------------------------------
 
+const PUBLIC_MEDIA_PREFIX = '/api/public-media/';
+
+/**
+ * Avatar/portada: una URL absoluta (datos de seed, CDN) o la ruta propia de
+ * una foto subida, que solo se acepta si apunta a una clave de perfil.
+ */
+const imageUrlSchema = z
+  .string()
+  .refine(
+    (v) =>
+      v === '' ||
+      z.string().url().safeParse(v).success ||
+      (v.startsWith(PUBLIC_MEDIA_PREFIX) &&
+        isProfileImageKey(v.slice(PUBLIC_MEDIA_PREFIX.length))),
+  )
+  .optional();
+
 const profileSchema = z.object({
   stageName: z.string().min(2).max(40),
+  /** Su @: el mismo para su cuenta y su direccion de creadora. */
+  username: z.string().trim().toLowerCase().regex(USERNAME_PATTERN).optional(),
   headline: z.string().max(120).optional(),
   bio: z.string().max(1200).optional(),
   languages: z.array(z.string()).max(8).optional(),
   tags: z.array(z.string()).max(12).optional(),
-  avatarUrl: z.string().url().optional().or(z.literal('')),
-  coverUrl: z.string().url().optional().or(z.literal('')),
+  avatarUrl: imageUrlSchema,
+  coverUrl: imageUrlSchema,
 });
 
 export async function updateModelProfileAction(input: {
   stageName: string;
+  username?: string;
   headline?: string;
   bio?: string;
   languages?: string[];
@@ -82,6 +113,15 @@ export async function updateModelProfileAction(input: {
     );
     if (contactError) return { ok: false, error: contactError };
 
+    const handle = parsed.data.username;
+    if (handle && handle !== profile.slug) {
+      if (isReservedUsername(handle) || !(await isHandleFree(handle, profile.userId))) {
+        return { ok: false, error: 'Ese @usuario ya esta cogido.' };
+      }
+      await changeHandle(profile.userId, handle);
+      revalidatePath(`/models/${handle}`);
+    }
+
     await prisma.modelProfile.update({
       where: { id: profile.id },
       data: {
@@ -98,6 +138,35 @@ export async function updateModelProfileAction(input: {
     revalidatePath('/dashboard/model');
     revalidatePath(`/models/${profile.slug}`);
     return { ok: true, message: 'Perfil actualizado.' };
+  } catch (error) {
+    return { ok: false, error: toMessage(error) };
+  }
+}
+
+/**
+ * URL firmada para subir una foto de perfil o portada ya recortada en el
+ * navegador. Devuelve tambien la URL publica que hay que guardar en el perfil.
+ */
+export async function requestProfileImageUploadUrlAction(input: {
+  kind: 'avatar' | 'cover';
+}): Promise<ModelActionResult<{ uploadUrl: string; publicUrl: string }>> {
+  try {
+    const { profile } = await requireModelProfile();
+    if (input.kind !== 'avatar' && input.kind !== 'cover') {
+      return { ok: false, error: 'Tipo de imagen invalido.' };
+    }
+
+    const key = buildProfileImageKey({ modelId: profile.id, kind: input.kind });
+    const uploadUrl = await createUploadUrl({ key, contentType: 'image/jpeg' });
+    if (!uploadUrl) {
+      return {
+        ok: false,
+        error:
+          'El almacenamiento no esta configurado. Define S3_* en tu .env o usa MinIO local.',
+      };
+    }
+
+    return { ok: true, data: { uploadUrl, publicUrl: profileImageUrl(key) } };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
   }
@@ -143,6 +212,7 @@ export async function updateRatesAction(input: {
 }): Promise<ModelActionResult> {
   try {
     const { profile } = await requireModelProfile();
+    await assertCreatorVerified({ modelId: profile.id });
     const parsed = ratesSchema.safeParse(input);
     if (!parsed.success) {
       return {
@@ -199,6 +269,7 @@ export async function setOnlineStatusAction(input: {
 }): Promise<ModelActionResult> {
   try {
     const { profile } = await requireModelProfile();
+    if (input.isOnline) await assertCreatorVerified({ modelId: profile.id });
 
     if (
       input.isOnline &&
@@ -255,6 +326,7 @@ export async function createContentPackageAction(input: {
 }): Promise<ModelActionResult<{ packageId: string }>> {
   try {
     const { profile } = await requireModelProfile();
+    await assertCreatorVerified({ modelId: profile.id });
     const parsed = contentSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: 'Datos de contenido invalidos.' };
     if (parsed.data.subscriberOnly && !profile.subscriptionEnabled) {
@@ -271,7 +343,9 @@ export async function createContentPackageAction(input: {
         description: parsed.data.description ?? null,
         type: parsed.data.type,
         priceTokens: parsed.data.priceTokens,
-        isPublic: parsed.data.priceTokens === 0,
+        // Un pack solo para suscriptores nunca es publico, aunque no tenga
+        // precio suelto: si no, cualquiera lo veria gratis.
+        isPublic: parsed.data.priceTokens === 0 && !parsed.data.subscriberOnly,
         isPublished: parsed.data.isPublished,
         previewUrl: parsed.data.previewUrl ?? null,
         subscriberOnly: parsed.data.subscriberOnly,
@@ -296,6 +370,7 @@ export async function updateContentPackageAction(input: {
 }): Promise<ModelActionResult> {
   try {
     const { profile } = await requireModelProfile();
+    await assertCreatorVerified({ modelId: profile.id });
 
     const pkg = await prisma.contentPackage.findFirst({
       where: { id: input.packageId, modelId: profile.id },
@@ -310,7 +385,7 @@ export async function updateContentPackageAction(input: {
         priceTokens: input.priceTokens ?? pkg.priceTokens,
         isPublic:
           input.priceTokens !== undefined
-            ? input.priceTokens === 0
+            ? input.priceTokens === 0 && !pkg.subscriberOnly
             : pkg.isPublic,
         isPublished: input.isPublished ?? pkg.isPublished,
       },
@@ -358,6 +433,7 @@ export async function requestContentUploadUrlAction(input: {
 }): Promise<ModelActionResult<{ uploadUrl: string; key: string }>> {
   try {
     const { profile } = await requireModelProfile();
+    await assertCreatorVerified({ modelId: profile.id });
 
     const pkg = await prisma.contentPackage.findFirst({
       where: { id: input.packageId, modelId: profile.id },
@@ -401,6 +477,7 @@ export async function attachContentAssetAction(input: {
 }): Promise<ModelActionResult> {
   try {
     const { profile } = await requireModelProfile();
+    await assertCreatorVerified({ modelId: profile.id });
 
     const pkg = await prisma.contentPackage.findFirst({
       where: { id: input.packageId, modelId: profile.id },
@@ -416,7 +493,10 @@ export async function attachContentAssetAction(input: {
           mimeType: input.mimeType,
           sizeBytes: input.sizeBytes ?? null,
           durationSec: input.durationSec ?? null,
-          isPreview: input.isPreview ?? pkg.assetCount === 0,
+          // Un original nunca es teaser por defecto: la API sirve los
+          // isPreview a cualquiera sin pagar. Antes el primer archivo de cada
+          // pack se marcaba solo y se regalaba.
+          isPreview: input.isPreview ?? false,
           sortOrder: pkg.assetCount,
         },
       }),
@@ -651,6 +731,22 @@ export async function requestPayoutAction(input: {
       };
     }
 
+    // Solo se retira lo GANADO: los tokens comprados son para gastar aqui.
+    const wallet = await prisma.wallet.findUnique({
+      where: { userId: user.id },
+      select: { balance: true, pendingEarnings: true },
+    });
+    const withdrawable = wallet ? withdrawableTokens(wallet) : 0;
+    if (tokens > withdrawable) {
+      return {
+        ok: false,
+        error:
+          withdrawable > 0
+            ? `Solo puedes retirar tokens ganados: tienes ${withdrawable} para retirar. Los tokens comprados solo sirven para gastar dentro de FantasyLive.`
+            : 'Aun no tienes tokens ganados para retirar. Los tokens comprados solo sirven para gastar dentro de FantasyLive.',
+      };
+    }
+
     // Una solicitud abierta a la vez: evita que se encadenen retiros mientras
     // finanzas todavia no ha procesado el anterior.
     const openRequest = await prisma.payoutRequest.findFirst({
@@ -695,7 +791,7 @@ export async function requestPayoutAction(input: {
         select: { id: true },
       });
 
-      // Debito atomico: lanza InsufficientTokensError y revierte la
+      // Debito atomico (solo de lo ganado): lanza NotWithdrawableError y revierte la
       // transaccion completa si el saldo no alcanza.
       await applyLedgerEntry(tx, {
         userId: user.id,
@@ -707,20 +803,6 @@ export async function requestPayoutAction(input: {
         payoutRequestId: payout.id,
         platformFeeTokens: feeTokens,
       });
-
-      // pendingEarnings nunca debe quedar negativo: se relee dentro de la
-      // transaccion y se descuenta solo lo que realmente hay acumulado.
-      const wallet = await tx.wallet.findUniqueOrThrow({
-        where: { userId: user.id },
-        select: { pendingEarnings: true },
-      });
-      const consumed = Math.min(tokens, Math.max(0, wallet.pendingEarnings));
-      if (consumed > 0) {
-        await tx.wallet.update({
-          where: { userId: user.id },
-          data: { pendingEarnings: { decrement: consumed } },
-        });
-      }
 
       await tx.auditLog.create({
         data: {
@@ -840,6 +922,7 @@ export async function setAvailabilityAction(
 ): Promise<ModelActionResult> {
   try {
     const { profile } = await requireModelProfile();
+    await assertCreatorVerified({ modelId: profile.id });
 
     await prisma.$transaction([
       prisma.availabilitySlot.deleteMany({ where: { modelId: profile.id } }),

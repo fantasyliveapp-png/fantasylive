@@ -21,6 +21,7 @@ import {
   formatRateNumber,
   tokensForMinutes,
 } from '@/lib/rates';
+import { useJoinPrompt } from '@/components/providers/join-prompt';
 
 export function StartPrivateCallButton({
   slug,
@@ -42,12 +43,13 @@ export function StartPrivateCallButton({
   className?: string;
 }) {
   const router = useRouter();
+  const joinPrompt = useJoinPrompt();
   const [confirming, setConfirming] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   function openConfirm() {
     if (!isAuthenticated) {
-      router.push(`/login?callbackUrl=/models/${slug}`);
+      joinPrompt('para hacer una videollamada');
       return;
     }
     setConfirming(true);

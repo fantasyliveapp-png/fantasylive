@@ -77,6 +77,17 @@ export function buildPostKey(params: {
   return `models/${params.modelId}/posts/${params.postId}/${id}${suffix}.${ext}`;
 }
 
+/** Boveda de la creadora (privada). Ej: models/<modelId>/vault/<uuid>.jpg */
+export function buildVaultKey(params: { modelId: string; filename: string }): string {
+  const ext = params.filename.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'bin';
+  return `models/${params.modelId}/vault/${crypto.randomUUID()}.${ext}`;
+}
+
+/** La clave es de la Boveda de ESTA creadora (y no una ruta inventada). */
+export function isVaultKeyOf(modelId: string, key: string): boolean {
+  return new RegExp(`^models/${modelId}/vault/[0-9a-f-]{36}\\.[a-z0-9]+$`).test(key);
+}
+
 /** Ej: models/<modelId>/greeting/<uuid>.jpg */
 export function buildGreetingKey(params: {
   modelId: string;
@@ -87,6 +98,45 @@ export function buildGreetingKey(params: {
   const id = crypto.randomUUID();
   const suffix = params.isPreview ? '-preview' : '';
   return `models/${params.modelId}/greeting/${id}${suffix}.${ext}`;
+}
+
+/**
+ * Foto de perfil o portada de una modelo.
+ *
+ * Son las unicas imagenes del bucket que se sirven sin firma a cualquiera
+ * (ver `/api/public-media`), asi que viven bajo un prefijo propio que la ruta
+ * publica comprueba antes de servir nada.
+ * Ej: models/<modelId>/profile/avatar-<uuid>.jpg
+ */
+export function buildProfileImageKey(params: {
+  modelId: string;
+  kind: 'avatar' | 'cover';
+}): string {
+  return `models/${params.modelId}/profile/${params.kind}-${crypto.randomUUID()}.jpg`;
+}
+
+const PROFILE_IMAGE_KEY = /^models\/[\w-]+\/profile\/(avatar|cover)-[\w-]+\.jpg$/;
+const USER_AVATAR_KEY = /^users\/[\w-]+\/avatar-[\w-]+\.jpg$/;
+
+/** La clave es una foto de perfil/portada (y por tanto publica). */
+export function isProfileImageKey(key: string): boolean {
+  return PROFILE_IMAGE_KEY.test(key) || USER_AVATAR_KEY.test(key);
+}
+
+/** Foto de perfil de una cuenta (fan). Ej: users/<userId>/avatar-<uuid>.jpg */
+export function buildUserAvatarKey(userId: string): string {
+  return `users/${userId}/avatar-${crypto.randomUUID()}.jpg`;
+}
+
+/**
+ * URL estable para guardar en `avatarUrl`/`coverUrl`. Con CDN apunta a ella;
+ * sin CDN, a la ruta propia que redirige a una URL firmada.
+ */
+export function profileImageUrl(key: string): string {
+  if (config.storage.publicBaseUrl) {
+    return `${config.storage.publicBaseUrl.replace(/\/$/, '')}/${key}`;
+  }
+  return `/api/public-media/${key}`;
 }
 
 export function buildKycKey(params: {
@@ -130,6 +180,28 @@ export async function createDownloadUrl(key: string): Promise<string | null> {
   return getSignedUrl(s3, command, {
     expiresIn: config.storage.signedUrlTtlMinutes * 60,
   });
+}
+
+/**
+ * Descarga un objeto privado al servidor (para procesarlo antes de servirlo,
+ * p. ej. la marca de agua del contenido de pago). null si no existe.
+ */
+export async function getObjectBuffer(key: string): Promise<Buffer | null> {
+  if (/^https?:\/\//i.test(key)) {
+    const res = await fetch(key, { signal: AbortSignal.timeout(15_000) });
+    return res.ok ? Buffer.from(await res.arrayBuffer()) : null;
+  }
+  const s3 = getClient();
+  if (!s3) return null;
+  try {
+    const result = await s3.send(
+      new GetObjectCommand({ Bucket: config.storage.bucket, Key: key }),
+    );
+    if (!result.Body) return null;
+    return Buffer.from(await result.Body.transformToByteArray());
+  } catch {
+    return null;
+  }
 }
 
 export async function deleteObject(key: string): Promise<void> {
