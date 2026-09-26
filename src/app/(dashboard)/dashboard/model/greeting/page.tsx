@@ -5,7 +5,7 @@ import { requireModel } from '@/lib/auth/guards';
 import { config } from '@/lib/config';
 import { prisma } from '@/lib/prisma';
 import { resolveAssetUrl } from '@/lib/storage';
-import { tokensToPayoutCents } from '@/lib/tokens';
+import { tokensToNetPayoutCents } from '@/lib/tokens';
 import { utcDay } from '@/lib/visits';
 
 export const metadata: Metadata = { title: 'Mensaje de bienvenida' };
@@ -68,7 +68,7 @@ export default async function GreetingPage() {
         stats={{
           sent: totalSent,
           unlocks: earned._count,
-          earnedCents: tokensToPayoutCents(earned._sum.tokens ?? 0),
+          earnedCents: tokensToNetPayoutCents(earned._sum.tokens ?? 0),
         }}
       />
     </div>

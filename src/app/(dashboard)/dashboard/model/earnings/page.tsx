@@ -14,7 +14,7 @@ import {
 import { requireModel } from '@/lib/auth/guards';
 import { TRANSACTION_TYPE_LABELS } from '@/lib/constants';
 import { prisma } from '@/lib/prisma';
-import { getWalletSummary, tokensToPayoutCents } from '@/lib/tokens';
+import { getWalletSummary, tokensToNetPayoutCents } from '@/lib/tokens';
 import { formatDateTime, formatMoney, formatTokens } from '@/lib/utils';
 
 export const metadata: Metadata = { title: 'Ganancias' };
@@ -81,7 +81,7 @@ export default async function EarningsPage() {
               {formatTokens(wallet.balance)}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              ≈ {formatMoney(tokensToPayoutCents(wallet.balance))}
+              ≈ {formatMoney(tokensToNetPayoutCents(wallet.balance))}
             </p>
           </CardContent>
         </Card>
@@ -206,7 +206,7 @@ function EarningCard({
         </p>
         <p className="mt-2 text-3xl font-bold">{formatTokens(tokens)}</p>
         <p className="mt-1 text-xs text-muted-foreground">
-          ≈ {formatMoney(tokensToPayoutCents(tokens))}
+          ≈ {formatMoney(tokensToNetPayoutCents(tokens))}
         </p>
       </CardContent>
     </Card>

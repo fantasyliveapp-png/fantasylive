@@ -17,7 +17,7 @@ import { config } from '@/lib/config';
 import { PAYOUT_STATUS_LABELS } from '@/lib/constants';
 import { PAYOUT_METHOD_LABELS } from '@/lib/payout-methods';
 import { prisma } from '@/lib/prisma';
-import { getWalletSummary, tokensToPayoutCents, withdrawableTokens } from '@/lib/tokens';
+import { getWalletSummary, tokensToNetPayoutCents, withdrawableTokens } from '@/lib/tokens';
 import { formatDateTime, formatMoney, formatTokens } from '@/lib/utils';
 
 export const metadata: Metadata = { title: 'Retiros' };
@@ -53,8 +53,9 @@ export default async function PayoutsPage() {
   // Solo lo GANADO se puede retirar; lo comprado es para gastar aqui.
   const withdrawable = withdrawableTokens(wallet);
   const purchased = wallet.balance - withdrawable;
-  const availableCents = tokensToPayoutCents(withdrawable);
-  const withdrawnCents = tokensToPayoutCents(wallet.lifetimeWithdrawn);
+  // Lo que le llega de verdad, ya descontado el % de retiro.
+  const availableCents = tokensToNetPayoutCents(withdrawable);
+  const withdrawnCents = tokensToNetPayoutCents(wallet.lifetimeWithdrawn);
 
   return (
     <div className="space-y-8">
@@ -86,7 +87,7 @@ export default async function PayoutsPage() {
         />
         <SummaryCard
           icon={<DollarSign className="h-4 w-4 text-emerald-400" />}
-          label="Equivale a"
+          label="Te llegan"
           value={formatMoney(availableCents)}
           hint={`Retirado hasta hoy: ${formatMoney(withdrawnCents)}`}
           highlight

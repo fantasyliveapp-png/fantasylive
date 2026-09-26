@@ -13,7 +13,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { requireModel } from '@/lib/auth/guards';
 import { prisma } from '@/lib/prisma';
-import { splitEarnings, tokensToPayoutCents } from '@/lib/tokens';
+import { splitEarnings, tokensToNetPayoutCents } from '@/lib/tokens';
 import { cn, formatDateTime, formatMoney, initials, relativeTime } from '@/lib/utils';
 
 export const metadata: Metadata = { title: 'Bandeja' };
@@ -330,7 +330,7 @@ function InboxSection({
                     // Lo que le llega a ella, no lo que paga el fan.
                     <span className="text-[11px] font-semibold text-state-connected">
                       +{formatMoney(
-                        tokensToPayoutCents(splitEarnings(item.amountTokens).modelTokens),
+                        tokensToNetPayoutCents(splitEarnings(item.amountTokens).modelTokens),
                       )}
                     </span>
                   ) : null}

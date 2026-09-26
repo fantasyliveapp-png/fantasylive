@@ -22,7 +22,7 @@ import {
   FAN_LINK_PLATFORM_PERCENT,
   FOUNDER_SPOTS,
 } from '@/lib/referrals';
-import { tokensToPayoutCents } from '@/lib/tokens';
+import { tokensToNetPayoutCents } from '@/lib/tokens';
 import { cn, formatMoney, initials } from '@/lib/utils';
 
 export const metadata: Metadata = { title: 'Invita y gana' };
@@ -62,7 +62,7 @@ export default async function InvitePage() {
 
   const fans = referred.filter((r) => !r.modelProfile);
   const creators = referred.filter((r) => r.modelProfile);
-  const earnedCents = tokensToPayoutCents(earned._sum.tokens ?? 0);
+  const earnedCents = tokensToNetPayoutCents(earned._sum.tokens ?? 0);
   const isFounder = profile.founderNumber != null;
   const spotsLeft = Math.max(0, FOUNDER_SPOTS - foundersTaken);
   const normalShare = 100 - config.economy.platformCommissionPercent;

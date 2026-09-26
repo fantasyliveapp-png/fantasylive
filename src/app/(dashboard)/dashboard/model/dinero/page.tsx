@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/button';
 import { requireModel } from '@/lib/auth/guards';
 import { config } from '@/lib/config';
 import { getCreatorEarnings, type EarningType } from '@/lib/creator-dashboard';
-import { getWalletSummary, tokensToPayoutCents, withdrawableTokens } from '@/lib/tokens';
+import { getWalletSummary, tokensToNetPayoutCents, withdrawableTokens } from '@/lib/tokens';
 import { cn, formatMoney, formatTokens, relativeTime } from '@/lib/utils';
 
 export const metadata: Metadata = { title: 'Dinero' };
@@ -52,7 +52,8 @@ export default async function MoneyPage() {
     getCreatorEarnings(user.id),
   ]);
 
-  const usd = (tokens: number) => formatMoney(tokensToPayoutCents(tokens));
+  // Siempre lo que le llega de verdad (ya descontado el % de retiro).
+  const usd = (tokens: number) => formatMoney(tokensToNetPayoutCents(tokens));
   // Solo lo GANADO se puede retirar; lo comprado es para gastar aqui.
   const withdrawable = withdrawableTokens(wallet);
   const purchased = wallet.balance - withdrawable;
@@ -78,8 +79,8 @@ export default async function MoneyPage() {
               {usd(withdrawable)}
             </p>
             <p className="mt-1.5 text-xs text-muted-foreground">
-              {formatTokens(withdrawable)} tokens ganados
-              {feePercent > 0 && ` · al retirar se descuenta un ${feePercent}%`}
+              Lo que te llega a tu cuenta
+              {feePercent > 0 && `, ya descontado el ${feePercent}% de retiro`}
               {!canWithdraw && ` · minimo ${usd(config.economy.minPayoutTokens)}`}
             </p>
             {purchased > 0 && (
@@ -134,7 +135,7 @@ export default async function MoneyPage() {
             <EarningsWeekChart
               days={earnings.days.map((d) => ({
                 label: d.label,
-                cents: tokensToPayoutCents(d.tokens),
+                cents: tokensToNetPayoutCents(d.tokens),
               }))}
             />
           </div>

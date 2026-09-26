@@ -387,6 +387,18 @@ export function tokensToPayoutCents(tokens: number): number {
   return Math.round(tokens * config.economy.modelPayoutCentsPerToken);
 }
 
+/**
+ * Lo que de verdad le llega a la creadora por N tokens ganados: su valor en
+ * dolares YA descontada la comision de retiro. Es lo que se le ensena en su
+ * panel, para que el numero que ve sea el que cobra.
+ */
+export function tokensToNetPayoutCents(tokens: number): number {
+  return Math.round(
+    (tokens * config.economy.modelPayoutCentsPerToken * (100 - config.economy.payoutFeePercent)) /
+      100,
+  );
+}
+
 /** Valor de venta de N tokens en centavos (lo que paga el usuario). */
 export function tokensToRetailCents(tokens: number): number {
   return Math.round(tokens * config.economy.tokenValueCents);

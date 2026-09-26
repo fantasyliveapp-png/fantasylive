@@ -23,7 +23,11 @@ import { getCreatorEarnings, getCreatorPending } from '@/lib/creator-dashboard';
 import { config } from '@/lib/config';
 import { TEST_AUDIENCE } from '@/lib/post-insights';
 import { prisma } from '@/lib/prisma';
-import { getWalletSummary, tokensToPayoutCents, withdrawableTokens } from '@/lib/tokens';
+import {
+  getWalletSummary,
+  tokensToNetPayoutCents,
+  withdrawableTokens,
+} from '@/lib/tokens';
 import { cn, formatMoney, initials } from '@/lib/utils';
 
 /**
@@ -61,7 +65,8 @@ export async function CreatorHome({
     }),
   ]);
 
-  const usd = (tokens: number) => formatMoney(tokensToPayoutCents(tokens));
+  // Lo que le llega de verdad (ya descontado el % de retiro).
+  const usd = (tokens: number) => formatMoney(tokensToNetPayoutCents(tokens));
   const firstName = profile.stageName.split(' ')[0];
 
   // Primeros pasos: desaparecen en cuanto estan todos hechos.
@@ -138,7 +143,7 @@ export async function CreatorHome({
     {
       target: 'money',
       title: 'Tu dinero',
-      body: `Lo que ya puedes retirar. Tocalo para ver tus ganancias y pedir tu retiro (desde ${formatMoney(tokensToPayoutCents(config.economy.minPayoutTokens))}).`,
+      body: `Lo que ya puedes retirar. Tocalo para ver tus ganancias y pedir tu retiro (desde ${usd(config.economy.minPayoutTokens)}). Es lo que te llega, ya descontado todo.`,
     },
     {
       target: 'invite',
