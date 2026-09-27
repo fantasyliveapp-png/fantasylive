@@ -48,6 +48,8 @@ export interface LiveChatMessage {
   isMine: boolean;
   /** Lo escribio la creadora del directo. */
   isHost: boolean;
+  /** Foto de quien escribe o regala (firmada por el servidor), si tiene. */
+  avatar?: string | null;
   /** Solo en regalos. */
   tokens?: number;
   emoji?: string;
@@ -85,6 +87,17 @@ export interface LiveHeart {
   /** Desvio lateral en px, para que no suban todos en fila. */
   drift: number;
   color: string;
+}
+
+/** La foto viaja en los metadatos del token, que firma el servidor. */
+function avatarFromMetadata(metadata: string | undefined): string | null {
+  if (!metadata) return null;
+  try {
+    const parsed = JSON.parse(metadata) as { avatar?: unknown };
+    return typeof parsed.avatar === 'string' && parsed.avatar ? parsed.avatar : null;
+  } catch {
+    return null;
+  }
 }
 
 const HEART_COLORS = ['#fe2c55', '#ff6fa3', '#ffb86b', '#ff4d6d', '#c77dff'];
@@ -234,6 +247,7 @@ export function useLiveRoom({
               from?: string;
               tokens?: number;
               emoji?: string;
+              avatar?: string | null;
             };
             try {
               parsed = JSON.parse(new TextDecoder().decode(payload));
@@ -277,6 +291,7 @@ export function useLiveRoom({
                 isHost: false,
                 tokens,
                 emoji,
+                avatar: typeof parsed.avatar === 'string' ? parsed.avatar : null,
               });
               return;
             }
@@ -292,6 +307,7 @@ export function useLiveRoom({
               isHost:
                 Boolean(hostIdentityRef.current) &&
                 participant?.identity === hostIdentityRef.current,
+              avatar: avatarFromMetadata(participant?.metadata),
             });
           },
         );
@@ -392,6 +408,7 @@ export function useLiveRoom({
         isHost:
           Boolean(hostIdentityRef.current) &&
           roomRef.current?.localParticipant.identity === hostIdentityRef.current,
+        avatar: avatarFromMetadata(roomRef.current?.localParticipant.metadata),
       });
       return true;
     },

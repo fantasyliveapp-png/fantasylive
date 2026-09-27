@@ -19,6 +19,7 @@ import {
   generateStreamKey,
   isLiveConfigured,
   isObsConfigured,
+  avatarOf,
   liveRoomName,
 } from '@/lib/live';
 import { closeRoom, countRoomParticipants, sendRoomData } from '@/lib/livekit';
@@ -45,6 +46,7 @@ async function requireLiveModel() {
       kycStatus: true,
       liveEnabled: true,
       streamKey: true,
+      avatarUrl: true,
     },
   });
   if (!profile) throw new Error('MODEL_PROFILE_MISSING');
@@ -202,11 +204,13 @@ export async function startStreamAction(input: {
             roomName,
             identity: user.id,
             name: profile.stageName,
+            avatarUrl: profile.avatarUrl,
           })
         : await createViewerToken({
             roomName,
             identity: user.id,
             name: profile.stageName,
+            avatarUrl: profile.avatarUrl,
           });
 
     revalidatePath('/dashboard/model/live');
@@ -522,6 +526,7 @@ export async function joinStreamAction(
       roomName: stream.roomName,
       identity: viewer.id,
       name: viewer.name ?? 'Invitado',
+      avatarUrl: await avatarOf(viewer.id),
     });
 
     // Presencia real: LiveKit es la unica fuente fiable del numero de

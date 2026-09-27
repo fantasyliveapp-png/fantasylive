@@ -219,6 +219,7 @@ export function useVideoRoom({
                 senderId?: string;
                 tokens?: number;
                 emoji?: string;
+                avatar?: string | null;
               };
               if (data.type !== 'gift' || typeof data.tokens !== 'number') return;
               const emoji = data.emoji || '🎁';
@@ -236,6 +237,7 @@ export function useVideoRoom({
                     isHost: false,
                     tokens: data.tokens,
                     emoji,
+                    avatar: typeof data.avatar === 'string' ? data.avatar : null,
                   },
                 ].slice(-100),
               );

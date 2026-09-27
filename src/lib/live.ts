@@ -51,6 +51,18 @@ export function isObsConfigured(): boolean {
   return isLiveConfigured() && config.live.obsConfigured;
 }
 
+/**
+ * Foto con la que alguien aparece en el chat y en los regalos: la de su perfil
+ * de creador si lo tiene (se guarda en avatarUrl) y si no la de su cuenta.
+ */
+export async function avatarOf(userId: string): Promise<string | null> {
+  const u = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { image: true, modelProfile: { select: { avatarUrl: true } } },
+  });
+  return u?.modelProfile?.avatarUrl ?? u?.image ?? null;
+}
+
 /** Nombre de sala de un directo. Estable y derivado del id del stream. */
 export function liveRoomName(streamId: string): string {
   return `live_${streamId}`;
@@ -64,6 +76,8 @@ export async function createBroadcasterToken(params: {
   roomName: string;
   identity: string;
   name?: string;
+  /** Foto para el chat. Va firmada en el token: nadie puede ponerse otra. */
+  avatarUrl?: string | null;
 }): Promise<string | null> {
   const { apiKey, apiSecret, configured } = config.media.livekit;
   if (!configured) return null;
@@ -72,6 +86,7 @@ export async function createBroadcasterToken(params: {
     identity: params.identity,
     name: params.name,
     ttl: 60 * 60 * 12,
+    metadata: JSON.stringify({ avatar: params.avatarUrl ?? null }),
   });
   at.addGrant({
     room: params.roomName,
@@ -91,6 +106,8 @@ export async function createViewerToken(params: {
   roomName: string;
   identity: string;
   name?: string;
+  /** Foto para el chat. Va firmada en el token: nadie puede ponerse otra. */
+  avatarUrl?: string | null;
 }): Promise<string | null> {
   const { apiKey, apiSecret, configured } = config.media.livekit;
   if (!configured) return null;
@@ -99,6 +116,7 @@ export async function createViewerToken(params: {
     identity: params.identity,
     name: params.name,
     ttl: 60 * 60 * 6,
+    metadata: JSON.stringify({ avatar: params.avatarUrl ?? null }),
   });
   at.addGrant({
     room: params.roomName,

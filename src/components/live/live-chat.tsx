@@ -49,8 +49,31 @@ function colorFor(name: string) {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
-/** Circulo con la inicial: da identidad a cada persona del chat sin fotos. */
-function Initial({ name, className }: { name: string; className?: string }) {
+/**
+ * Foto de quien escribe o regala. Sin foto (o si no carga), un circulo con la
+ * inicial en un color propio de esa persona.
+ */
+function Initial({
+  name,
+  avatar,
+  className,
+}: {
+  name: string;
+  avatar?: string | null;
+  className?: string;
+}) {
+  const [broken, setBroken] = useState(false);
+  if (avatar && !broken) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={avatar}
+        alt=""
+        onError={() => setBroken(true)}
+        className={cn('h-6 w-6 shrink-0 rounded-full object-cover', className)}
+      />
+    );
+  }
   return (
     <span
       aria-hidden
@@ -117,7 +140,7 @@ export function LiveChatFeed({
             key={message.id}
             className="flex w-fit max-w-full items-center gap-2 rounded-full bg-gradient-to-r from-champagne-gold/35 to-transparent py-0.5 pl-0.5 pr-3 text-[13px] text-white"
           >
-            <Initial name={message.from} />
+            <Initial name={message.from} avatar={message.avatar} />
             <span className="min-w-0 break-words">
               <span className="font-semibold text-champagne-gold">{message.from}</span>{' '}
               {t('live.sentGift')} {message.emoji}{' '}
@@ -131,6 +154,7 @@ export function LiveChatFeed({
           >
             <Initial
               name={message.from}
+              avatar={message.avatar}
               className={cn(message.isHost && 'ring-2 ring-fantazy-red')}
             />
             <p className="min-w-0 break-words pt-0.5">
@@ -441,7 +465,7 @@ export function GiftBursts({
       {combos.map(({ key, first, count, last }) => (
         <div key={key} className="flex animate-gift-pop items-center gap-1">
           <div className="flex items-center gap-2 rounded-full bg-gradient-to-r from-black/60 via-black/40 to-transparent py-1 pl-1 pr-6">
-            <Initial name={first.from} className="h-9 w-9 text-sm" />
+            <Initial name={first.from} avatar={first.avatar} className="h-9 w-9 text-sm" />
             <div className="leading-tight">
               <p className="max-w-[8rem] truncate text-xs font-semibold text-white">
                 {first.from}

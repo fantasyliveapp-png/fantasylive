@@ -903,7 +903,7 @@ export async function getPostCommentsAction(postId: string): Promise<
             email: true,
             image: true,
             username: true,
-            modelProfile: { select: { slug: true } },
+            modelProfile: { select: { slug: true, stageName: true, avatarUrl: true } },
           },
         },
       },
@@ -918,8 +918,16 @@ export async function getPostCommentsAction(postId: string): Promise<
         // Sin nombre se usa la parte local del correo: publicar el correo
         // completo de alguien bajo una publicacion seria filtrar un dato
         // personal a cualquiera que pase por el feed.
-        author: c.user.name ?? c.user.email.split('@')[0] ?? 'Usuario',
-        image: c.user.image,
+        //
+        // Quien comenta siendo creador aparece como tal: su nombre artistico y
+        // la foto de su perfil de creador, que se guarda en avatarUrl y no en
+        // user.image (por eso antes salia sin foto).
+        author:
+          c.user.modelProfile?.stageName ??
+          c.user.name ??
+          c.user.email.split('@')[0] ??
+          'Usuario',
+        image: c.user.modelProfile?.avatarUrl ?? c.user.image,
         profileHref: c.user.modelProfile
           ? `/models/${c.user.modelProfile.slug}`
           : c.user.username

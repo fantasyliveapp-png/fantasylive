@@ -7,6 +7,7 @@ import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { prisma } from '@/lib/prisma';
 import { checkNoContactInfo } from '@/lib/content-filter';
 import { GEO_BLOCKED_MESSAGE, isBlockedForViewer } from '@/lib/geo';
+import { avatarOf } from '@/lib/live';
 import { sendRoomData } from '@/lib/livekit';
 import { createNotification } from '@/lib/notifications';
 import { startTokenPurchase } from '@/lib/payments';
@@ -289,10 +290,12 @@ export async function sendGiftAction(input: {
 
     // El regalo se anuncia en la sala desde el servidor, ya cobrado: asi lo
     // ven la creadora y todo el publico, y nadie puede fingirlo por el chat.
+    const senderAvatar = liveRoomName || callRoomName ? await avatarOf(user.id) : null;
     if (liveRoomName) {
       await sendRoomData(liveRoomName, {
         type: 'gift',
         from: user.name ?? 'Alguien',
+        avatar: senderAvatar,
         tokens,
         emoji: emoji ?? '🎁',
       });
@@ -304,6 +307,7 @@ export async function sendGiftAction(input: {
       await sendRoomData(callRoomName, {
         type: 'gift',
         from: user.name ?? 'Alguien',
+        avatar: senderAvatar,
         senderId: user.id,
         tokens,
         emoji: emoji ?? '🎁',
