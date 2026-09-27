@@ -451,24 +451,31 @@ export function PostCard({
 
           {comments.map((comment) => (
             <div key={comment.id} className="flex gap-2.5">
-              <Avatar className="h-7 w-7 shrink-0">
+              <Avatar className="h-8 w-8 shrink-0">
                 <AvatarImage src={comment.image ?? undefined} />
                 <AvatarFallback className="text-[10px]">
                   {initials(comment.author)}
                 </AvatarFallback>
               </Avatar>
-              <div className="min-w-0 flex-1 rounded-lg bg-muted/50 px-3 py-2">
-                {comment.profileHref ? (
-                  <Link
-                    href={comment.profileHref}
-                    className="text-xs font-medium hover:underline"
-                  >
-                    {comment.author}
-                  </Link>
-                ) : (
-                  <p className="text-xs font-medium">{comment.author}</p>
-                )}
-                <p className="mt-0.5 break-words text-sm">{comment.body}</p>
+              <div className="min-w-0 flex-1">
+                {/* La cabecera mide lo mismo que la foto: el nombre queda
+                    centrado con ella y el texto empieza justo debajo. */}
+                <div className="flex h-8 min-w-0 items-center gap-2">
+                  {comment.profileHref ? (
+                    <Link
+                      href={comment.profileHref}
+                      className="truncate text-sm font-semibold hover:underline"
+                    >
+                      {comment.author}
+                    </Link>
+                  ) : (
+                    <p className="truncate text-sm font-semibold">{comment.author}</p>
+                  )}
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {relativeTime(new Date(comment.createdAt))}
+                  </span>
+                </div>
+                <p className="-mt-1 break-words text-sm">{comment.body}</p>
               </div>
             </div>
           ))}
