@@ -50,7 +50,7 @@ export default async function AdminContentPage({
         actions={
           <SearchBox
             action="/admin/content"
-            placeholder="Buscar creadora..."
+            placeholder="Buscar creador..."
             defaultValue={sp.q}
             hidden={{ f: filter || undefined }}
           />

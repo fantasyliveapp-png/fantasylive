@@ -1,0 +1,38 @@
+##############################################################################
+# MinIO (almacenamiento S3 propio) - unidad systemd
+# Instalar en /etc/systemd/system/minio.service
+#
+# La instala deploy/setup-storage.sh, que tambien crea el usuario de servicio,
+# el directorio de datos y /etc/default/minio con las credenciales.
+#
+# Solo escucha en 127.0.0.1: desde fuera se entra por nginx con HTTPS
+# (deploy/nginx-storage.conf), nunca directamente al puerto 9000.
+##############################################################################
+
+[Unit]
+Description=MinIO (almacenamiento S3 de FantasyLive)
+Documentation=https://min.io/docs/minio/linux/index.html
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+User=minio-user
+Group=minio-user
+EnvironmentFile=/etc/default/minio
+ExecStart=/usr/local/bin/minio server $MINIO_OPTS $MINIO_VOLUMES
+
+Restart=always
+RestartSec=5
+LimitNOFILE=65536
+TimeoutStopSec=30
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/minio
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

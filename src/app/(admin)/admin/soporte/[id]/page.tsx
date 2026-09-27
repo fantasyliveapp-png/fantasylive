@@ -8,6 +8,7 @@ import { AdminReplyBox } from '@/components/admin/admin-tools';
 import { Panel, PersonLink, Pill } from '@/components/admin/admin-ui';
 import { personOf } from '@/lib/admin-supervision';
 import { requireAdmin } from '@/lib/auth/guards';
+import { creatorLabel } from '@/lib/gender-words';
 import { prisma } from '@/lib/prisma';
 import { SUPPORT_STATUS_LABELS, supportCategoryLabel } from '@/lib/support';
 import { cn, formatDate, formatDateTime, formatTokens } from '@/lib/utils';
@@ -36,7 +37,7 @@ export default async function AdminTicketPage({ params }: { params: Promise<{ id
           createdAt: true,
           status: true,
           wallet: { select: { balance: true } },
-          modelProfile: { select: { stageName: true, avatarUrl: true, kycStatus: true } },
+          modelProfile: { select: { stageName: true, avatarUrl: true, kycStatus: true, gender: true } },
         },
       },
       messages: {
@@ -106,7 +107,7 @@ export default async function AdminTicketPage({ params }: { params: Promise<{ id
               </div>
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Tipo</dt>
-                <dd>{ticket.user.modelProfile ? 'Creadora' : 'Fan'}</dd>
+                <dd>{ticket.user.modelProfile ? creatorLabel(ticket.user.modelProfile.gender) : 'Fan'}</dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Alta</dt>

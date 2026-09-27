@@ -6,7 +6,7 @@ import { OnboardingForm } from '@/components/model/onboarding-form';
 import { requireUser } from '@/lib/auth/guards';
 import { prisma } from '@/lib/prisma';
 
-export const metadata: Metadata = { title: 'Hazte creadora' };
+export const metadata: Metadata = { title: 'Hazte creador' };
 export const dynamic = 'force-dynamic';
 
 const PERKS = [
@@ -24,7 +24,7 @@ const PERKS = [
  * la identidad despues, desde su panel.
  */
 export default async function BecomeCreatorPage() {
-  const user = await requireUser('/hazte-creadora');
+  const user = await requireUser('/hazte-creador');
 
   const existing = await prisma.modelProfile.findUnique({
     where: { userId: user.id },
@@ -46,7 +46,7 @@ export default async function BecomeCreatorPage() {
         />
         <p className="relative flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
           <Sparkles className="h-3.5 w-3.5" />
-          Modo creadora
+          Modo creador
         </p>
         <h1 className="relative mt-2 font-heading text-3xl uppercase tracking-wide">
           Empieza a ganar con tu contenido

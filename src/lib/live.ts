@@ -161,47 +161,6 @@ export async function deleteRtmpIngress(ingressId: string): Promise<void> {
   }
 }
 
-/**
- * Directos en curso, para la portada y para /live.
- *
- * `geoFilter` excluye a las creadoras que bloquean el pais del visitante: si
- * no se aplicase aqui, el bloqueo geografico se saltaria simplemente entrando
- * por la portada.
- */
-export async function getLiveStreams(params: {
-  geoFilter?: Record<string, unknown>;
-  take?: number;
-}) {
-  return prisma.liveStream.findMany({
-    where: {
-      status: 'LIVE',
-      model: { kycStatus: 'APPROVED', ...(params.geoFilter ?? {}) },
-    },
-    orderBy: [{ viewerCount: 'desc' }, { startedAt: 'desc' }],
-    take: params.take ?? 12,
-    select: {
-      id: true,
-      title: true,
-      viewerCount: true,
-      startedAt: true,
-      source: true,
-      model: {
-        select: {
-          id: true,
-          slug: true,
-          stageName: true,
-          avatarUrl: true,
-          coverUrl: true,
-          country: true,
-          tier: true,
-          isAi: true,
-          vipRateCentitokens: true,
-        },
-      },
-    },
-  });
-}
-
 /** Directo en curso de una creadora, o null. */
 export async function getActiveStreamForModel(modelId: string) {
   return prisma.liveStream.findFirst({

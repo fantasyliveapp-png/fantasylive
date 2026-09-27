@@ -586,7 +586,7 @@ export function ImageCropDialog({
   const aspectRatio = spec.width / spec.height;
 
   return (
-    <div className="fixed inset-0 !m-0 z-[70] flex flex-col items-center justify-center gap-5 bg-black/90 p-5">
+    <div className="fixed inset-0 !m-0 z-[70] flex flex-col items-center justify-center gap-5 bg-black p-5">
       <p className="font-heading text-sm uppercase tracking-[0.2em] text-white">{spec.label}</p>
 
       <div className={cn('relative w-full', kind === 'avatar' ? 'max-w-xs' : 'max-w-lg')}>
@@ -600,8 +600,12 @@ export function ImageCropDialog({
           className={kind === 'avatar' ? 'rounded-none' : 'rounded-2xl'}
         />
         {kind === 'avatar' && (
-          // Mascara circular: asi se vera en el perfil.
-          <span className="pointer-events-none absolute inset-0 rounded-full shadow-[0_0_0_9999px_rgba(0,0,0,0.6)] ring-2 ring-white/70" />
+          // Mascara circular: asi se vera en el perfil. La sombra que oscurece
+          // lo de fuera del circulo se recorta al marco; sin el overflow-hidden
+          // cubria toda la pantalla y dejaba opacos el zoom y los botones.
+          <span className="pointer-events-none absolute inset-0 overflow-hidden">
+            <span className="absolute inset-0 rounded-full shadow-[0_0_0_9999px_rgba(0,0,0,0.6)] ring-2 ring-white/70" />
+          </span>
         )}
       </div>
 

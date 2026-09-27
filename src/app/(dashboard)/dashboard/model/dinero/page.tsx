@@ -121,7 +121,7 @@ export default async function MoneyPage() {
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-semibold">Invita y gana</span>
           <span className="block text-xs text-muted-foreground">
-            Tu enlace para fans y para creadoras. Ganas sin pagar nada.
+            Tu enlace para fans y para creadores. Ganas sin pagar nada.
           </span>
         </span>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />

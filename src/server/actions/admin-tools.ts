@@ -41,9 +41,9 @@ export async function featureCreatorAction(input: {
       where: { id: input.modelId },
       select: { id: true, stageName: true, kycStatus: true, featuredUntil: true },
     });
-    if (!model) return { ok: false, error: 'Creadora no encontrada.' };
+    if (!model) return { ok: false, error: 'Creador no encontrado.' };
     if (days > 0 && model.kycStatus !== 'APPROVED') {
-      return { ok: false, error: 'Solo se puede destacar a creadoras verificadas.' };
+      return { ok: false, error: 'Solo se puede destacar a creadores verificados.' };
     }
 
     // Si ya estaba destacada, los dias se suman a los que le quedaban.

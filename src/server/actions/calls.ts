@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import type { CallEndReason, Gender } from '@prisma/client';
 
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
+import { gw } from '@/lib/gender-words';
 import { prisma } from '@/lib/prisma';
 import { createNotification } from '@/lib/notifications';
 import {
@@ -209,7 +210,9 @@ export async function endCallAction(
   try {
     const user = await getAuthedUserOrThrow();
     await endCall(sessionId, user.id, reason);
-    revalidatePath('/dashboard');
+    // Sin revalidatePath: /dashboard ya es force-dynamic, y revalidar desde
+    // esta accion re-renderizaba la propia pagina de la llamada, que al verla
+    // terminada redirigia al panel y se saltaba la pantalla final.
     return { ok: true };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
@@ -250,10 +253,11 @@ export async function startPrivateCallAction(
         minPrivateMinutes: true,
         kycStatus: true,
         blockedCountries: true,
+        gender: true,
       },
     });
 
-    if (!model) return { ok: false, error: 'Modelo no encontrada.' };
+    if (!model) return { ok: false, error: 'Perfil no encontrado.' };
     if (model.userId === user.id) {
       return { ok: false, error: 'No puedes llamarte a ti misma/o.' };
     }
@@ -261,7 +265,10 @@ export async function startPrivateCallAction(
       return { ok: false, error: GEO_BLOCKED_MESSAGE };
     }
     if (config.moderation.requireKycToStream && model.kycStatus !== 'APPROVED') {
-      return { ok: false, error: 'Esta modelo aun no esta verificada.' };
+      return {
+        ok: false,
+        error: `${model.stageName} aun no esta ${gw(model.gender, { f: 'verificada', m: 'verificado', pl: 'verificados' })}.`,
+      };
     }
     if (!model.isOnline) {
       return {

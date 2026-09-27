@@ -13,8 +13,8 @@ export const dynamic = 'force-dynamic';
 const AUDIENCE_LABEL: Record<string, string> = {
   all: 'Todos',
   fans: 'Fans',
-  creators: 'Creadoras',
-  founders: 'Fundadoras',
+  creators: 'Creadores',
+  founders: 'Fundadores',
 };
 
 /** AVISOS A TODOS: una notificacion del equipo a todos o a un grupo. */
@@ -29,7 +29,7 @@ export default async function AdminAnnouncementsPage() {
     <>
       <AdminPageHeader
         title="Avisos"
-        description="Manda una notificacion a todos, solo a fans, solo a creadoras o a tus Fundadoras: novedades, promociones o mantenimiento."
+        description="Manda una notificacion a todos, solo a fans, solo a creadores o a tus Fundadores: novedades, promociones o mantenimiento."
       />
       <div className="space-y-6">
         <Panel title="Nuevo aviso">

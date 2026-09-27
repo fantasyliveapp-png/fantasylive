@@ -34,7 +34,7 @@ export default async function RecruitersAdminPage() {
     <div className="space-y-6">
       <AdminPageHeader
         title="Reclutadores"
-        description={<>Personas que traen creadoras a cambio de un % de lo que venden. Se paga de nuestra comision y solo cuando la creadora ya ha vendido.</>}
+        description={<>Personas que traen creadores a cambio de un % de lo que venden. Se paga de nuestra comision y solo cuando el creador ya ha vendido.</>}
       />
       <CreateRecruiterForm />
       {overviews.length === 0 ? (

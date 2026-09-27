@@ -41,13 +41,13 @@ export default async function RecruiterPage() {
       <header>
         <h1 className="font-heading text-3xl uppercase tracking-wide">Panel de reclutador</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Trae creadoras a FantasyLive y gana con cada venta que hagan.
+          Trae creadores a FantasyLive y gana con cada venta que hagan.
         </p>
       </header>
 
       {!r.active && (
         <p className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
-          Tu cuenta de reclutador esta en pausa: tu enlace no registra nuevas creadoras. Habla con el
+          Tu cuenta de reclutador esta en pausa: tu enlace no registra nuevos creadores. Habla con el
           equipo.
         </p>
       )}
@@ -58,15 +58,15 @@ export default async function RecruiterPage() {
           <p className="text-sm font-semibold">Tus condiciones</p>
           <p className="text-sm text-muted-foreground">{termsLabel(r)}.</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Cuenta desde que cada creadora se hace creadora. Solo se paga por ventas reales: nada
+            Cuenta desde que cada creador se hace creador. Solo se paga por ventas reales: nada
             por registrarse.
           </p>
         </div>
       </section>
 
       <section className="space-y-2 rounded-2xl border border-border/60 bg-card p-4">
-        <p className="text-sm font-semibold">Tu enlace para creadoras</p>
-        <ReferralLink url={link} shareText="Unete a FantasyLive como creadora" />
+        <p className="text-sm font-semibold">Tu enlace para creadores</p>
+        <ReferralLink url={link} shareText="Unete a FantasyLive como creador" />
         <p className="text-[11px] text-muted-foreground">
           Quien lo abra y se registre en los proximos 30 dias queda como tuya.
         </p>
@@ -74,7 +74,7 @@ export default async function RecruiterPage() {
 
       <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Stat icon={Users} label="Registradas" value={String(r.totals.registered)} />
-        <Stat icon={BadgeCheck} label="Verificadas" value={String(r.totals.verified)} />
+        <Stat icon={BadgeCheck} label="Verificados" value={String(r.totals.verified)} />
         <Stat
           icon={Wallet}
           label="Por cobrar"
@@ -87,7 +87,7 @@ export default async function RecruiterPage() {
 
       <section>
         <h2 className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          Creadoras que has traido
+          Creadores que has traido
         </h2>
         {r.recruits.length === 0 ? (
           <p className="rounded-2xl border border-dashed border-border/60 p-6 text-center text-sm text-muted-foreground">
@@ -119,9 +119,9 @@ export default async function RecruiterPage() {
         <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
           <li>
             Te pagamos lo acumulado cada semana, a partir de {formatMoney(minPayoutCents)}. Al
-            cobrar se descuenta un 10%, igual que a las creadoras.
+            cobrar se descuenta un 10%, igual que a los creadores.
           </li>
-          <li>Cada creadora cuenta cuando verifica su identidad y hace su primera venta.</li>
+          <li>Cada creador cuenta cuando verifica su identidad y hace su primera venta.</li>
           <li>Nada de spam, nada dirigido a menores y no te hagas pasar por FantasyLive.</li>
           <li>Si se incumplen las normas, se pausa la cuenta y se pierde lo pendiente.</li>
         </ul>

@@ -144,7 +144,7 @@ export function termsLabel(r: {
 }) {
   return [
     `${r.commissionPercent}% de cada venta`,
-    r.months == null ? 'para siempre' : `${r.months} meses por creadora`,
-    r.maxCreators == null ? 'sin tope' : `hasta ${r.maxCreators} creadoras`,
+    r.months == null ? 'para siempre' : `${r.months} meses por creador`,
+    r.maxCreators == null ? 'sin tope' : `hasta ${r.maxCreators} creadores`,
   ].join(' · ');
 }

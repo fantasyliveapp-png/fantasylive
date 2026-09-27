@@ -57,7 +57,7 @@ export async function requireModel() {
   const profile = await prisma.modelProfile.findUnique({
     where: { userId: user.id },
   });
-  if (!profile) redirect('/hazte-creadora');
+  if (!profile) redirect('/hazte-creador');
   return { user, profile };
 }
 

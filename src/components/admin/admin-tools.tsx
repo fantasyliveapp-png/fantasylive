@@ -77,8 +77,8 @@ export function FeatureButtons({ modelId, featured }: { modelId: string; feature
 const AUDIENCES: { value: Audience; label: string }[] = [
   { value: 'all', label: 'Todos' },
   { value: 'fans', label: 'Solo fans' },
-  { value: 'creators', label: 'Solo creadoras' },
-  { value: 'founders', label: 'Fundadoras' },
+  { value: 'creators', label: 'Solo creadores' },
+  { value: 'founders', label: 'Fundadores' },
 ];
 
 export function AnnouncementForm() {
@@ -157,7 +157,7 @@ export function AnnouncementForm() {
         </label>
         <label className="block space-y-1.5 text-xs text-muted-foreground">
           Al tocarlo, lleva a (opcional)
-          <Input value={link} onChange={(e) => setLink(e.target.value)} placeholder="/feed, /live, /hazte-creadora..." />
+          <Input value={link} onChange={(e) => setLink(e.target.value)} placeholder="/feed, /live, /hazte-creador..." />
         </label>
         <Button variant="brand" onClick={send} disabled={pending || title.trim().length < 3 || !count}>
           {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

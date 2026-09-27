@@ -7,7 +7,7 @@ import { ModelCard } from '@/components/models/model-card';
 import { Button } from '@/components/ui/button';
 import { getVisibilityContext } from '@/lib/geo';
 import { getI18n } from '@/lib/i18n/server';
-import { getLiveStreams } from '@/lib/live';
+import { rankLiveStreamsForRequest } from '@/lib/live-rank';
 import { prisma } from '@/lib/prisma';
 
 export const metadata: Metadata = { title: 'Directos' };
@@ -20,7 +20,7 @@ export default async function LivePage() {
   ]);
 
   const [streams, onlineModels] = await Promise.all([
-    getLiveStreams({ geoFilter, take: 24 }),
+    rankLiveStreamsForRequest({ geoFilter, take: 24 }),
     // Quien esta conectada pero no emitiendo: si no hay directos, la pagina
     // sigue ofreciendo algo que hacer en vez de quedarse vacia.
     prisma.modelProfile.findMany({

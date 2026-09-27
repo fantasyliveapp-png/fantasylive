@@ -40,7 +40,7 @@ export default async function AdminPayoutsPage({
   return (
     <div className="space-y-8">
       <AdminPageHeader
-        title="Retiros de creadoras"
+        title="Retiros de creadores"
         description={
           <>
             Aprueba, marca como pagado o rechaza. Rechazar devuelve los tokens al monedero de la

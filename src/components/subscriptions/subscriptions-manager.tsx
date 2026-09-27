@@ -5,12 +5,14 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Coins, Crown, Loader2, X } from 'lucide-react';
 import { toast } from 'sonner';
+import type { Gender } from '@prisma/client';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { cancelSubscriptionAction } from '@/server/actions/subscriptions';
+import { onlineLabel } from '@/lib/gender-words';
 import { formatDate, formatTokens, initials } from '@/lib/utils';
 
 interface SubscriptionRow {
@@ -20,6 +22,7 @@ interface SubscriptionRow {
   modelStageName: string;
   modelAvatarUrl: string | null;
   modelIsOnline: boolean;
+  modelGender: Gender;
   priceTokens: number;
   discountPercent: number;
   startedAt: string;
@@ -39,8 +42,8 @@ export function SubscriptionsManager({
   if (subscriptions.length === 0) {
     return (
       <p className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
-        Todavia no te suscribiste a ninguna creadora. Entra al perfil de una
-        creadora para suscribirte y acceder a su contenido exclusivo.
+        Todavia no te suscribiste a ningun creador. Entra al perfil de uno
+        para suscribirte y acceder a su contenido exclusivo.
       </p>
     );
   }
@@ -109,7 +112,7 @@ function SubscriptionCard({ sub }: { sub: SubscriptionRow }) {
             <div>
               <p className="text-sm font-medium">{sub.modelStageName}</p>
               <p className="text-xs text-muted-foreground">
-                {sub.modelIsOnline ? 'Conectada' : 'Offline'}
+                {sub.modelIsOnline ? onlineLabel(sub.modelGender, true) : 'Offline'}
               </p>
             </div>
           </Link>

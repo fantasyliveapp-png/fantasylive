@@ -31,7 +31,7 @@ export function OnboardingForm({
 
   function submit() {
     if (stageName.trim().length < 2) {
-      toast.error('Elige un nombre de creadora.');
+      toast.error('Elige un nombre de creador.');
       return;
     }
     if (!gender) {
@@ -41,7 +41,7 @@ export function OnboardingForm({
     startTransition(async () => {
       const result = await createModelProfileAction({ stageName: stageName.trim(), gender });
       if (result.ok) {
-        toast.success('¡Listo! Ya eres creadora.');
+        toast.success('¡Listo! Tu perfil de creador esta activo.');
         router.push('/dashboard/model');
         router.refresh();
       } else {
@@ -53,7 +53,7 @@ export function OnboardingForm({
   return (
     <div className="space-y-5">
       <div className="space-y-2">
-        <Label htmlFor="stageName">Tu nombre de creadora</Label>
+        <Label htmlFor="stageName">Tu nombre de creador</Label>
         <Input
           id="stageName"
           value={stageName}
@@ -93,7 +93,7 @@ export function OnboardingForm({
         disabled={isPending || !gender}
       >
         {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-        Activar modo creadora
+        Activar modo creador
       </Button>
     </div>
   );

@@ -97,7 +97,7 @@ export function KycGate({
           {pending
             ? 'Te avisaremos en 24-48 h. En cuanto la aprobemos se desbloquea todo tu panel. Mientras tanto puedes preparar tu perfil.'
             : rejected
-              ? 'Revisa el motivo y vuelve a enviarla. Hasta que este aprobada no puedes usar las herramientas de creadora.'
+              ? 'Revisa el motivo y vuelve a enviarla. Hasta que este aprobada no puedes usar las herramientas de creador.'
               : 'Por ley tenemos que comprobar que eres mayor de edad y que eres tu antes de que publiques o cobres. Son 2 minutos.'}
         </p>
 

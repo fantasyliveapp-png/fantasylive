@@ -6,18 +6,19 @@ import { AdminPageHeader, AdminTabs } from '@/components/admin/admin-shell';
 import { Empty, Panel, PersonLink, Pill } from '@/components/admin/admin-ui';
 import { requireAdmin } from '@/lib/auth/guards';
 import { KYC_STATUS_LABELS } from '@/lib/constants';
+import { creatorLabel, founderLabel } from '@/lib/gender-words';
 import { prisma } from '@/lib/prisma';
 import { cn, formatTokens } from '@/lib/utils';
 
-export const metadata: Metadata = { title: 'Embudo de creadoras' };
+export const metadata: Metadata = { title: 'Embudo de creadores' };
 export const dynamic = 'force-dynamic';
 
 type Step = 'signup' | 'kyc' | 'verified' | 'posted' | 'sold';
 
 const STEPS: { key: Step; label: string; hint: string; stuck: string }[] = [
-  { key: 'signup', label: 'Se hicieron creadora', hint: 'Crearon su perfil', stuck: 'No han enviado su verificacion' },
+  { key: 'signup', label: 'Se hicieron creadores', hint: 'Crearon su perfil', stuck: 'No han enviado su verificacion' },
   { key: 'kyc', label: 'Enviaron verificacion', hint: 'Mandaron su documento', stuck: 'Verificacion pendiente o rechazada' },
-  { key: 'verified', label: 'Verificadas', hint: 'Ya pueden publicar', stuck: 'Verificadas pero sin publicar nada' },
+  { key: 'verified', label: 'Verificados', hint: 'Ya pueden publicar', stuck: 'Verificados pero sin publicar nada' },
   { key: 'posted', label: 'Empezaron', hint: 'Publicaron o hicieron su primer directo o llamada', stuck: 'Empezaron pero aun no venden' },
   { key: 'sold', label: 'Vendieron', hint: 'Ya ganaron dinero', stuck: '' },
 ];
@@ -56,6 +57,7 @@ export default async function AdminFunnelPage({
       postsCount: true,
       totalTokensEarned: true,
       founderNumber: true,
+      gender: true,
       user: {
         select: { id: true, username: true, email: true, referredById: true, recruitedById: true },
       },
@@ -113,13 +115,13 @@ export default async function AdminFunnelPage({
   return (
     <>
       <AdminPageHeader
-        title="Embudo de creadoras"
-        description="Cuantas de las que se hacen creadora llegan a vender, en que paso se quedan y quienes estan atascadas para que les escribas."
+        title="Embudo de creadores"
+        description="Cuantos de los que se hacen creadores llegan a vender, en que paso se quedan y quienes estan atascados para que les escribas."
         tabs={<AdminTabs basePath="/admin/embudo" param="periodo" current={periodo} tabs={PERIODS} />}
       />
 
       <div className="space-y-6">
-        <Panel title="De registro a primera venta" aside={`${formatTokens(counts[0]!.n)} creadoras en el periodo`}>
+        <Panel title="De registro a primera venta" aside={`${formatTokens(counts[0]!.n)} creadores en el periodo`}>
           <div className="space-y-4 p-5">
             {counts.map((s, i) => {
               const prev = i > 0 ? counts[i - 1]!.n : null;
@@ -148,7 +150,7 @@ export default async function AdminFunnelPage({
                   <div className="h-7 overflow-hidden rounded-md bg-white/[0.04]">
                     <div className="flex h-full" style={{ width: `${Math.max(2, (s.n / top) * 100)}%` }}>
                       <div className="h-full bg-primary" style={{ flex: s.byOrigin.direct || 0.0001 }} title={`Por su cuenta: ${s.byOrigin.direct}`} />
-                      <div className="h-full bg-champagne-gold" style={{ flex: s.byOrigin.creator || 0.0001 }} title={`Invitadas por creadora: ${s.byOrigin.creator}`} />
+                      <div className="h-full bg-champagne-gold" style={{ flex: s.byOrigin.creator || 0.0001 }} title={`Invitados por otro creador: ${s.byOrigin.creator}`} />
                       <div className="h-full bg-sky-500" style={{ flex: s.byOrigin.recruiter || 0.0001 }} title={`Por reclutador: ${s.byOrigin.recruiter}`} />
                     </div>
                   </div>
@@ -157,7 +159,7 @@ export default async function AdminFunnelPage({
             })}
             <div className="flex flex-wrap gap-4 pt-1 text-[11px] text-muted-foreground">
               <Legend cls="bg-primary" label="Llegaron por su cuenta" />
-              <Legend cls="bg-champagne-gold" label="Invitadas por otra creadora" />
+              <Legend cls="bg-champagne-gold" label="Invitados por otro creador" />
               <Legend cls="bg-sky-500" label="Traidas por un reclutador" />
             </div>
           </div>
@@ -195,9 +197,9 @@ export default async function AdminFunnelPage({
                       {stuckStep === 'kyc' && (
                         <Pill tone={c.kycStatus === 'REJECTED' ? 'bad' : 'warn'}>{KYC_STATUS_LABELS[c.kycStatus]}</Pill>
                       )}
-                      {c.founderNumber && <Pill tone="gold">Fundadora #{c.founderNumber}</Pill>}
+                      {c.founderNumber && <Pill tone="gold">{founderLabel(c.gender)} #{c.founderNumber}</Pill>}
                       <span>
-                        Creadora desde hace {days} {days === 1 ? 'dia' : 'dias'}
+                        {creatorLabel(c.gender)} desde hace {days} {days === 1 ? 'dia' : 'dias'}
                         {origin(c) !== 'direct' && ` · ${origin(c) === 'creator' ? 'invitada' : 'de reclutador'}`}
                       </span>
                     </div>

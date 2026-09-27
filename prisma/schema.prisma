@@ -402,6 +402,7 @@ model User {
   postComments             PostComment[]
   profileVisits            ProfileVisit[]
   greetingsReceived        AutoGreetingLog[]
+  liveViews                LiveView[]
 
   @@index([role, status])
   @@index([createdAt])
@@ -717,6 +718,7 @@ model ModelProfile {
   conversations    Conversation[]
   posts            Post[]
   streams          LiveStream[]
+  liveViews        LiveView[]
   visits           ProfileVisit[]
   greetings        AutoGreetingLog[]
   vaultFolders     VaultFolder[]
@@ -1641,6 +1643,13 @@ model LiveStream {
   giftsCount   Int @default(0)
   tokensEarned Int @default(0)
 
+  /// Meta de tokens visible en el directo ("500 tokens -> bailo").
+  /// goalProgress cuenta lo que pagan los fans desde que se puso la meta.
+  goalLabel     String?
+  goalTokens    Int?
+  goalProgress  Int       @default(0)
+  goalReachedAt DateTime?
+
   startedAt DateTime?
   endedAt   DateTime?
 
@@ -1650,10 +1659,36 @@ model LiveStream {
   model        ModelProfile  @relation(fields: [modelId], references: [id], onDelete: Cascade)
   gifts        Gift[]
   transactions Transaction[]
+  views        LiveView[]
 
   @@index([status, startedAt])
   @@index([modelId, createdAt])
   @@map("live_streams")
+}
+
+/// Cuanto tiempo ha mirado cada persona cada directo. Es la senal de
+/// retencion del algoritmo de directos: un directo del que la gente no se va
+/// sube, uno que se salta en segundos baja (ver lib/live-rank.ts).
+model LiveView {
+  id       String @id @default(cuid())
+  streamId String
+  userId   String
+  modelId  String
+
+  /// Segundos mirando con la pestana visible, acumulados.
+  seconds Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stream LiveStream   @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  model  ModelProfile @relation(fields: [modelId], references: [id], onDelete: Cascade)
+
+  @@unique([streamId, userId])
+  @@index([userId, updatedAt])
+  @@index([modelId])
+  @@map("live_views")
 }
 
 // =============================================================================

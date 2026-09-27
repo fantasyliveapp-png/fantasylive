@@ -60,7 +60,7 @@ export function RemovePostButton({ postId, removed }: { postId: string; removed:
       size="sm"
       disabled={pending}
       onClick={() => {
-        const reason = askReason('Retirar esta publicacion? Dejara de verse y la creadora no podra republicarla.');
+        const reason = askReason('Retirar esta publicacion? Dejara de verse y su autor no podra republicarla.');
         if (reason !== null) run(() => adminRemovePostAction({ postId, reason }));
       }}
     >

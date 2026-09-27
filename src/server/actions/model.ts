@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { assertCreatorVerified } from '@/lib/creator-kyc';
 import { prisma } from '@/lib/prisma';
+import { onlineLabel } from '@/lib/gender-words';
 import { checkNoContactInfo } from '@/lib/content-filter';
 import { changeHandle, isHandleFree } from '@/lib/creator-profile';
 import { isReservedUsername, USERNAME_PATTERN } from '@/lib/usernames';
@@ -295,7 +296,10 @@ export async function setOnlineStatusAction(input: {
     revalidatePath('/dashboard/model');
     revalidatePath('/models');
     revalidatePath('/vip');
-    return { ok: true, message: input.isOnline ? 'Estas en linea.' : 'Desconectada.' };
+    return {
+      ok: true,
+      message: input.isOnline ? 'Estas en linea.' : `${onlineLabel(profile.gender, false)}.`,
+    };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
   }

@@ -20,6 +20,7 @@ export default async function UserSubscriptionsPage() {
           slug: true,
           avatarUrl: true,
           isOnline: true,
+          gender: true,
         },
       },
     },
@@ -32,7 +33,7 @@ export default async function UserSubscriptionsPage() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight">Mis suscripciones</h1>
         <p className="mt-2 text-muted-foreground">
-          Las creadoras a las que estas suscrito y tu historial de
+          Los creadores a los que estas suscrito y tu historial de
           suscripciones.
         </p>
       </div>
@@ -45,6 +46,7 @@ export default async function UserSubscriptionsPage() {
           modelStageName: s.model.stageName,
           modelAvatarUrl: s.model.avatarUrl,
           modelIsOnline: s.model.isOnline,
+          modelGender: s.model.gender,
           priceTokens: s.priceTokens,
           discountPercent: s.discountPercent,
           startedAt: s.startedAt.toISOString(),

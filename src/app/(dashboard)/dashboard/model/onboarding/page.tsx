@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 
-/** La activacion del modo creadora vive ahora en /hazte-creadora. */
+/** La activacion del modo creadora vive ahora en /hazte-creador. */
 export default function LegacyOnboardingPage() {
-  redirect('/hazte-creadora');
+  redirect('/hazte-creador');
 }

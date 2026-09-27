@@ -938,7 +938,7 @@ function toMessage(error: unknown): string {
     if (error.message === 'UNAUTHORIZED') return 'Debes iniciar sesion.';
     if (error.message === 'ACCOUNT_BANNED') return 'Tu cuenta esta suspendida.';
     if (error.message === 'MODEL_PROFILE_MISSING') {
-      return 'Necesitas un perfil de creadora.';
+      return 'Necesitas un perfil de creador.';
     }
     return error.message;
   }

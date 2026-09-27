@@ -23,7 +23,7 @@ export async function createModelProfileAction(input: {
   try {
     const user = await getAuthedUserOrThrow();
     const parsed = schema.safeParse(input);
-    if (!parsed.success) return { ok: false, error: 'Revisa tu nombre de creadora.' };
+    if (!parsed.success) return { ok: false, error: 'Revisa tu nombre de creador.' };
 
     const account = await prisma.user.findUnique({
       where: { id: user.id },

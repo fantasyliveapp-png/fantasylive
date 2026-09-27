@@ -256,14 +256,14 @@ export default async function PersonProfilePage({
 
       {isSelf && (
         <Link
-          href="/hazte-creadora"
+          href="/hazte-creador"
           className="relative flex items-center gap-4 overflow-hidden rounded-2xl border border-primary/40 bg-primary/5 p-4 transition-colors hover:bg-primary/10"
         >
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-primary via-fantazy-red to-champagne-gold text-white">
             <Sparkles className="h-5 w-5" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-sm font-semibold">Hazte creadora</span>
+            <span className="block text-sm font-semibold">Hazte creador</span>
             <span className="block text-xs text-muted-foreground">
               Publica, haz directos y cobra con tu contenido. Con la misma cuenta.
             </span>

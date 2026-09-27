@@ -84,7 +84,7 @@ export async function adminRemovePostAction(input: {
     revalidatePath('/admin/content');
     revalidatePath(`/admin/content/${post.id}`);
     revalidatePath(`/models/${post.model.slug}`);
-    return { ok: true, message: 'Publicacion retirada. Se ha avisado a la creadora.' };
+    return { ok: true, message: 'Publicacion retirada. Se ha avisado a su autor.' };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
   }
@@ -203,7 +203,7 @@ export async function adminEndStreamAction(input: {
     revalidatePath('/admin/live');
     revalidatePath('/live');
     revalidatePath('/');
-    return { ok: true, message: 'Directo cortado. Se ha avisado a la creadora.' };
+    return { ok: true, message: 'Directo cortado. Se ha avisado a quien emitia.' };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
   }

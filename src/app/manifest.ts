@@ -12,7 +12,7 @@ export default function manifest(): MetadataRoute.Manifest {
     id: '/',
     name: config.app.name,
     short_name: config.app.name,
-    description: 'Tus creadoras favoritas: directos, videollamadas, mensajes y contenido exclusivo.',
+    description: 'Tus creadores favoritos: directos, videollamadas, mensajes y contenido exclusivo.',
     start_url: '/?source=app',
     scope: '/',
     display: 'standalone',

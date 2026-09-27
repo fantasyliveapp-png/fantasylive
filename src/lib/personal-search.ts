@@ -4,7 +4,8 @@ import type { Gender, Prisma } from '@prisma/client';
 
 import type { AnonTaste } from '@/lib/anon-taste';
 import type { FeedPost } from '@/lib/posts';
-import { getLiveStreams } from '@/lib/live';
+import { rankLiveStreams } from '@/lib/live-rank';
+import { creatorLabel, gw } from '@/lib/gender-words';
 import { prisma } from '@/lib/prisma';
 import {
   getForYouFeed,
@@ -115,7 +116,7 @@ type CreatorBits = {
   isLive: boolean;
 };
 
-/** % de afinidad de una creadora y el motivo principal. */
+/** % de afinidad de un perfil y el motivo principal. */
 export function affinityOf(
   ctx: AffinityContext,
   c: CreatorBits,
@@ -130,8 +131,10 @@ export function affinityOf(
   let reason = 'Popular ahora';
   const creatorWeight = ctx.learned?.creators.get(c.id) ?? 0;
   const sharedTag = dnaTop.find((t) => c.tags.includes(t));
-  if (follows) reason = 'La sigues';
-  else if (creatorWeight >= 4) reason = 'La miras a menudo';
+  // "La" / "Lo" / "Los" segun el perfil (lib/gender-words.ts).
+  const pronoun = gw(c.gender, { f: 'La', m: 'Lo', pl: 'Los' });
+  if (follows) reason = `${pronoun} sigues`;
+  else if (creatorWeight >= 4) reason = `${pronoun} miras a menudo`;
   else if (sharedTag) reason = `Te gusta #${sharedTag}`;
   else if (ctx.tastes?.preferredGenders.includes(c.gender)) reason = 'Tu tipo';
 
@@ -180,7 +183,12 @@ export async function getExploreMosaic(params: {
       sessionStart: new Date(),
       anonTaste: params.anonTaste ?? null,
     }),
-    getLiveStreams({ geoFilter: params.geoFilter, take: 8 }),
+    rankLiveStreams({
+      viewerId: params.viewerId,
+      anonTaste: params.anonTaste ?? null,
+      geoFilter: params.geoFilter,
+      take: 8,
+    }),
   ]);
 
   // Solo lo visual: publicaciones con fotos o videos (sin texto suelto ni
@@ -215,7 +223,11 @@ export async function getExploreMosaic(params: {
     const isNew = m ? m.createdAt.getTime() > monthAgo : false;
     return {
       match: personalized ? match : null,
-      reason: personalized ? reason : isNew ? 'Creadora nueva' : 'Popular ahora',
+      reason: personalized
+        ? reason
+        : isNew
+          ? `${creatorLabel(bits.gender)} ${gw(bits.gender, { f: 'nueva', m: 'nuevo', pl: 'nuevos' })}`
+          : 'Popular ahora',
       tags: bits.tags,
     };
   };

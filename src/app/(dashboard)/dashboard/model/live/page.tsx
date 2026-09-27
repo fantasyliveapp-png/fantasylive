@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: 'Directos' };
 export const dynamic = 'force-dynamic';
 
 export default async function ModelLivePage() {
-  const { profile } = await requireModel();
+  const { user, profile } = await requireModel();
 
   const [existing, totals] = await Promise.all([
     getActiveStreamForModel(profile.id),
@@ -34,6 +34,8 @@ export default async function ModelLivePage() {
         obsConfigured={isObsConfigured()}
         slug={profile.slug}
         stageName={profile.stageName}
+        userId={user.id}
+        gender={profile.gender}
         existing={
           existing
             ? {

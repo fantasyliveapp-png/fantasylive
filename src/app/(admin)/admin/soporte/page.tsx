@@ -57,7 +57,7 @@ export default async function AdminSupportPage({
     <>
       <AdminPageHeader
         title="Soporte"
-        description="Consultas que te escriben fans y creadoras desde /soporte. Cuando respondes, les llega una notificacion."
+        description="Consultas que te escriben fans y creadores desde /soporte. Cuando respondes, les llega una notificacion."
         tabs={<AdminTabs basePath="/admin/soporte" current={tab.value} tabs={TABS} />}
       />
       <Panel>

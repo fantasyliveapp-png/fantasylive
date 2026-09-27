@@ -11,7 +11,7 @@ import { prisma } from '@/lib/prisma';
  * accion del servidor, no solo en la interfaz, para que no se pueda saltar.
  */
 export const KYC_REQUIRED_MESSAGE =
-  'Primero verifica tu identidad. Hasta que la aprobemos no puedes publicar, cobrar ni usar las herramientas de creadora.';
+  'Primero verifica tu identidad. Hasta que la aprobemos no puedes publicar, cobrar ni usar las herramientas de creador.';
 
 export async function assertCreatorVerified(
   who: { modelId: string } | { userId: string },

@@ -9,6 +9,7 @@ import { DeleteCommentButton, RemovePostButton } from '@/components/admin/superv
 import { adminMediaUrl, personOf } from '@/lib/admin-supervision';
 import { requireAdmin } from '@/lib/auth/guards';
 import { REPORT_REASON_LABELS } from '@/lib/constants';
+import { creatorLabel } from '@/lib/gender-words';
 import { prisma } from '@/lib/prisma';
 import { tokensToPayoutCents } from '@/lib/tokens';
 import { formatDateTime, formatMoney, formatTokens, relativeTime } from '@/lib/utils';
@@ -49,7 +50,7 @@ export default async function AdminPostPage({ params }: { params: Promise<{ post
         select: { id: true, storageKey: true, mimeType: true },
       },
       poll: { select: { question: true, options: { orderBy: { sortOrder: 'asc' }, select: { id: true, text: true, voteCount: true } } } },
-      model: { select: { slug: true, user: { select: personSelect } } },
+      model: { select: { slug: true, gender: true, user: { select: personSelect } } },
       comments: {
         orderBy: { createdAt: 'desc' },
         take: 200,
@@ -191,7 +192,7 @@ export default async function AdminPostPage({ params }: { params: Promise<{ post
         </div>
 
         <div className="space-y-6">
-          <Panel title="Creadora">
+          <Panel title={creatorLabel(post.model.gender)}>
             <div className="px-5 py-4">
               <PersonLink id={creator.id} name={creator.name} username={creator.username} image={creator.image} />
             </div>

@@ -30,6 +30,14 @@ const nextConfig = {
   ],
   // No anunciar la version del framework.
   poweredByHeader: false,
+  // Direcciones antiguas en femenino: siguen funcionando para no romper los
+  // enlaces que ya se han compartido (invitaciones, redes...).
+  async redirects() {
+    return [
+      { source: '/hazte-creadora', destination: '/hazte-creador', permanent: true },
+      { source: '/r/:slug/creadora', destination: '/r/:slug/creador', permanent: true },
+    ];
+  },
   async headers() {
     return [
       {

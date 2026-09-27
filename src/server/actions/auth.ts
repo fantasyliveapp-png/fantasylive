@@ -144,7 +144,7 @@ export async function registerAction(
         birthDate,
         ageVerified: false, // se confirma con KYC / verificacion documental
         // Una sola cuenta para todos: el modo creadora se activa despues en
-        // /hazte-creadora (un solo paso; el campo "role" del formulario solo
+        // /hazte-creador (un solo paso; el campo "role" del formulario solo
         // indica la intencion, para llevarla alli tras registrarse).
         role: 'USER',
         status: 'ACTIVE',

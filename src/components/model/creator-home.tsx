@@ -21,6 +21,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { getCreatorEarnings, getCreatorPending } from '@/lib/creator-dashboard';
 import { config } from '@/lib/config';
+import { founderLabel, onlineLabel } from '@/lib/gender-words';
 import { TEST_AUDIENCE } from '@/lib/post-insights';
 import { prisma } from '@/lib/prisma';
 import {
@@ -137,7 +138,7 @@ export async function CreatorHome({
     },
     {
       target: 'online',
-      title: 'Conectada o desconectada',
+      title: `${onlineLabel(profile.gender, true)} o ${onlineLabel(profile.gender, false).toLowerCase()}`,
       body: 'Enciendelo cuando estes disponible: los fans te ven en linea y pueden llamarte. Apagalo al irte.',
     },
     {
@@ -148,7 +149,7 @@ export async function CreatorHome({
     {
       target: 'invite',
       title: 'Invita y gana',
-      body: 'Tu enlace para compartir. Los fans que traes te dejan el 70% y ganas un 5% de las creadoras que invites.',
+      body: 'Tu enlace para compartir. Los fans que traes te dejan el 70% y ganas un 5% de los creadores que invites.',
     },
     {
       target: 'todo',
@@ -211,6 +212,7 @@ export async function CreatorHome({
             isAvailableForVip={profile.isAvailableForVip}
             isVipEnabled={profile.isVipEnabled}
             canStream={profile.kycStatus === 'APPROVED'}
+            gender={profile.gender}
           />
           </div>
         </div>
@@ -250,11 +252,11 @@ export async function CreatorHome({
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-semibold">
             {profile.founderNumber != null
-              ? `Fundadora #${profile.founderNumber} · Invita y gana`
+              ? `${founderLabel(profile.gender)} #${profile.founderNumber} · Invita y gana`
               : 'Invita y gana'}
           </span>
           <span className="block text-xs text-muted-foreground">
-            Tus fans te dejan mas y ganas el 5% de las creadoras que traigas
+            Tus fans te dejan mas y ganas el 5% de los creadores que traigas
           </span>
         </span>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />

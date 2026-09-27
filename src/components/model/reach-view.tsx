@@ -77,7 +77,7 @@ export function ReachView({ reach }: { reach: CreatorReach }) {
       <section className="flex gap-3 rounded-2xl border border-primary/30 bg-primary/5 p-4 text-sm">
         <Scale className="h-5 w-5 shrink-0 text-primary" />
         <div className="space-y-1">
-          <p className="font-semibold">Todas las creadoras tienen la misma oportunidad</p>
+          <p className="font-semibold">Todos los creadores tienen la misma oportunidad</p>
           <p className="text-xs leading-relaxed text-muted-foreground">
             Cada publicacion nueva se ensena a unas 40 personas aunque tengas pocos
             seguidores (fase de prueba). Despues, cuanto mas gusta (me gusta, comentarios,

@@ -62,7 +62,7 @@ export default async function AdminLivePage() {
     <>
       <AdminPageHeader
         title="Directos"
-        description="Entra a cualquier directo para vigilarlo. Si incumple las normas, cortalo: se avisa a la creadora con el motivo."
+        description="Entra a cualquier directo para vigilarlo. Si incumple las normas, cortalo: se le avisa con el motivo."
       />
 
       <div className="space-y-6">
@@ -117,7 +117,7 @@ export default async function AdminLivePage() {
               <table className="w-full text-sm">
                 <thead className="text-left text-[11px] uppercase tracking-wider text-muted-foreground">
                   <tr className="border-b border-white/[0.06]">
-                    <th className="px-5 py-2 font-medium">Creadora</th>
+                    <th className="px-5 py-2 font-medium">Creador</th>
                     <th className="px-3 py-2 font-medium">Titulo</th>
                     <th className="px-3 py-2 font-medium">Inicio</th>
                     <th className="px-3 py-2 font-medium">Duracion</th>

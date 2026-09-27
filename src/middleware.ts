@@ -14,7 +14,7 @@ const PROTECTED_PREFIXES = [
   '/call',
   '/random',
   '/vip',
-  '/hazte-creadora',
+  '/hazte-creador',
   '/mensajes',
 ];
 
@@ -53,7 +53,7 @@ export default auth((req) => {
       (user as any).role !== 'ADMIN'
     ) {
       // Sin modo creadora: se le ofrece activarlo en vez de un 403.
-      return NextResponse.redirect(new URL('/hazte-creadora', req.nextUrl.origin));
+      return NextResponse.redirect(new URL('/hazte-creador', req.nextUrl.origin));
     }
 
     // Ya autenticado: fuera de login/register

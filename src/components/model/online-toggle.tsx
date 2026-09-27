@@ -4,9 +4,11 @@ import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Crown, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import type { Gender } from '@prisma/client';
 
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { onlineLabel } from '@/lib/gender-words';
 import { cn } from '@/lib/utils';
 import { setOnlineStatusAction } from '@/server/actions/model';
 
@@ -15,12 +17,15 @@ export function OnlineToggle({
   isAvailableForVip,
   isVipEnabled,
   canStream,
+  gender,
   variant = 'compact',
 }: {
   isOnline: boolean;
   isAvailableForVip: boolean;
   isVipEnabled: boolean;
   canStream: boolean;
+  /** Genero del perfil, para "desconectada" / "desconectado". */
+  gender?: Gender | null;
   /** "hero": boton grande para el inicio del panel. */
   variant?: 'compact' | 'hero';
 }) {
@@ -89,7 +94,7 @@ export function OnlineToggle({
               {isPending && <Loader2 className="h-3 w-3 animate-spin text-black" />}
             </span>
           </span>
-          {online ? 'Estas en linea' : 'Estas desconectada'}
+          {online ? 'Estas en linea' : `Estas ${onlineLabel(gender, false).toLowerCase()}`}
         </button>
 
         {isVipEnabled && online && (
@@ -130,7 +135,7 @@ export function OnlineToggle({
               className={online ? 'live-dot' : 'h-2.5 w-2.5 rounded-full bg-muted-foreground'}
             />
           )}
-          {online ? 'En linea' : 'Desconectada'}
+          {online ? 'En linea' : onlineLabel(gender, false)}
         </Label>
         <Switch
           id="online"

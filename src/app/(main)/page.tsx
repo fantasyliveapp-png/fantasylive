@@ -19,7 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { getVisibilityContext } from '@/lib/geo';
 import { getI18n } from '@/lib/i18n/server';
-import { getLiveStreams } from '@/lib/live';
+import { rankLiveStreamsForRequest } from '@/lib/live-rank';
 import { getQueueStats } from '@/lib/matchmaking';
 import { prisma } from '@/lib/prisma';
 import { formatTokens } from '@/lib/utils';
@@ -36,7 +36,7 @@ export default async function HomePage() {
 
   const [stats, liveStreams, featured, packages] = await Promise.all([
     getQueueStats(),
-    getLiveStreams({ geoFilter, take: 6 }),
+    rankLiveStreamsForRequest({ geoFilter, take: 6 }),
     prisma.modelProfile.findMany({
       where: { kycStatus: 'APPROVED', ...geoFilter },
       orderBy: [{ isOnline: 'desc' }, { ratingAvg: 'desc' }],
@@ -75,7 +75,7 @@ export default async function HomePage() {
       icon: Compass,
       title: t('feed.discover'),
       description:
-        'Un feed con lo ultimo de todas las creadoras, y otro solo con las que sigues. Publicaciones publicas, de pago y exclusivas para suscriptores.',
+        'Un feed con lo ultimo de todos los creadores, y otro solo con los que sigues. Publicaciones publicas, de pago y exclusivas para suscriptores.',
       href: '/feed',
       cta: t('home.exploreFeed'),
     },
@@ -83,7 +83,7 @@ export default async function HomePage() {
       icon: Radio,
       title: t('live.title'),
       description:
-        'Directos de creadoras verificadas. Entra gratis, comenta en el chat y envia regalos en tokens.',
+        'Directos de creadores verificados. Entra gratis, comenta en el chat y envia regalos en tokens.',
       href: '/live',
       cta: t('live.liveNow'),
     },
@@ -99,7 +99,7 @@ export default async function HomePage() {
       icon: Video,
       title: 'Privados 1 a 1',
       description:
-        'Videollamada privada con tu creadora favorita, al instante o reservada. Pagas solo los minutos que usas.',
+        'Videollamada privada con tu creador favorito, al instante o reservada. Pagas solo los minutos que usas.',
       href: '/models',
       cta: t('nav.creators'),
     },
@@ -175,7 +175,7 @@ export default async function HomePage() {
                 {t('home.liveNow')}
               </h2>
               <p className="mt-2 text-muted-foreground">
-                Solo creadoras con KYC aprobado pueden emitir.
+                Solo creadores con KYC aprobado pueden emitir.
               </p>
             </div>
             <Link href="/live">
@@ -333,7 +333,7 @@ export default async function HomePage() {
             Verificacion en 24-48 h
           </Badge>
           <h2 className="text-2xl font-bold tracking-tight md:text-3xl">
-            Gana dinero como creadora
+            Gana dinero como creador
           </h2>
           <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
             Emite en directo desde OBS o desde el navegador, publica contenido

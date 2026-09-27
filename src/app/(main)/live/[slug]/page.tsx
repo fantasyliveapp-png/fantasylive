@@ -7,8 +7,9 @@ import { LiveViewer } from '@/components/live/live-viewer';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { getCurrentUser } from '@/lib/auth/guards';
-import { getViewerCountry, isCountryBlocked } from '@/lib/geo';
+import { getViewerCountry, getVisibilityContext, isCountryBlocked } from '@/lib/geo';
 import { getI18n } from '@/lib/i18n/server';
+import { rankLiveStreams } from '@/lib/live-rank';
 import { prisma } from '@/lib/prisma';
 import { getWalletSummary } from '@/lib/tokens';
 import { initials } from '@/lib/utils';
@@ -45,12 +46,21 @@ export default async function LiveStreamPage({
       avatarUrl: true,
       userId: true,
       isOnline: true,
+      gender: true,
       blockedCountries: true,
       streams: {
         where: { status: { in: ['PREPARING', 'LIVE'] } },
         orderBy: { createdAt: 'desc' },
         take: 1,
-        select: { id: true, title: true, viewerCount: true, status: true },
+        select: {
+          id: true,
+          title: true,
+          viewerCount: true,
+          status: true,
+          goalLabel: true,
+          goalTokens: true,
+          goalProgress: true,
+        },
       },
     },
   });
@@ -120,18 +130,45 @@ export default async function LiveStreamPage({
     );
   }
 
-  const wallet = await getWalletSummary(viewer.id);
+  const [wallet, follow, ranked] = await Promise.all([
+    getWalletSummary(viewer.id),
+    prisma.follow.findUnique({
+      where: { userId_modelId: { userId: viewer.id, modelId: model.id } },
+      select: { id: true },
+    }),
+    // El "Para ti" de directos de este fan: el orden de deslizar.
+    rankLiveStreams({
+      viewerId: viewer.id,
+      geoFilter: (await getVisibilityContext()).filter,
+      take: 50,
+    }),
+  ]);
 
   return (
     <div className="container max-w-6xl py-6">
       <LiveViewer
+        key={stream.id}
         streamId={stream.id}
+        feed={ranked.map((l) => l.model.slug)}
+        initialGoal={
+          stream.goalLabel && stream.goalTokens
+            ? {
+                label: stream.goalLabel,
+                target: stream.goalTokens,
+                progress: stream.goalProgress,
+              }
+            : null
+        }
+        streamTitle={stream.title}
+        isFollowing={Boolean(follow) || viewer.id === model.userId}
         model={{
+          id: model.id,
           slug: model.slug,
           stageName: model.stageName,
           avatarUrl: model.avatarUrl,
           userId: model.userId,
           isOnline: model.isOnline,
+          gender: model.gender,
         }}
         balance={wallet.balance}
         viewerName={viewer.name ?? 'Invitado'}

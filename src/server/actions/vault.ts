@@ -34,7 +34,7 @@ async function requireCreator() {
       vaultPriceSpecial: true,
     },
   });
-  if (!profile) throw new Error('Solo para creadoras.');
+  if (!profile) throw new Error('Solo para creadores.');
   return { user, profile };
 }
 

@@ -52,6 +52,7 @@ import { recordProfileVisit } from '@/lib/visits';
 import { formatRateNumber } from '@/lib/rates';
 import { GENDER_LABELS, ORIENTATION_LABELS } from '@/lib/constants';
 import { peerPair } from '@/lib/chat';
+import { founderLabel } from '@/lib/gender-words';
 import { prisma } from '@/lib/prisma';
 import { applySubscriberDiscount, getActiveSubscription } from '@/lib/subscriptions';
 import { cn, formatDate, formatTokens, initials, relativeTime } from '@/lib/utils';
@@ -465,10 +466,10 @@ export default async function ModelProfilePage({
                     <Badge
                       variant="muted"
                       className="gap-1 border border-champagne-gold/40 bg-champagne-gold/15 text-champagne-gold"
-                      title="De las 100 primeras creadoras de FantasyLive"
+                      title="De los 100 primeros creadores de FantasyLive"
                     >
                       <Crown className="h-3 w-3" />
-                      Fundadora
+                      {founderLabel(model.gender)}
                     </Badge>
                   )}
                   {model.tier !== 'STANDARD' && (

@@ -35,7 +35,7 @@ export default async function AdminFinancePage() {
     <>
       <AdminPageHeader
         title="Finanzas"
-        description="Lo que entra, lo que ganan las creadoras, lo que te quedas y lo que debes. Descarga los CSV para tu contador."
+        description="Lo que entra, lo que ganan los creadores, lo que te quedas y lo que debes. Descarga los CSV para tu contador."
         actions={
           <a
             href="/admin/finanzas/export"
@@ -51,7 +51,7 @@ export default async function AdminFinancePage() {
           <Stat label={`Ventas en ${monthName(current.month)}`} value={formatMoney(current.salesCents)} hint={`${current.purchases} compras`} />
           <Stat label="Tu comision este mes" value={formatMoney(current.commissionCents + current.payoutFeesCents)} hint="Ventas + comision de retiros" />
           <Stat
-            label="Debes a creadoras"
+            label="Debes a creadores"
             value={formatMoney(owed.earnedNotWithdrawnCents + owed.payoutsPendingCents)}
             hint={`${formatMoney(owed.payoutsPendingCents)} en ${owed.payoutsPendingCount} retiros pedidos`}
             warn
@@ -70,7 +70,7 @@ export default async function AdminFinancePage() {
                 <tr className="border-b border-white/[0.06]">
                   <th className="px-5 py-2 font-medium">Mes</th>
                   <th className="px-3 py-2 text-right font-medium">Ventas</th>
-                  <th className="px-3 py-2 text-right font-medium">Creadoras ganaron</th>
+                  <th className="px-3 py-2 text-right font-medium">Creadores ganaron</th>
                   <th className="px-3 py-2 text-right font-medium">Referidos</th>
                   <th className="px-3 py-2 text-right font-medium">Tu comision</th>
                   <th className="px-3 py-2 text-right font-medium">Retiros pagados</th>
@@ -126,7 +126,7 @@ export default async function AdminFinancePage() {
               tokens (antes de lo que cobre la pasarela de pago).
             </li>
             <li>
-              <span className="text-foreground">Creadoras ganaron:</span> lo que se llevaron por sus
+              <span className="text-foreground">Creadores ganaron:</span> lo que se llevaron por sus
               ventas, al valor de retiro. Es dinero que les debes hasta que lo retiran.
             </li>
             <li>

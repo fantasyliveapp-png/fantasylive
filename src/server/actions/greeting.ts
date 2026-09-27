@@ -188,7 +188,7 @@ function toMessage(error: unknown): string {
   if (error instanceof Error) {
     if (error.message === 'UNAUTHORIZED') return 'Debes iniciar sesion.';
     if (error.message === 'MODEL_PROFILE_MISSING') {
-      return 'Necesitas un perfil de creadora.';
+      return 'Necesitas un perfil de creador.';
     }
     return error.message;
   }

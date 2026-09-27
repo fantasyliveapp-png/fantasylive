@@ -13,6 +13,7 @@ import {
 import { ReferralLink } from '@/components/model/referral-link';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { requireModel } from '@/lib/auth/guards';
+import { founderLabel, gw } from '@/lib/gender-words';
 import { config } from '@/lib/config';
 import { prisma } from '@/lib/prisma';
 import {
@@ -39,7 +40,7 @@ export default async function InvitePage() {
   const { user, profile } = await requireModel();
   const base = config.app.url.replace(/\/$/, '');
   const fanLink = `${base}/r/${profile.slug}`;
-  const creatorLink = `${base}/r/${profile.slug}/creadora`;
+  const creatorLink = `${base}/r/${profile.slug}/creador`;
 
   const [referred, earned, foundersTaken] = await Promise.all([
     prisma.user.findMany({
@@ -73,7 +74,7 @@ export default async function InvitePage() {
       <header>
         <h1 className="font-heading text-3xl uppercase tracking-wide">Invita y gana</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Trae a tus fans y a otras creadoras. Ganas mas, sin pagar nada.
+          Trae a tus fans y a otros creadores. Ganas mas, sin pagar nada.
         </p>
       </header>
 
@@ -96,20 +97,21 @@ export default async function InvitePage() {
             {isFounder ? (
               <>
                 <p className="font-heading text-xl uppercase tracking-wide">
-                  Fundadora #{profile.founderNumber}
+                  {founderLabel(profile.gender)} #{profile.founderNumber}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  Eres de las {FOUNDER_SPOTS} primeras: tu {AMBASSADOR_PERCENT}% por cada creadora
+                  Eres {gw(profile.gender, { f: 'de las', m: 'de los', pl: 'de los' })} {FOUNDER_SPOTS}{' '}
+                  {gw(profile.gender, { f: 'primeras', m: 'primeros', pl: 'primeros' })}: tu {AMBASSADOR_PERCENT}% por cada creador
                   que invites es <strong className="text-foreground">para siempre</strong>.
                 </p>
               </>
             ) : (
               <>
-                <p className="font-heading text-xl uppercase tracking-wide">Programa Fundadoras</p>
+                <p className="font-heading text-xl uppercase tracking-wide">Programa Fundadores</p>
                 <p className="text-sm text-muted-foreground">
                   {spotsLeft > 0
-                    ? `Las ${FOUNDER_SPOTS} primeras creadoras verificadas cobran su ${AMBASSADOR_PERCENT}% para siempre. Quedan ${spotsLeft} plazas.`
-                    : `Las ${FOUNDER_SPOTS} plazas de Fundadora ya estan cogidas. Tu ${AMBASSADOR_PERCENT}% dura ${AMBASSADOR_MONTHS} meses por cada creadora que invites.`}
+                    ? `Los ${FOUNDER_SPOTS} primeros creadores verificados cobran su ${AMBASSADOR_PERCENT}% para siempre. Quedan ${spotsLeft} plazas.`
+                    : `Las ${FOUNDER_SPOTS} plazas de Fundador ya estan cogidas. Tu ${AMBASSADOR_PERCENT}% dura ${AMBASSADOR_MONTHS} meses por cada creador que invites.`}
                 </p>
               </>
             )}
@@ -121,7 +123,7 @@ export default async function InvitePage() {
       <section className="grid grid-cols-3 gap-2">
         <Stat icon={Wallet} label="Ganado invitando" value={formatMoney(earnedCents)} highlight />
         <Stat icon={Heart} label="Fans traidos" value={String(fans.length)} />
-        <Stat icon={Users} label="Creadoras" value={String(creators.length)} />
+        <Stat icon={Users} label="Creadores" value={String(creators.length)} />
       </section>
 
       {/* Enlace para fans */}
@@ -149,16 +151,16 @@ export default async function InvitePage() {
             <Sparkles className="h-5 w-5" />
           </span>
           <div className="min-w-0">
-            <h2 className="font-semibold">Invita a otras creadoras</h2>
+            <h2 className="font-semibold">Invita a otros creadores</h2>
             <p className="text-sm text-muted-foreground">
-              Cuando una creadora que invites venda, ganas el{' '}
+              Cuando un creador que invites venda, ganas el{' '}
               <strong className="text-foreground">{AMBASSADOR_PERCENT}% de cada venta suya</strong>{' '}
               {isFounder ? 'para siempre' : `durante ${AMBASSADOR_MONTHS} meses`}. Sale de nuestra
-              comision: a ella no le quitamos nada.
+              comision: a esa persona no le quitamos nada.
             </p>
           </div>
         </div>
-        <ReferralLink url={creatorLink} shareText="Unete a FantasyLive como creadora" />
+        <ReferralLink url={creatorLink} shareText="Unete a FantasyLive como creador" />
         <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
           <BadgeCheck className="h-3.5 w-3.5" />
           Cuenta cuando verifica su identidad y hace su primera venta.
@@ -169,7 +171,7 @@ export default async function InvitePage() {
       {creators.length > 0 && (
         <section>
           <h2 className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Creadoras que has invitado
+            Creadores que has invitado
           </h2>
           <ul className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/60 bg-card">
             {creators.map((c) => {

@@ -56,6 +56,10 @@ const SIGNAL = {
   completed: 2,
   /** La paso de largo (< 1,5 s) */
   skip: -0.5,
+  /** Miro su directo un buen rato (1 min o mas) */
+  liveWatch: 1.5,
+  /** Salto su directo en segundos */
+  liveSkip: -0.5,
 } as const;
 
 export async function getViewerTastes(viewerId: string | null): Promise<Tastes | null> {
@@ -109,7 +113,7 @@ export async function getLearnedProfile(viewerId: string): Promise<LearnedProfil
   const model = { select: { id: true, gender: true, tags: true } } as const;
   const viaPost = { post: { select: { model } } } as const;
 
-  const [likes, comments, unlocks, follows, visits, hides, views] = await Promise.all([
+  const [likes, comments, unlocks, follows, visits, hides, views, liveViews] = await Promise.all([
     prisma.postLike.findMany({
       where: { userId: viewerId, createdAt: { gte: since } },
       orderBy: { createdAt: 'desc' },
@@ -147,6 +151,12 @@ export async function getLearnedProfile(viewerId: string): Promise<LearnedProfil
       take: 600,
       select: { dwellMs: true, completed: true, ...viaPost },
     }),
+    prisma.liveView.findMany({
+      where: { userId: viewerId, updatedAt: { gte: since } },
+      orderBy: { updatedAt: 'desc' },
+      take: 300,
+      select: { seconds: true, model },
+    }),
   ]);
 
   const profile: LearnedProfile = {
@@ -182,6 +192,10 @@ export async function getLearnedProfile(viewerId: string): Promise<LearnedProfil
     if (r.completed) add(r.post.model, SIGNAL.completed);
     if (r.dwellMs >= 8000) add(r.post.model, SIGNAL.longView);
     else if (r.dwellMs < 1500 && !r.completed) add(r.post.model, SIGNAL.skip);
+  });
+  liveViews.forEach((r) => {
+    if (r.seconds >= 60) add(r.model, SIGNAL.liveWatch);
+    else if (r.seconds < 8) add(r.model, SIGNAL.liveSkip);
   });
 
   return profile;

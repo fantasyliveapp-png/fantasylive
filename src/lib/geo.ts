@@ -166,4 +166,4 @@ export async function isBlockedForViewer(
 
 /** Mensaje unico para todas las respuestas de bloqueo geografico. */
 export const GEO_BLOCKED_MESSAGE =
-  'Esta creadora no esta disponible en tu pais.';
+  'Este perfil no esta disponible en tu pais.';

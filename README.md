@@ -817,6 +817,21 @@ certbot --nginx -d tudominio.com -d www.tudominio.com
 
 Después hay que cambiar `NEXT_PUBLIC_APP_URL`, `NEXTAUTH_URL` y `AUTH_URL` a `https://…` y reiniciar (`systemctl restart fantasylive`). **Mientras la app se sirva por HTTP la cookie de sesión no puede marcarse `Secure`**, así que es el primer paso a dar en cuanto haya dominio.
 
+### Almacenamiento propio (MinIO en el mismo servidor)
+
+Sin `S3_*` la subida de fotos y videos falla con *«El almacenamiento no esta configurado»*. Para guardar los archivos en el propio VPS, sin Cloudflare R2 ni AWS:
+
+1. Crea un registro DNS **A** para un subdominio de archivos (p. ej. `files.tudominio.com`) hacia la IP del servidor. Si usas Cloudflare, déjalo en **gris («DNS only»)**: el plan gratuito corta las subidas de más de 100 MB.
+2. En el servidor, como root:
+
+```bash
+bash /var/www/fantasylive/deploy/setup-storage.sh files.tudominio.com https://tudominio.com
+```
+
+Instala MinIO escuchando solo en `127.0.0.1`, lo publica en el subdominio con HTTPS (`deploy/nginx-storage.conf`), crea el bucket y un usuario solo para la app, escribe las `S3_*` en `.env` (con copia `.env.bak-*`) y reinicia. Se puede repetir sin riesgo.
+
+Los archivos quedan en `/var/lib/minio`: **inclúyelo en las copias de seguridad**. Las credenciales de administrador de MinIO están en `/etc/default/minio` (solo root).
+
 ### Actualizar
 
 ```bash

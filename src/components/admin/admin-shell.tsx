@@ -78,8 +78,8 @@ const NAV: { title?: string; links: NavLink[] }[] = [
   {
     title: 'Comunidad',
     links: [
-      { href: '/admin/users', label: 'Usuarios y creadoras', icon: Users },
-      { href: '/admin/embudo', label: 'Embudo de creadoras', icon: Filter },
+      { href: '/admin/users', label: 'Usuarios y creadores', icon: Users },
+      { href: '/admin/embudo', label: 'Embudo de creadores', icon: Filter },
       { href: '/admin/destacadas', label: 'Destacadas', icon: Sparkles },
       {
         href: '/admin/reclutadores',

@@ -65,7 +65,7 @@ function TermsFields({
         </select>
       </label>
       <label className="space-y-1 text-xs text-muted-foreground">
-        Cupo de creadoras (vacio = sin tope)
+        Cupo de creadores (vacio = sin tope)
         <Input type="number" min={1} value={cap} onChange={(e) => setCap(e.target.value)} placeholder="Sin tope" />
       </label>
     </div>
@@ -197,7 +197,7 @@ export function RecruiterRow({
           <span className="block truncate text-xs text-muted-foreground">
             {r.commissionPercent}% · {r.months == null ? 'para siempre' : `${r.months} meses`} ·{' '}
             {r.maxCreators == null ? 'sin tope' : `cupo ${r.maxCreators}`} · {r.totals.verified}/
-            {r.totals.registered} verificadas
+            {r.totals.registered} verificados
           </span>
         </span>
         <span className="text-right">

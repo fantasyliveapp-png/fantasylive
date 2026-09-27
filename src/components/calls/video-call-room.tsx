@@ -24,6 +24,7 @@ import { toast } from 'sonner';
 import type { CallType } from '@prisma/client';
 
 import { GiftPanel } from '@/components/calls/gift-panel';
+import { GiftBursts, GiftSpotlight } from '@/components/live/live-chat';
 import { ReportDialog } from '@/components/calls/report-dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -111,6 +112,11 @@ export function VideoCallRoom({
   });
 
   const isLive = room.status === 'connected' || room.status === 'partner-joined';
+
+  // Lo que la otra persona me ha regalado en esta llamada (lo que yo envio
+  // tambien se ve en pantalla, pero no suma aqui).
+  const received = room.gifts.filter((g) => partner && g.senderId === partner.id);
+  const receivedTokens = received.reduce((sum, g) => sum + (g.tokens ?? 0), 0);
 
   // No se expulsa al usuario de golpe: se corta el video y se abre el panel
   // final, desde donde puede seguir la conversacion por chat o recargar saldo.
@@ -311,6 +317,16 @@ export function VideoCallRoom({
                 {partner.country ? ` · ${partner.country}` : ''}
               </Badge>
             )}
+
+            {receivedTokens > 0 && (
+              <Badge
+                key={receivedTokens}
+                className="animate-in zoom-in-95 gap-1 border-0 bg-gradient-to-r from-fantazy-red to-champagne-gold text-white"
+                title={`${received.length} regalos recibidos en esta llamada`}
+              >
+                <Gift className="h-3.5 w-3.5" />+{formatTokens(receivedTokens)}
+              </Badge>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -359,6 +375,10 @@ export function VideoCallRoom({
             </Badge>
           </div>
         </div>
+
+        {/* Regalos: los dos los ven al momento sobre el video */}
+        <GiftBursts messages={room.gifts} className="top-20" />
+        <GiftSpotlight messages={room.gifts} minTokens={100} />
 
         {/* VIDEO LOCAL (PiP) */}
         <div className="absolute bottom-28 right-4 h-40 w-28 overflow-hidden rounded-xl border-2 border-white/20 bg-zinc-900 shadow-2xl sm:h-48 sm:w-36">
@@ -501,6 +521,15 @@ export function VideoCallRoom({
                         : ''
                     }`}
             </p>
+
+            {receivedTokens > 0 && (
+              <p className="mt-3 flex items-center justify-center gap-1.5 text-sm font-semibold text-champagne-gold">
+                <Gift className="h-4 w-4" />
+                {received.length === 1 ? '1 regalo recibido' : `${received.length} regalos recibidos`}
+                {' · '}
+                {formatTokens(receivedTokens)} tokens
+              </p>
+            )}
 
             <div className="mt-6 flex flex-col gap-2">
               {/* Seguir por chat: solo tiene sentido con creadoras, que son

@@ -19,6 +19,7 @@ import {
 import { AdminPageHeader } from '@/components/admin/admin-shell';
 import { auditLabel, getAdminOverview, type DayPoint, type Kpi } from '@/lib/admin-overview';
 import { requireAdmin } from '@/lib/auth/guards';
+import { onlineLabel } from '@/lib/gender-words';
 import { prisma } from '@/lib/prisma';
 import { cn, formatMoney, formatTokens, relativeTime } from '@/lib/utils';
 
@@ -46,7 +47,7 @@ export default async function AdminDashboardPage() {
       title: 'Verificaciones de identidad',
       detail: o.oldestKycAt
         ? `La mas antigua espera desde ${relativeTime(o.oldestKycAt)}`
-        : 'Creadoras esperando para poder publicar',
+        : 'Creadores esperando para poder publicar',
     },
     {
       href: '/admin/reports',
@@ -59,7 +60,7 @@ export default async function AdminDashboardPage() {
       href: '/admin/payouts',
       icon: Wallet,
       count: o.counts.payouts,
-      title: 'Retiros de creadoras',
+      title: 'Retiros de creadores',
       detail: `${formatMoney(o.payoutsPendingCents)} por pagar en total`,
     },
     {
@@ -67,7 +68,7 @@ export default async function AdminDashboardPage() {
       icon: LifeBuoy,
       count: o.counts.support,
       title: 'Consultas de soporte',
-      detail: 'Fans y creadoras esperando respuesta',
+      detail: 'Fans y creadores esperando respuesta',
     },
     {
       href: '/admin/reclutadores',
@@ -132,7 +133,7 @@ export default async function AdminDashboardPage() {
             <KpiCard label="Ventas" kpi={o.kpis.revenue} money />
             <KpiCard label="Tu comision" kpi={o.kpis.commission} money />
             <KpiCard label="Cuentas nuevas" kpi={o.kpis.fans} />
-            <KpiCard label="Creadoras nuevas" kpi={o.kpis.creators} />
+            <KpiCard label="Creadores nuevos" kpi={o.kpis.creators} />
           </div>
 
           <Panel title="Ventas de tokens" aside="Ultimos 30 dias">
@@ -140,7 +141,7 @@ export default async function AdminDashboardPage() {
           </Panel>
 
           <div className="grid gap-6 lg:grid-cols-2">
-            <Panel title="Creadoras que mas ganan" aside="30 dias">
+            <Panel title="Creadores que mas ganan" aside="30 dias">
               {o.top.length === 0 ? (
                 <Empty>Aun no hay ventas este mes.</Empty>
               ) : (
@@ -174,7 +175,9 @@ export default async function AdminDashboardPage() {
                           <span className="block truncate text-sm font-medium">{c.name}</span>
                         )}
                         {c.isOnline && (
-                          <span className="text-[11px] text-state-connected">Conectada</span>
+                          <span className="text-[11px] text-state-connected">
+                            {onlineLabel(c.gender, true)}
+                          </span>
                         )}
                       </span>
                       <span className="text-sm font-semibold tabular-nums">
@@ -218,13 +221,13 @@ export default async function AdminDashboardPage() {
               <LiveRow icon={PhoneCall} label="Llamadas en curso" value={o.live.activeCalls} hot />
               <LiveRow
                 icon={BadgeCheck}
-                label="Creadoras conectadas"
+                label="Creadores conectados"
                 value={o.live.onlineCreators}
               />
             </ul>
           </Panel>
 
-          <Panel title="Fundadoras">
+          <Panel title="Fundadores">
             <div className="space-y-3 px-5 py-4">
               <div className="flex items-baseline justify-between">
                 <span className="flex items-center gap-2 text-sm">
@@ -254,9 +257,9 @@ export default async function AdminDashboardPage() {
           <Panel title="En total">
             <dl className="divide-y divide-white/[0.06] text-sm">
               <TotalRow label="Cuentas" value={formatTokens(o.totals.users)} />
-              <TotalRow label="Creadoras" value={formatTokens(o.totals.creators)} />
+              <TotalRow label="Creadores" value={formatTokens(o.totals.creators)} />
               <TotalRow
-                label="Creadoras verificadas"
+                label="Creadores verificados"
                 value={formatTokens(o.totals.verifiedCreators)}
               />
             </dl>

@@ -16,6 +16,11 @@ import {
   type RemoteTrackPublication,
 } from 'livekit-client';
 
+import type { LiveChatMessage } from '@/hooks/use-live-room';
+
+/** Regalo recibido en la llamada, con quien lo envio. */
+export type CallGift = LiveChatMessage & { senderId: string };
+
 /** Calidad de conexion normalizada para la interfaz. */
 export type CallQuality = 'excellent' | 'good' | 'poor' | 'unknown';
 
@@ -64,6 +69,7 @@ export function useVideoRoom({
   const [isCameraEnabled, setCameraEnabled] = useState(true);
   const [partnerIdentity, setPartnerIdentity] = useState<string | null>(null);
   const [quality, setQuality] = useState<CallQuality>('unknown');
+  const [gifts, setGifts] = useState<CallGift[]>([]);
 
   const roomRef = useRef<Room | null>(null);
   const localTracksRef = useRef<LocalTrack[]>([]);
@@ -200,6 +206,44 @@ export function useVideoRoom({
           if (state === ConnectionState.Reconnecting) setStatus('connecting');
           if (state === ConnectionState.Disconnected) setStatus('disconnected');
         })
+        .on(
+          RoomEvent.DataReceived,
+          (payload: Uint8Array, participant?: RemoteParticipant) => {
+            // Los regalos solo los anuncia el servidor al cobrarlos (sin
+            // participante): nadie puede fingir uno desde la llamada.
+            if (participant) return;
+            try {
+              const data = JSON.parse(new TextDecoder().decode(payload)) as {
+                type?: string;
+                from?: string;
+                senderId?: string;
+                tokens?: number;
+                emoji?: string;
+              };
+              if (data.type !== 'gift' || typeof data.tokens !== 'number') return;
+              const emoji = data.emoji || '🎁';
+              setGifts((prev) =>
+                [
+                  ...prev,
+                  {
+                    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                    kind: 'gift' as const,
+                    from: data.from || 'Alguien',
+                    senderId: data.senderId ?? '',
+                    body: `${emoji} ${data.tokens} tokens`,
+                    at: Date.now(),
+                    isMine: false,
+                    isHost: false,
+                    tokens: data.tokens,
+                    emoji,
+                  },
+                ].slice(-100),
+              );
+            } catch {
+              // Un paquete que no es nuestro se ignora.
+            }
+          },
+        )
         .on(RoomEvent.Reconnected, () => {
           setStatus(
             roomRef.current && roomRef.current.remoteParticipants.size > 0
@@ -311,6 +355,7 @@ export function useVideoRoom({
     error,
     quality,
     partnerIdentity,
+    gifts,
     isMicEnabled,
     isCameraEnabled,
     localVideoRef,

@@ -137,7 +137,7 @@ export function RegisterForm({
       // A los fans se les pregunta que les gusta para su Descubrir.
       router.push(
         wantsCreator
-          ? '/hazte-creadora'
+          ? '/hazte-creador'
           : `/bienvenida${next ? `?next=${encodeURIComponent(next)}` : ''}`,
       );
       router.refresh();
@@ -241,8 +241,8 @@ export function RegisterForm({
             <div className="flex gap-2 rounded-xl border border-primary/30 bg-primary/5 p-3 text-xs text-muted-foreground">
               <Sparkles className="h-4 w-4 shrink-0 text-primary" />
               <span>
-                Crea tu cuenta y despues solo pulsas «Activar modo creadora».
-                Tu @usuario sera tambien tu @ de creadora.
+                Crea tu cuenta y despues solo pulsas «Activar modo creador».
+                Tu @usuario sera tambien tu @ de creador.
               </span>
             </div>
           )}

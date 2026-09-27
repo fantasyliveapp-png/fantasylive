@@ -92,12 +92,41 @@ const config: Config = {
         shimmer: {
           '100%': { transform: 'translateX(100%)' },
         },
+        'heart-float': {
+          '0%': { transform: 'translate(0, 0) scale(0.4)', opacity: '0' },
+          '12%': { transform: 'translate(0, -20px) scale(1.1)', opacity: '1' },
+          '100%': {
+            transform: 'translate(var(--drift, 0px), -240px) scale(0.8)',
+            opacity: '0',
+          },
+        },
+        spotlight: {
+          '0%': { transform: 'scale(0.3)', opacity: '0' },
+          '15%': { transform: 'scale(1.15)', opacity: '1' },
+          '25%, 80%': { transform: 'scale(1)', opacity: '1' },
+          '100%': { transform: 'scale(1.1) translateY(-30px)', opacity: '0' },
+        },
+        'swipe-hint': {
+          '0%, 100%': { transform: 'translateY(0)', opacity: '0.6' },
+          '50%': { transform: 'translateY(-10px)', opacity: '1' },
+        },
+        'gift-pop': {
+          '0%': { transform: 'translateX(-24px) scale(0.9)', opacity: '0' },
+          '12%': { transform: 'translateX(0) scale(1.05)', opacity: '1' },
+          '20%, 85%': { transform: 'translateX(0) scale(1)', opacity: '1' },
+          '100%': { transform: 'translateY(-12px)', opacity: '0' },
+        },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
         'pulse-ring': 'pulse-ring 1.8s cubic-bezier(0.24, 0, 0.38, 1) infinite',
         shimmer: 'shimmer 2s infinite',
+        'gift-pop': 'gift-pop 5s ease-out forwards',
+        'heart-float': 'heart-float 2.4s ease-out forwards',
+        spotlight: 'spotlight 2.8s ease-out forwards',
+        'swipe-hint': 'swipe-hint 1.2s ease-in-out infinite',
+        'spin-slow': 'spin 3s linear infinite',
       },
     },
   },

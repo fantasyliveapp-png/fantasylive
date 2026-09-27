@@ -361,7 +361,9 @@ export async function transferWithCommission(
       callSessionId: params.callSessionId,
       contentPackageId: params.contentPackageId,
       bookingId: params.bookingId,
-      giftId: params.giftId,
+      // giftId es unico en la tabla: el regalo queda enlazado al cargo del
+      // fan (debit). Repetirlo aqui rompia todos los regalos con un error de
+      // restriccion unica.
       subscriptionId: params.subscriptionId,
       contentRequestId: params.contentRequestId,
       conversationId: params.conversationId,

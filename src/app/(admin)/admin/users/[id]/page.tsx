@@ -16,6 +16,7 @@ import {
   REPORT_STATUS_LABELS,
   TRANSACTION_TYPE_LABELS,
 } from '@/lib/constants';
+import { creatorLabel, founderLabel } from '@/lib/gender-words';
 import { prisma } from '@/lib/prisma';
 import { tokensToPayoutCents } from '@/lib/tokens';
 import { cn, formatDate, formatDateTime, formatMoney, formatTokens, relativeTime } from '@/lib/utils';
@@ -68,6 +69,7 @@ export default async function AdminUserPage({ params }: { params: Promise<{ id: 
           avatarUrl: true,
           kycStatus: true,
           founderNumber: true,
+          gender: true,
           featuredUntil: true,
           isOnline: true,
           postsCount: true,
@@ -198,7 +200,7 @@ export default async function AdminUserPage({ params }: { params: Promise<{ id: 
               )}
               <div className="mt-3 flex flex-wrap justify-center gap-1.5">
                 <Pill tone={user.role === 'ADMIN' ? 'brand' : mp ? 'gold' : 'neutral'}>
-                  {user.role === 'ADMIN' ? 'Admin' : mp ? 'Creadora' : 'Fan'}
+                  {user.role === 'ADMIN' ? 'Admin' : mp ? creatorLabel(mp.gender) : 'Fan'}
                 </Pill>
                 <Pill tone={user.status === 'ACTIVE' ? 'good' : 'bad'}>
                   {user.status === 'ACTIVE' ? 'Activa' : user.status === 'BANNED' ? 'Baneada' : 'Suspendida'}
@@ -206,7 +208,7 @@ export default async function AdminUserPage({ params }: { params: Promise<{ id: 
                 {user.isVip && <Pill tone="gold">VIP</Pill>}
                 {mp?.founderNumber && (
                   <Pill tone="gold">
-                    <Crown className="h-3 w-3" /> Fundadora #{mp.founderNumber}
+                    <Crown className="h-3 w-3" /> {founderLabel(mp.gender)} #{mp.founderNumber}
                   </Pill>
                 )}
                 {user.recruiterAccount && <Pill tone="brand">Reclutador</Pill>}

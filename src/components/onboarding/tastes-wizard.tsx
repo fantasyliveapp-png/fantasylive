@@ -230,7 +230,7 @@ export function TastesWizard({
       hint: 'Asi sabemos que enseñarte primero.',
     },
     follow: {
-      title: 'Creadoras para ti',
+      title: 'Creadores para ti',
       hint: 'Siguelas para ver lo que publican en Siguiendo.',
     },
   };

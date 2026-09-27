@@ -141,8 +141,8 @@ export function UserMenu({
         ) : (
           role !== 'ADMIN' && (
             <DropdownMenuItem asChild>
-              <Link href="/hazte-creadora" className="font-medium text-primary">
-                <Sparkles /> Hazte creadora
+              <Link href="/hazte-creador" className="font-medium text-primary">
+                <Sparkles /> Hazte creador
               </Link>
             </DropdownMenuItem>
           )

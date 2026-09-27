@@ -228,7 +228,7 @@ export function ReportsReviewList({ reports }: { reports: ReportRow[] }) {
                           : kind === 'chat'
                             ? 'un chat entre personas'
                             : kind === 'conversation'
-                              ? 'un chat con creadora'
+                              ? 'un chat con un creador'
                               : 'su perfil';
                       return (
                         <Link href={href} className="font-medium text-primary hover:underline">

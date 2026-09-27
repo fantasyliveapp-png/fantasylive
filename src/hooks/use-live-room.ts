@@ -40,10 +40,17 @@ export type LiveStatus =
 
 export interface LiveChatMessage {
   id: string;
+  /** chat: lo escribe alguien de la sala. gift: lo anuncia el servidor. */
+  kind: 'chat' | 'gift';
   from: string;
   body: string;
   at: number;
   isMine: boolean;
+  /** Lo escribio la creadora del directo. */
+  isHost: boolean;
+  /** Solo en regalos. */
+  tokens?: number;
+  emoji?: string;
 }
 
 interface UseLiveRoomOptions {
@@ -53,18 +60,43 @@ interface UseLiveRoomOptions {
   publishCamera: boolean;
   /** Nombre visible en el chat. */
   displayName: string;
+  /** Identidad de la creadora en la sala, para destacar sus mensajes. */
+  hostIdentity?: string;
   /** Se llama la primera vez que hay video en la sala. */
   onVideoStarted?: () => void;
+  /** Meta de tokens al entrar; luego llega por la sala. */
+  initialGoal?: LiveGoal | null;
 }
 
 const MAX_CHAT_MESSAGES = 200;
+const MAX_HEARTS = 24;
+const HEART_LIFETIME_MS = 2_400;
+/** Como mucho un "me gusta" por la red cada tanto, por mucho que se pulse. */
+const LIKE_SEND_INTERVAL_MS = 300;
+
+export interface LiveGoal {
+  label: string;
+  target: number;
+  progress: number;
+}
+
+export interface LiveHeart {
+  id: string;
+  /** Desvio lateral en px, para que no suban todos en fila. */
+  drift: number;
+  color: string;
+}
+
+const HEART_COLORS = ['#fe2c55', '#ff6fa3', '#ffb86b', '#ff4d6d', '#c77dff'];
 
 export function useLiveRoom({
   token,
   url,
   publishCamera,
   displayName,
+  hostIdentity,
   onVideoStarted,
+  initialGoal = null,
 }: UseLiveRoomOptions) {
   const [status, setStatus] = useState<LiveStatus>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -72,6 +104,11 @@ export function useLiveRoom({
   const [participantCount, setParticipantCount] = useState(0);
   const [isMicEnabled, setMicEnabled] = useState(true);
   const [isCameraEnabled, setCameraEnabled] = useState(true);
+  const [giftTotals, setGiftTotals] = useState({ count: 0, tokens: 0 });
+  const [hearts, setHearts] = useState<LiveHeart[]>([]);
+  const [likeCount, setLikeCount] = useState(0);
+  const [goal, setGoal] = useState<LiveGoal | null>(initialGoal);
+  const lastLikeSentRef = useRef(0);
 
   const roomRef = useRef<Room | null>(null);
   const localTracksRef = useRef<LocalTrack[]>([]);
@@ -81,6 +118,27 @@ export function useLiveRoom({
   // El callback se guarda en una ref para que cambiarlo no reconecte la sala.
   const onVideoStartedRef = useRef(onVideoStarted);
   onVideoStartedRef.current = onVideoStarted;
+  const hostIdentityRef = useRef(hostIdentity);
+  hostIdentityRef.current = hostIdentity;
+
+  const pushMessage = useCallback((message: LiveChatMessage) => {
+    setMessages((prev) => [...prev, message].slice(-MAX_CHAT_MESSAGES));
+  }, []);
+
+  const addHeart = useCallback(() => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const heart: LiveHeart = {
+      id,
+      drift: Math.round(Math.random() * 60 - 30),
+      color: HEART_COLORS[Math.floor(Math.random() * HEART_COLORS.length)]!,
+    };
+    setHearts((prev) => [...prev, heart].slice(-MAX_HEARTS));
+    setLikeCount((count) => count + 1);
+    setTimeout(
+      () => setHearts((prev) => prev.filter((h) => h.id !== id)),
+      HEART_LIFETIME_MS,
+    );
+  }, []);
 
   const cleanup = useCallback(() => {
     localTracksRef.current.forEach((track) => {
@@ -109,8 +167,14 @@ export function useLiveRoom({
 
     setStatus('connecting');
 
+    // Solo la sala mas reciente puede tocar el estado: una anterior que se
+    // esta cerrando (recarga, cambio de token, doble montaje de React) no
+    // debe dejar la pantalla en "terminado" ni tumbar la conexion nueva.
+    let room: Room | null = null;
+    const isCurrent = () => room !== null && roomRef.current === room;
+
     try {
-      const room = new Room({
+      room = new Room({
         adaptiveStream: true,
         dynacast: true,
         disconnectOnPageLeave: true,
@@ -124,11 +188,13 @@ export function useLiveRoom({
       });
       roomRef.current = room;
 
-      const refreshCount = () =>
-        setParticipantCount(room.remoteParticipants.size);
+      const refreshCount = () => {
+        if (isCurrent()) setParticipantCount(room!.remoteParticipants.size);
+      };
 
       room
         .on(RoomEvent.TrackSubscribed, (track: RemoteTrack) => {
+          if (!isCurrent()) return;
           if (track.kind === Track.Kind.Video && videoRef.current) {
             track.attach(videoRef.current);
             setStatus('playing');
@@ -143,42 +209,90 @@ export function useLiveRoom({
         })
         .on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack) => {
           track.detach().forEach((el) => el.remove());
+          if (!isCurrent()) return;
           // Si quien se va era la emision, se vuelve a "esperando video" en
           // lugar de dejar el ultimo fotograma congelado en pantalla.
           if (track.kind === Track.Kind.Video) setStatus('waiting-video');
         })
         .on(RoomEvent.ParticipantConnected, refreshCount)
         .on(RoomEvent.ParticipantDisconnected, refreshCount)
-        .on(RoomEvent.Disconnected, () => setStatus('ended'))
+        .on(RoomEvent.Disconnected, () => {
+          if (isCurrent()) setStatus('ended');
+        })
         .on(RoomEvent.ConnectionStateChanged, (state: ConnectionState) => {
-          if (state === ConnectionState.Reconnecting) setStatus('connecting');
+          if (isCurrent() && state === ConnectionState.Reconnecting) {
+            setStatus('connecting');
+          }
         })
         .on(
           RoomEvent.DataReceived,
           (payload: Uint8Array, participant?: RemoteParticipant) => {
+            if (!isCurrent()) return;
+            let parsed: {
+              type?: string;
+              body?: string;
+              from?: string;
+              tokens?: number;
+              emoji?: string;
+            };
             try {
-              const parsed = JSON.parse(new TextDecoder().decode(payload)) as {
-                type?: string;
-                body?: string;
-                from?: string;
-              };
-              if (parsed.type !== 'chat' || !parsed.body) return;
-
-              setMessages((prev) =>
-                [
-                  ...prev,
-                  {
-                    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-                    from: parsed.from || participant?.name || 'Invitado',
-                    body: parsed.body!,
-                    at: Date.now(),
-                    isMine: false,
-                  },
-                ].slice(-MAX_CHAT_MESSAGES),
-              );
+              parsed = JSON.parse(new TextDecoder().decode(payload));
             } catch {
               // Un paquete de datos que no es nuestro chat se ignora.
+              return;
             }
+
+            // La meta solo la cambia el servidor (al cobrar o al editarla).
+            if (parsed.type === 'goal') {
+              if (participant) return;
+              const next = (parsed as { goal?: LiveGoal | null }).goal ?? null;
+              setGoal(next);
+              return;
+            }
+
+            if (parsed.type === 'like') {
+              addHeart();
+              return;
+            }
+
+            const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+            // Los regalos solo valen si los manda el servidor (sin
+            // participante): un espectador no puede inventarse uno.
+            if (parsed.type === 'gift') {
+              if (participant || typeof parsed.tokens !== 'number') return;
+              const tokens = parsed.tokens;
+              const emoji = parsed.emoji || '🎁';
+              setGiftTotals((prev) => ({
+                count: prev.count + 1,
+                tokens: prev.tokens + tokens,
+              }));
+              pushMessage({
+                id,
+                kind: 'gift',
+                from: parsed.from || 'Alguien',
+                body: `${emoji} ${tokens} tokens`,
+                at: Date.now(),
+                isMine: false,
+                isHost: false,
+                tokens,
+                emoji,
+              });
+              return;
+            }
+
+            if (parsed.type !== 'chat' || !parsed.body) return;
+            pushMessage({
+              id,
+              kind: 'chat',
+              from: participant?.name || parsed.from || 'Invitado',
+              body: parsed.body,
+              at: Date.now(),
+              isMine: false,
+              isHost:
+                Boolean(hostIdentityRef.current) &&
+                participant?.identity === hostIdentityRef.current,
+            });
           },
         );
 
@@ -188,6 +302,7 @@ export function useLiveRoom({
         peerConnectionTimeout: 20_000,
         maxRetries: 2,
       });
+      if (!isCurrent()) return;
 
       refreshCount();
 
@@ -198,8 +313,19 @@ export function useLiveRoom({
             noiseSuppression: true,
             autoGainControl: true,
           },
-          video: { resolution: VideoPresets.h720.resolution },
+          // En un movil en vertical se pide la camara en vertical: el
+          // directo se ve a pantalla completa, como en TikTok.
+          video: {
+            facingMode: 'user',
+            resolution: window.matchMedia('(orientation: portrait)').matches
+              ? { width: 720, height: 1280, frameRate: 30 }
+              : VideoPresets.h720.resolution,
+          },
         });
+        if (!isCurrent()) {
+          tracks.forEach((track) => track.stop());
+          return;
+        }
         localTracksRef.current = tracks;
 
         const videoTrack = tracks.find((t) => t.kind === Track.Kind.Video);
@@ -220,6 +346,8 @@ export function useLiveRoom({
         setStatus((prev) => (prev === 'playing' ? prev : 'waiting-video'));
       }
     } catch (err) {
+      // El fallo de una sala ya sustituida no es asunto de la pantalla.
+      if (room && !isCurrent()) return;
       const message =
         err instanceof Error ? err.message : 'No se pudo conectar al directo';
       setError(
@@ -230,39 +358,61 @@ export function useLiveRoom({
       setStatus('error');
       cleanup();
     }
-  }, [cleanup, publishCamera, token, url]);
+  }, [addHeart, cleanup, publishCamera, pushMessage, token, url]);
 
-  /** Envia un mensaje al chat de la sala. */
+  /**
+   * Envia un mensaje al chat de la sala. Devuelve false si no se pudo enviar,
+   * para que quien llama conserve el texto en vez de perderlo en silencio.
+   */
   const sendChat = useCallback(
-    async (body: string) => {
+    async (body: string): Promise<boolean> => {
       const text = body.trim();
-      if (!text || !roomRef.current) return;
+      if (!text || !roomRef.current) return false;
 
       const payload = new TextEncoder().encode(
         JSON.stringify({ type: 'chat', body: text, from: displayName }),
       );
-      // reliable: el chat de un directo puede perder un mensaje sin drama,
-      // pero perderlo justo cuando alguien pregunta algo se nota, asi que se
-      // manda por el canal fiable.
-      await roomRef.current.localParticipant.publishData(payload, {
-        reliable: true,
-      });
+      try {
+        // reliable: perder un mensaje justo cuando alguien pregunta algo se
+        // nota, asi que se manda por el canal fiable.
+        await roomRef.current.localParticipant.publishData(payload, {
+          reliable: true,
+        });
+      } catch {
+        return false;
+      }
 
-      setMessages((prev) =>
-        [
-          ...prev,
-          {
-            id: `${Date.now()}-me`,
-            from: displayName,
-            body: text,
-            at: Date.now(),
-            isMine: true,
-          },
-        ].slice(-MAX_CHAT_MESSAGES),
-      );
+      pushMessage({
+        id: `${Date.now()}-me`,
+        kind: 'chat',
+        from: displayName,
+        body: text,
+        at: Date.now(),
+        isMine: true,
+        isHost:
+          Boolean(hostIdentityRef.current) &&
+          roomRef.current?.localParticipant.identity === hostIdentityRef.current,
+      });
+      return true;
     },
-    [displayName],
+    [displayName, pushMessage],
   );
+
+  /** Corazon: se ve al instante y se reparte a la sala sin saturarla. */
+  const sendLike = useCallback(() => {
+    addHeart();
+    const room = roomRef.current;
+    const now = Date.now();
+    if (!room || now - lastLikeSentRef.current < LIKE_SEND_INTERVAL_MS) return;
+    lastLikeSentRef.current = now;
+    void room.localParticipant
+      .publishData(new TextEncoder().encode(JSON.stringify({ type: 'like' })), {
+        reliable: false,
+      })
+      .catch(() => {
+        // Un corazon perdido no importa.
+      });
+  }, [addHeart]);
 
   const toggleMic = useCallback(async () => {
     const next = !isMicEnabled;
@@ -288,7 +438,7 @@ export function useLiveRoom({
   }, [cleanup]);
 
   useEffect(() => {
-    if (token && url && status === 'idle') void connect();
+    if (token && url) void connect();
     return () => cleanup();
     // Solo al montar o al cambiar de sala.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -298,6 +448,11 @@ export function useLiveRoom({
     status,
     error,
     messages,
+    giftTotals,
+    hearts,
+    likeCount,
+    goal,
+    setGoal,
     participantCount,
     isMicEnabled,
     isCameraEnabled,
@@ -306,6 +461,7 @@ export function useLiveRoom({
     connect,
     disconnect,
     sendChat,
+    sendLike,
     toggleMic,
     toggleCamera,
   };

@@ -153,6 +153,7 @@ export async function CreatorShell({
                   isAvailableForVip={profile.isAvailableForVip}
                   isVipEnabled={profile.isVipEnabled}
                   canStream
+                  gender={profile.gender}
                 />
               </div>
             )}

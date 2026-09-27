@@ -21,7 +21,7 @@ import {
   isObsConfigured,
   liveRoomName,
 } from '@/lib/live';
-import { closeRoom, countRoomParticipants } from '@/lib/livekit';
+import { closeRoom, countRoomParticipants, sendRoomData } from '@/lib/livekit';
 import { assertCreatorVerified } from '@/lib/creator-kyc';
 import { prisma } from '@/lib/prisma';
 import { maybeSendAutoGreeting } from '@/lib/greeting';
@@ -55,10 +55,22 @@ async function requireLiveModel() {
 // EMITIR
 // ---------------------------------------------------------------------------
 
+const goalSchema = z.object({
+  label: z.string().trim().min(1).max(60),
+  tokens: z.number().int().min(10).max(1_000_000),
+});
+
 const startSchema = z.object({
   title: z.string().trim().max(120).optional(),
   source: z.enum(['BROWSER', 'OBS_RTMP']),
+  goal: goalSchema.optional(),
 });
+
+export interface StreamGoal {
+  label: string;
+  target: number;
+  progress: number;
+}
 
 /**
  * Abre un directo.
@@ -75,6 +87,7 @@ const startSchema = z.object({
 export async function startStreamAction(input: {
   title?: string;
   source: 'BROWSER' | 'OBS_RTMP';
+  goal?: { label: string; tokens: number };
 }): Promise<
   LiveActionResult<{
     streamId: string;
@@ -84,6 +97,7 @@ export async function startStreamAction(input: {
     rtmpUrl: string | null;
     streamKey: string | null;
     source: 'BROWSER' | 'OBS_RTMP';
+    goal: StreamGoal | null;
   }>
 > {
   try {
@@ -105,10 +119,12 @@ export async function startStreamAction(input: {
         error: 'El servidor de video no esta configurado. Define LIVEKIT_* en el entorno.',
       };
     }
-    if (parsed.data.title) {
-      const contactError = checkNoContactInfo(parsed.data.title);
+    for (const text of [parsed.data.title, parsed.data.goal?.label]) {
+      if (!text) continue;
+      const contactError = checkNoContactInfo(text);
       if (contactError) return { ok: false, error: contactError };
     }
+    const goal = parsed.data.goal ?? null;
 
     // Un directo a la vez: dos salas en paralelo dividirian a los
     // espectadores y los regalos irian a la sala equivocada.
@@ -132,6 +148,8 @@ export async function startStreamAction(input: {
         // unico provisional porque la columna es unique y NOT NULL.
         roomName: `live_pending_${crypto.randomUUID()}`,
         streamKey,
+        goalLabel: goal?.label ?? null,
+        goalTokens: goal?.tokens ?? null,
       },
       select: { id: true },
     });
@@ -202,6 +220,7 @@ export async function startStreamAction(input: {
         rtmpUrl,
         streamKey: obsKey,
         source: parsed.data.source,
+        goal: goal ? { label: goal.label, target: goal.tokens, progress: 0 } : null,
       },
     };
   } catch (error) {
@@ -281,6 +300,146 @@ export async function endStreamAction(
     revalidatePath('/live');
     revalidatePath('/dashboard/model/live');
     return { ok: true, message: 'Directo finalizado.' };
+  } catch (error) {
+    return { ok: false, error: toMessage(error) };
+  }
+}
+
+/**
+ * Pone, cambia o quita la meta de tokens del directo en curso. La nueva meta
+ * empieza de cero y se anuncia a toda la sala al momento.
+ */
+export async function setStreamGoalAction(
+  streamId: string,
+  input: { label: string; tokens: number } | null,
+): Promise<LiveActionResult<{ goal: StreamGoal | null }>> {
+  try {
+    const { profile } = await requireLiveModel();
+
+    let goal: z.infer<typeof goalSchema> | null = null;
+    if (input) {
+      const parsed = goalSchema.safeParse(input);
+      if (!parsed.success) {
+        return { ok: false, error: 'La meta necesita un texto y al menos 10 tokens.' };
+      }
+      const contactError = checkNoContactInfo(parsed.data.label);
+      if (contactError) return { ok: false, error: contactError };
+      goal = parsed.data;
+    }
+
+    const stream = await prisma.liveStream.findFirst({
+      where: {
+        id: streamId,
+        modelId: profile.id,
+        status: { in: ['PREPARING', 'LIVE'] },
+      },
+      select: { id: true, roomName: true },
+    });
+    if (!stream) return { ok: false, error: 'Directo no encontrado.' };
+
+    await prisma.liveStream.update({
+      where: { id: stream.id },
+      data: {
+        goalLabel: goal?.label ?? null,
+        goalTokens: goal?.tokens ?? null,
+        goalProgress: 0,
+        goalReachedAt: null,
+      },
+    });
+
+    const result = goal ? { label: goal.label, target: goal.tokens, progress: 0 } : null;
+    await sendRoomData(stream.roomName, { type: 'goal', goal: result });
+    return { ok: true, data: { goal: result } };
+  } catch (error) {
+    return { ok: false, error: toMessage(error) };
+  }
+}
+
+export interface StreamSummary {
+  durationSeconds: number;
+  viewerPeak: number;
+  totalJoins: number;
+  giftsCount: number;
+  tokensEarned: number;
+  newFollowers: number;
+  goal: (StreamGoal & { reached: boolean }) | null;
+  topFans: { name: string; avatarUrl: string | null; tokens: number }[];
+}
+
+/** Resumen de un directo terminado, para la pantalla final de la creadora. */
+export async function getStreamSummaryAction(
+  streamId: string,
+): Promise<LiveActionResult<StreamSummary>> {
+  try {
+    const { profile } = await requireLiveModel();
+
+    const stream = await prisma.liveStream.findFirst({
+      where: { id: streamId, modelId: profile.id },
+      select: {
+        createdAt: true,
+        startedAt: true,
+        endedAt: true,
+        viewerPeak: true,
+        totalJoins: true,
+        giftsCount: true,
+        tokensEarned: true,
+        goalLabel: true,
+        goalTokens: true,
+        goalProgress: true,
+        goalReachedAt: true,
+      },
+    });
+    if (!stream) return { ok: false, error: 'Directo no encontrado.' };
+
+    const from = stream.startedAt ?? stream.createdAt;
+    const to = stream.endedAt ?? new Date();
+
+    const [grouped, newFollowers] = await Promise.all([
+      prisma.gift.groupBy({
+        by: ['senderId'],
+        where: { streamId },
+        _sum: { tokens: true },
+        orderBy: { _sum: { tokens: 'desc' } },
+        take: 3,
+      }),
+      prisma.follow.count({
+        where: { modelId: profile.id, createdAt: { gte: from, lte: to } },
+      }),
+    ]);
+
+    const senders = await prisma.user.findMany({
+      where: { id: { in: grouped.map((g) => g.senderId) } },
+      select: { id: true, name: true, image: true },
+    });
+
+    return {
+      ok: true,
+      data: {
+        durationSeconds: Math.max(0, Math.round((to.getTime() - from.getTime()) / 1000)),
+        viewerPeak: stream.viewerPeak,
+        totalJoins: stream.totalJoins,
+        giftsCount: stream.giftsCount,
+        tokensEarned: stream.tokensEarned,
+        newFollowers,
+        goal:
+          stream.goalLabel && stream.goalTokens
+            ? {
+                label: stream.goalLabel,
+                target: stream.goalTokens,
+                progress: stream.goalProgress,
+                reached: Boolean(stream.goalReachedAt),
+              }
+            : null,
+        topFans: grouped.map((g) => {
+          const sender = senders.find((u) => u.id === g.senderId);
+          return {
+            name: sender?.name ?? 'Fan',
+            avatarUrl: sender?.image ?? null,
+            tokens: g._sum.tokens ?? 0,
+          };
+        }),
+      },
+    };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
   }
@@ -456,7 +615,7 @@ function toMessage(error: unknown): string {
     if (error.message === 'UNAUTHORIZED') return 'Debes iniciar sesion.';
     if (error.message === 'ACCOUNT_BANNED') return 'Tu cuenta esta suspendida.';
     if (error.message === 'MODEL_PROFILE_MISSING') {
-      return 'Necesitas un perfil de creadora.';
+      return 'Necesitas un perfil de creador.';
     }
     return error.message;
   }

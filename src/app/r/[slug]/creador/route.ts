@@ -6,8 +6,9 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
- * Enlace de una creadora para invitar a otras creadoras:
- * /r/<su-slug>/creadora -> registro como creadora, recordando quien invito.
+ * Enlace de un creador para invitar a otros creadores:
+ * /r/<su-slug>/creador -> registro como creador, recordando quien invito.
+ * La direccion antigua /r/<slug>/creadora redirige aqui (next.config.mjs).
  */
 export async function GET(
   req: NextRequest,

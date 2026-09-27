@@ -7,6 +7,7 @@ import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { prisma } from '@/lib/prisma';
 import { checkNoContactInfo } from '@/lib/content-filter';
 import { GEO_BLOCKED_MESSAGE, isBlockedForViewer } from '@/lib/geo';
+import { sendRoomData } from '@/lib/livekit';
 import { createNotification } from '@/lib/notifications';
 import { startTokenPurchase } from '@/lib/payments';
 import {
@@ -191,9 +192,27 @@ export async function sendGiftAction(input: {
       },
     });
     if (!receiver) return { ok: false, error: 'Destinatario no encontrado.' };
+
+    // Un regalo "de llamada" solo vale dentro de una llamada entre estas dos
+    // personas: si no, se podria anunciar un regalo en la sala de otros.
+    let callRoomName: string | null = null;
+    if (sessionId) {
+      const session = await prisma.callSession.findUnique({
+        where: { id: sessionId },
+        select: { roomName: true, callerId: true, calleeId: true },
+      });
+      const members = [session?.callerId, session?.calleeId];
+      if (!session || !members.includes(user.id) || !members.includes(receiverId)) {
+        return { ok: false, error: 'Llamada no encontrada.' };
+      }
+      callRoomName = session.roomName;
+    }
     if (await isBlockedForViewer(receiver.modelProfile?.blockedCountries)) {
       return { ok: false, error: GEO_BLOCKED_MESSAGE };
     }
+
+    let liveRoomName: string | null = null;
+    let liveGoal: { label: string; target: number; progress: number } | null = null;
 
     const balance = await prisma.$transaction(async (tx) => {
       const gift = await tx.gift.create({
@@ -224,13 +243,38 @@ export async function sendGiftAction(input: {
       // Contadores del directo: son lo que la creadora ve al terminar de
       // emitir, sin tener que agregar la tabla de regalos.
       if (streamId) {
-        await tx.liveStream.update({
+        const stream = await tx.liveStream.update({
           where: { id: streamId },
           data: {
             giftsCount: { increment: 1 },
             tokensEarned: { increment: modelTokens },
+            // La meta cuenta lo que paga el fan (lo que ve en pantalla),
+            // no la parte neta de la creadora.
+            goalProgress: { increment: tokens },
+          },
+          select: {
+            id: true,
+            roomName: true,
+            goalLabel: true,
+            goalTokens: true,
+            goalProgress: true,
+            goalReachedAt: true,
           },
         });
+        liveRoomName = stream.roomName;
+        if (stream.goalLabel && stream.goalTokens) {
+          liveGoal = {
+            label: stream.goalLabel,
+            target: stream.goalTokens,
+            progress: stream.goalProgress,
+          };
+          if (!stream.goalReachedAt && stream.goalProgress >= stream.goalTokens) {
+            await tx.liveStream.update({
+              where: { id: stream.id },
+              data: { goalReachedAt: new Date() },
+            });
+          }
+        }
       }
 
       await createNotification(tx, {
@@ -242,6 +286,29 @@ export async function sendGiftAction(input: {
 
       return debit.balanceAfter;
     });
+
+    // El regalo se anuncia en la sala desde el servidor, ya cobrado: asi lo
+    // ven la creadora y todo el publico, y nadie puede fingirlo por el chat.
+    if (liveRoomName) {
+      await sendRoomData(liveRoomName, {
+        type: 'gift',
+        from: user.name ?? 'Alguien',
+        tokens,
+        emoji: emoji ?? '🎁',
+      });
+      if (liveGoal) await sendRoomData(liveRoomName, { type: 'goal', goal: liveGoal });
+    }
+    // En una llamada 1 a 1 se anuncia igual, para que quien lo recibe lo vea
+    // en pantalla al momento y no solo en las notificaciones.
+    if (callRoomName) {
+      await sendRoomData(callRoomName, {
+        type: 'gift',
+        from: user.name ?? 'Alguien',
+        senderId: user.id,
+        tokens,
+        emoji: emoji ?? '🎁',
+      });
+    }
 
     return {
       ok: true,

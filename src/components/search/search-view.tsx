@@ -158,8 +158,8 @@ export function SearchView({
               <section>
                 <SectionTitle icon={Users}>
                   {result.creators.some((c) => c.match !== undefined)
-                    ? 'Creadoras · ordenadas por afinidad contigo'
-                    : 'Creadoras'}
+                    ? 'Creadores · ordenados por afinidad contigo'
+                    : 'Creadores'}
                 </SectionTitle>
                 <CreatorList creators={result.creators} />
               </section>
@@ -257,7 +257,7 @@ function Mosaic({
               onClick={() => onTag(active)}
               className="font-medium text-primary hover:underline"
             >
-              Buscar creadoras de #{active}
+              Buscar creadores de #{active}
             </button>
           )}
         </div>
@@ -359,10 +359,11 @@ function LiveTile({ item }: { item: MosaicLiveItem }) {
 
 function reasonIcon(reason: string): LucideIcon {
   if (reason.startsWith('En directo')) return Radio;
-  if (reason === 'La sigues') return UserCheck;
-  if (reason === 'La miras a menudo') return Eye;
+  // Los motivos van segun el genero del perfil: "La sigues" / "Lo sigues".
+  if (/^(La|Lo|Los) sigues$/.test(reason)) return UserCheck;
+  if (/^(La|Lo|Los) miras a menudo$/.test(reason)) return Eye;
   if (reason.startsWith('Te gusta')) return Heart;
-  if (reason === 'Creadora nueva') return Sparkles;
+  if (/^Creador(a|es)? nuev(a|o|os)$/.test(reason)) return Sparkles;
   return Flame;
 }
 

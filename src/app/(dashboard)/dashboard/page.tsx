@@ -136,7 +136,7 @@ export default async function UserDashboardPage() {
           href="/vip"
           icon={Crown}
           title="Sala VIP"
-          description="Solo modelos verificadas"
+          description="Solo modelos verificados"
         />
         <QuickAction
           href="/models"
@@ -154,7 +154,7 @@ export default async function UserDashboardPage() {
           href="/dashboard/subscriptions"
           icon={Heart}
           title="Mis suscripciones"
-          description="Creadoras que segui pagando"
+          description="Creadores que sigues pagando"
         />
         <QuickAction
           href="/mensajes"

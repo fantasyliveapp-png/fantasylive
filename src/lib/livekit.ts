@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { AccessToken, RoomServiceClient } from 'livekit-server-sdk';
+import { AccessToken, DataPacket_Kind, RoomServiceClient } from 'livekit-server-sdk';
 
 import { config } from '@/lib/config';
 
@@ -67,6 +67,31 @@ export async function removeParticipant(
     await svc.removeParticipant(roomName, identity);
   } catch {
     // ignorar
+  }
+}
+
+/**
+ * Envia un paquete de datos a toda la sala desde el servidor.
+ *
+ * Lo que llega por aqui no tiene participante emisor, y eso es lo que permite
+ * al cliente distinguir un aviso verificado (un regalo cobrado) de un mensaje
+ * de chat que cualquiera podria escribir imitandolo.
+ */
+export async function sendRoomData(
+  roomName: string,
+  payload: Record<string, unknown>,
+): Promise<void> {
+  const svc = roomService();
+  if (!svc) return;
+  try {
+    await svc.sendData(
+      roomName,
+      new TextEncoder().encode(JSON.stringify(payload)),
+      DataPacket_Kind.RELIABLE,
+      {},
+    );
+  } catch {
+    // Si la sala ya no existe el aviso se pierde; el regalo ya esta cobrado.
   }
 }
 

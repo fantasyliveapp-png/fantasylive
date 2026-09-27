@@ -77,13 +77,13 @@ export default async function AdminFeaturedPage({
     <>
       <AdminPageHeader
         title="Destacadas"
-        description="Dale visibilidad extra en Descubrir a las creadoras que elijas, durante 7 o 30 dias. Ideal para Fundadoras nuevas o para quien este empezando."
+        description="Dale visibilidad extra en Descubrir a los creadores que elijas, durante 7 o 30 dias. Ideal para Fundadores nuevos o para quien este empezando."
       />
 
       <div className="space-y-6">
         <Panel title="Destacadas ahora" aside={`${featured.length}`}>
           {featured.length === 0 ? (
-            <Empty>No hay ninguna creadora destacada.</Empty>
+            <Empty>No hay ningun creador destacado.</Empty>
           ) : (
             <ul className="divide-y divide-white/[0.06]">
               {featured.map((m) => (
@@ -94,11 +94,11 @@ export default async function AdminFeaturedPage({
         </Panel>
 
         <Panel
-          title={term ? `Resultados para "${term}"` : 'Verificadas mas nuevas'}
-          aside={<SearchBox action="/admin/destacadas" placeholder="Buscar creadora..." defaultValue={q} />}
+          title={term ? `Resultados para "${term}"` : 'Verificados mas nuevos'}
+          aside={<SearchBox action="/admin/destacadas" placeholder="Buscar creador..." defaultValue={q} />}
         >
           {candidates.length === 0 ? (
-            <Empty>No hay creadoras verificadas que coincidan.</Empty>
+            <Empty>No hay creadores verificados que coincidan.</Empty>
           ) : (
             <ul className="divide-y divide-white/[0.06]">
               {candidates.map((m) => (

@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { requireAdmin } from '@/lib/auth/guards';
 import { prisma } from '@/lib/prisma';
 
-export const metadata: Metadata = { title: 'Usuarios y creadoras' };
+export const metadata: Metadata = { title: 'Usuarios y creadores' };
 export const dynamic = 'force-dynamic';
 
 const PAGE_SIZE = 30;
@@ -63,7 +63,7 @@ export default async function AdminUsersPage({
   return (
     <div className="space-y-8">
       <AdminPageHeader
-        title="Usuarios y creadoras"
+        title="Usuarios y creadores"
         description={<>{total} cuentas registradas. Suspende, banea o promociona a VIP.</>}
       />
 

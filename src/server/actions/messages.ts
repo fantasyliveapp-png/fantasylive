@@ -78,7 +78,7 @@ export async function startConversationAction(input: {
 
     // Con la mensajeria activada ella decide el precio; 0 = gratis.
     if (!model.messagingEnabled) {
-      return { ok: false, error: 'Esta creadora no tiene los mensajes activados.' };
+      return { ok: false, error: 'Este perfil no tiene los mensajes activados.' };
     }
     const price = Math.max(0, model.messagePriceTokens);
 

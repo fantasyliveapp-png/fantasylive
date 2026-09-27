@@ -203,7 +203,7 @@ export function MatchmakingLobby({
           </h1>
           <p className={`mt-2 text-sm ${isVip ? 'text-white/80' : 'text-muted-foreground'}`}>
             {isVip
-              ? 'Conexion aleatoria exclusivamente con modelos VIP verificadas y en linea. Pagas por minuto.'
+              ? 'Conexion aleatoria exclusivamente con modelos VIP verificados y en linea. Pagas por minuto.'
               : 'Conecta con gente nueva al azar. Gratis, sin limite de tiempo.'}
           </p>
         </div>

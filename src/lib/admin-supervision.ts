@@ -292,7 +292,7 @@ export async function getAdminChat(kind: ChatKind, id: string) {
       kind,
       id: c.id,
       createdAt: c.createdAt,
-      note: `Chat de fan con creadora · abierto por ${c.unlockPriceTokens} tokens`,
+      note: `Chat de fan con creador · abierto por ${c.unlockPriceTokens} tokens`,
       people: [personOf(c.user), personOf(c.model.user)],
       messages: await Promise.all(
         c.messages.map(

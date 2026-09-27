@@ -106,7 +106,7 @@ export default async function AdminChatsPage({
                   </div>
                   <div className="hidden shrink-0 text-right sm:block">
                     <Pill tone={c.kind === 'fan' ? 'brand' : 'neutral'}>
-                      {c.kind === 'fan' ? 'Fan y creadora' : 'Entre personas'}
+                      {c.kind === 'fan' ? 'Fan y creador' : 'Entre personas'}
                     </Pill>
                     <p className="mt-1 text-[11px] text-muted-foreground">
                       {c.messages} mensajes · {relativeTime(c.lastMessageAt)}

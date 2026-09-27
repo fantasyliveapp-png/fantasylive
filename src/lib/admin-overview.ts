@@ -168,6 +168,7 @@ export async function getAdminOverview() {
           slug: true,
           avatarUrl: true,
           isOnline: true,
+          gender: true,
         },
       },
     },
@@ -181,6 +182,7 @@ export async function getAdminOverview() {
       slug: u?.modelProfile?.slug ?? null,
       avatarUrl: u?.modelProfile?.avatarUrl ?? null,
       isOnline: u?.modelProfile?.isOnline ?? false,
+      gender: u?.modelProfile?.gender ?? null,
       earnedCents: tokensToPayoutCents(t._sum.tokens ?? 0),
     };
   });
@@ -234,8 +236,8 @@ const AUDIT_LABELS: Record<string, string> = {
   PAYOUT_DESTINATION_REVEALED: 'Vio los datos de pago de un retiro',
   ADMIN_CREDIT: 'Anadio tokens a un monedero',
   ADMIN_DEBIT: 'Quito tokens de un monedero',
-  MODEL_PROFILE_CREATED: 'Nueva creadora registrada',
-  BLOCKED_COUNTRIES_UPDATED: 'Una creadora cambio sus paises bloqueados',
+  MODEL_PROFILE_CREATED: 'Nuevo creador registrado',
+  BLOCKED_COUNTRIES_UPDATED: 'Un creador cambio sus paises bloqueados',
   RECRUITER_CREATED: 'Creo un reclutador',
   RECRUITER_UPDATED: 'Cambio las condiciones de un reclutador',
   RECRUITER_PAID: 'Anoto un pago a un reclutador',
@@ -245,8 +247,8 @@ const AUDIT_LABELS: Record<string, string> = {
   COMMENT_DELETED: 'Borro un comentario',
   LIVE_ENDED_BY_ADMIN: 'Corto un directo',
   CHAT_VIEWED: 'Abrio un chat privado',
-  CREATOR_FEATURED: 'Destaco a una creadora',
-  CREATOR_UNFEATURED: 'Quito una creadora de destacadas',
+  CREATOR_FEATURED: 'Destaco a un creador',
+  CREATOR_UNFEATURED: 'Quito un creador de destacados',
   ANNOUNCEMENT_SENT: 'Envio un aviso a todos',
 };
 
