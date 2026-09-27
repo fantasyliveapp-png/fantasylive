@@ -38,7 +38,12 @@ TimeoutStopSec=30
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/lib/seaweedfs
+# /tmp tambien: SeaweedFS escribe ahi su log y los sockets unix con los que
+# sus partes (master, volumen, filer) y "weed shell" hablan entre si. Con
+# ProtectSystem=strict y sin esto, /tmp es de solo lectura y el master no
+# arranca. Compartido (sin PrivateTmp) para que setup-storage.sh pueda usar
+# "weed shell" desde fuera del servicio.
+ReadWritePaths=/var/lib/seaweedfs /tmp
 RestrictSUIDSGID=true
 
 [Install]
