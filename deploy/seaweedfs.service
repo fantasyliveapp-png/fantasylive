@@ -11,6 +11,11 @@
 # Puertos propios, lejos de los de por defecto: LiveKit Ingress ya usa el 8080
 # (su healthcheck), que es el del volumen de SeaweedFS si no se cambia. Cada
 # servicio abre ademas su puerto gRPC en +10000 (28080, 28888, 29333).
+#
+# Bloques (volumenes) de 1 GB en vez de los 30 GB por defecto: con
+# -volume.max=0 el numero de bloques se calcula por el espacio libre, y con
+# 30 GB un disco de ~90 GB solo daba 2, que ya ocupa el propio SeaweedFS. Sin
+# bloques libres cada subida falla con "No writable volume".
 ##############################################################################
 
 [Unit]
@@ -27,7 +32,7 @@ ExecStart=/usr/local/bin/weed server \
   -dir=/var/lib/seaweedfs \
   -ip=127.0.0.1 -ip.bind=127.0.0.1 \
   -master.port=19333 -volume.port=18080 -filer.port=18888 \
-  -volume.max=0 \
+  -volume.max=0 -master.volumeSizeLimitMB=1024 \
   -s3 -s3.port=18333 -s3.config=/etc/seaweedfs/s3.json
 
 Restart=always
