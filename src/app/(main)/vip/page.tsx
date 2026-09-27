@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { requireUser } from '@/lib/auth/guards';
 import { getVisibilityContext } from '@/lib/geo';
 import { getQueueStats } from '@/lib/matchmaking';
+import { liveModelIds } from '@/lib/live';
 import { prisma } from '@/lib/prisma';
 import { DEFAULT_RATE_CENTITOKENS } from '@/lib/rates';
 import { getWalletSummary } from '@/lib/tokens';
@@ -69,6 +70,8 @@ export default async function VipPage() {
     }),
   ]);
 
+
+  const liveIds = await liveModelIds(availableModels.map((m) => m.id));
   return (
     <div className="container py-12">
       <MatchmakingLobby
@@ -99,7 +102,7 @@ export default async function VipPage() {
 
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {availableModels.map((model) => (
-              <ModelCard key={model.id} model={model} />
+              <ModelCard key={model.id} model={{ ...model, isLive: liveIds.has(model.id) }} />
             ))}
           </div>
         </section>

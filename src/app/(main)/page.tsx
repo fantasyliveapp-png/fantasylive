@@ -20,6 +20,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { getVisibilityContext } from '@/lib/geo';
 import { getI18n } from '@/lib/i18n/server';
 import { rankLiveStreamsForRequest } from '@/lib/live-rank';
+import { liveModelIds } from '@/lib/live';
 import { getQueueStats } from '@/lib/matchmaking';
 import { prisma } from '@/lib/prisma';
 import { formatTokens } from '@/lib/utils';
@@ -105,6 +106,8 @@ export default async function HomePage() {
     },
   ];
 
+
+  const liveIds = await liveModelIds(featured.map((m) => m.id));
   return (
     <>
       {/* HERO */}
@@ -259,7 +262,7 @@ export default async function HomePage() {
 
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {featured.map((model) => (
-              <ModelCard key={model.id} model={model} />
+              <ModelCard key={model.id} model={{ ...model, isLive: liveIds.has(model.id) }} />
             ))}
           </div>
         </div>

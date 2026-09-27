@@ -52,7 +52,7 @@ import { recordProfileVisit } from '@/lib/visits';
 import { formatRateNumber } from '@/lib/rates';
 import { GENDER_LABELS, ORIENTATION_LABELS } from '@/lib/constants';
 import { peerPair } from '@/lib/chat';
-import { founderLabel } from '@/lib/gender-words';
+import { founderLabel, onlineLabel } from '@/lib/gender-words';
 import { prisma } from '@/lib/prisma';
 import { applySubscriberDiscount, getActiveSubscription } from '@/lib/subscriptions';
 import { cn, formatDate, formatTokens, initials, relativeTime } from '@/lib/utils';
@@ -168,8 +168,8 @@ export default async function ModelProfilePage({
     select: { id: true, title: true, viewerCount: true },
   });
 
-  // En vivo = tiene una llamada activa ahora mismo (distinto de "conectado",
-  // que solo indica que la sesion esta abierta).
+  // En llamada = tiene una videollamada activa ahora mismo. Es distinto de
+  // "en directo" (emitiendo, isStreaming) y de "conectado" (sesion abierta).
   const activeCall = await prisma.callSession.findFirst({
     where: {
       status: 'ACTIVE',
@@ -384,8 +384,8 @@ export default async function ModelProfilePage({
         <AvatarFallback className="text-3xl">{initials(model.stageName)}</AvatarFallback>
       </Avatar>
       {(isStreaming || isLiveNow) && (
-        <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-md border-2 border-background bg-primary px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary-foreground">
-          En vivo
+        <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md border-2 border-background bg-primary px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary-foreground">
+          {isStreaming ? 'En directo' : 'En llamada'}
         </span>
       )}
     </span>
@@ -402,15 +402,19 @@ export default async function ModelProfilePage({
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/30 to-transparent" />
 
         <div className="absolute left-4 top-4 md:left-6 md:top-6">
-          {isLiveNow ? (
+          {isStreaming ? (
             <Badge variant="live" className="gap-1.5">
               <span className="live-dot !h-2 !w-2 bg-white" />
-              EN VIVO
+              EN DIRECTO
+            </Badge>
+          ) : isLiveNow ? (
+            <Badge variant="live" className="gap-1.5">
+              En llamada
             </Badge>
           ) : model.isOnline ? (
             <Badge variant="connected" className="gap-1.5">
               <span className="h-2 w-2 rounded-full bg-onix-black/60" />
-              Conectado
+              {onlineLabel(model.gender, true)}
             </Badge>
           ) : (
             <Badge variant="muted">

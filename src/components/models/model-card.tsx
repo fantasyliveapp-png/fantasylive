@@ -4,6 +4,7 @@ import type { Gender, ModelTier, Orientation } from '@prisma/client';
 
 import { Badge } from '@/components/ui/badge';
 import { GENDER_LABELS, ORIENTATION_LABELS } from '@/lib/constants';
+import { onlineLabel } from '@/lib/gender-words';
 import { cn } from '@/lib/utils';
 import { formatRateNumber } from '@/lib/rates';
 
@@ -19,6 +20,9 @@ export interface ModelCardData {
   avatarUrl?: string | null;
   coverUrl?: string | null;
   isOnline: boolean;
+  /// Emitiendo un directo ahora mismo. Distinto de isOnline, que solo dice
+  /// que tiene la sesion abierta y esta disponible.
+  isLive?: boolean;
   /// Perfil atendido por IA. Se etiqueta en la tarjeta para que se sepa antes
   /// de entrar, no despues de pagar por escribirle.
   isAi: boolean;
@@ -53,10 +57,15 @@ export function ModelCard({ model }: { model: ModelCardData }) {
 
         {/* Estado */}
         <div className="absolute left-3 top-3 flex flex-col gap-1.5">
-          {model.isOnline ? (
+          {model.isLive ? (
             <Badge variant="live" className="gap-1.5">
               <span className="live-dot !h-2 !w-2 bg-white" />
-              EN VIVO
+              EN DIRECTO
+            </Badge>
+          ) : model.isOnline ? (
+            <Badge variant="connected" className="gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-onix-black/60" />
+              {onlineLabel(model.gender, true)}
             </Badge>
           ) : (
             <Badge variant="muted">Offline</Badge>

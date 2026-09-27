@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { getVisibilityContext } from '@/lib/geo';
 import { getI18n } from '@/lib/i18n/server';
 import { rankLiveStreamsForRequest } from '@/lib/live-rank';
+import { liveModelIds } from '@/lib/live';
 import { prisma } from '@/lib/prisma';
 
 export const metadata: Metadata = { title: 'Directos' };
@@ -55,6 +56,8 @@ export default async function LivePage() {
     }),
   ]);
 
+
+  const liveIds = await liveModelIds(onlineModels.map((m) => m.id));
   return (
     <div className="container max-w-6xl py-6">
       <div className="mb-6 flex items-center gap-3">
@@ -91,7 +94,7 @@ export default async function LivePage() {
 
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {onlineModels.map((model) => (
-              <ModelCard key={model.id} model={model} />
+              <ModelCard key={model.id} model={{ ...model, isLive: liveIds.has(model.id) }} />
             ))}
           </div>
         </section>

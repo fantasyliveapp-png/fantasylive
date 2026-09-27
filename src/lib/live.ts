@@ -161,6 +161,20 @@ export async function deleteRtmpIngress(ingressId: string): Promise<void> {
   }
 }
 
+/**
+ * De estos perfiles, cuales estan emitiendo un directo ahora mismo. Sirve
+ * para que las tarjetas digan "EN DIRECTO" solo a quien emite, y no a quien
+ * solo esta conectado.
+ */
+export async function liveModelIds(modelIds: string[]): Promise<Set<string>> {
+  if (modelIds.length === 0) return new Set();
+  const live = await prisma.liveStream.findMany({
+    where: { modelId: { in: modelIds }, status: 'LIVE' },
+    select: { modelId: true },
+  });
+  return new Set(live.map((l) => l.modelId));
+}
+
 /** Directo en curso de una creadora, o null. */
 export async function getActiveStreamForModel(modelId: string) {
   return prisma.liveStream.findFirst({

@@ -3,6 +3,7 @@ import type { Gender, ModelTier, Orientation, Prisma } from '@prisma/client';
 
 import { ModelCard } from '@/components/models/model-card';
 import { ModelFilters } from '@/components/models/model-filters';
+import { liveModelIds } from '@/lib/live';
 import { prisma } from '@/lib/prisma';
 import { getVisibilityContext } from '@/lib/geo';
 
@@ -107,6 +108,8 @@ export default async function ModelsPage({
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
+
+  const liveIds = await liveModelIds(models.map((m) => m.id));
   return (
     <div className="container py-10">
       <div className="mb-8">
@@ -129,7 +132,7 @@ export default async function ModelsPage({
       ) : (
         <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {models.map((model) => (
-            <ModelCard key={model.id} model={model} />
+            <ModelCard key={model.id} model={{ ...model, isLive: liveIds.has(model.id) }} />
           ))}
         </div>
       )}
