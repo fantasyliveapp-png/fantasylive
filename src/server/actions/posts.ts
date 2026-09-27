@@ -919,14 +919,17 @@ export async function getPostCommentsAction(postId: string): Promise<
         // completo de alguien bajo una publicacion seria filtrar un dato
         // personal a cualquiera que pase por el feed.
         //
-        // Quien comenta siendo creador aparece como tal: su nombre artistico y
-        // la foto de su perfil de creador, que se guarda en avatarUrl y no en
-        // user.image (por eso antes salia sin foto).
+        // Se muestra el nombre de usuario (el @), como en Instagram o TikTok:
+        // es unico y es por el que se busca a la gente. Si alguien antiguo no
+        // lo tiene, su nombre artistico o su nombre.
         author:
+          c.user.username ??
           c.user.modelProfile?.stageName ??
           c.user.name ??
           c.user.email.split('@')[0] ??
           'Usuario',
+        // La foto de un creador esta en su perfil de creador (avatarUrl), no
+        // en user.image: por eso antes salia sin foto.
         image: c.user.modelProfile?.avatarUrl ?? c.user.image,
         profileHref: c.user.modelProfile
           ? `/models/${c.user.modelProfile.slug}`
