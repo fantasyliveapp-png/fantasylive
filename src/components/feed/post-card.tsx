@@ -241,8 +241,9 @@ export function PostCard({
               })}
             </p>
           ) : (
-            <p className="text-xs text-muted-foreground">
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
               {relativeTime(new Date(post.createdAt))}
+              <PaidPill post={post} />
             </p>
           )}
         </div>
@@ -626,4 +627,29 @@ function VideoWatermark({ label }: { label: string }) {
       {label}
     </span>
   );
+}
+
+/**
+ * Etiqueta pequena de las publicaciones que no son publicas. Siempre visible,
+ * tambien para su duena: ella las ve desbloqueadas y sin esto no sabria
+ * cuales son de pago ni a que precio.
+ */
+function PaidPill({ post }: { post: FeedPost }) {
+  if (post.visibility === 'LOCKED') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-token/15 px-1.5 py-px text-[10px] font-semibold text-token">
+        <Lock className="h-2.5 w-2.5" />
+        {formatTokens(post.priceTokens)} tokens
+      </span>
+    );
+  }
+  if (post.visibility === 'SUBSCRIBERS') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-champagne-gold/15 px-1.5 py-px text-[10px] font-semibold text-champagne-gold">
+        <Crown className="h-2.5 w-2.5" />
+        Suscriptores
+      </span>
+    );
+  }
+  return null;
 }

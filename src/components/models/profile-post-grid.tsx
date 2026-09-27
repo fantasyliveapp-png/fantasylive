@@ -275,6 +275,21 @@ function PostTile({ post, onOpen }: { post: FeedPost; onOpen: () => void }) {
         </span>
       )}
 
+      {/* Desbloqueada (p. ej. la ve su duena) pero de pago o de suscriptores:
+          una etiqueta pequena para saber cuales son y a que precio. */}
+      {!locked && post.visibility !== 'PUBLIC' && (
+        <span className="pointer-events-none absolute bottom-1.5 left-1.5 z-10 flex items-center gap-1 rounded-full bg-black/70 px-1.5 py-0.5 text-[10px] font-bold text-white backdrop-blur-sm">
+          {post.visibility === 'SUBSCRIBERS' ? (
+            <Crown className="h-3 w-3 text-champagne-gold" />
+          ) : (
+            <>
+              <Lock className="h-3 w-3 text-token" />
+              {formatTokens(post.priceTokens)}
+            </>
+          )}
+        </span>
+      )}
+
       <span className="pointer-events-none absolute right-1.5 top-1.5 text-white drop-shadow">
         {post.assets.length > 1 ? (
           <Layers className="h-4 w-4" />
