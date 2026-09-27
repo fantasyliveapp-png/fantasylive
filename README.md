@@ -817,7 +817,7 @@ certbot --nginx -d tudominio.com -d www.tudominio.com
 
 Después hay que cambiar `NEXT_PUBLIC_APP_URL`, `NEXTAUTH_URL` y `AUTH_URL` a `https://…` y reiniciar (`systemctl restart fantasylive`). **Mientras la app se sirva por HTTP la cookie de sesión no puede marcarse `Secure`**, así que es el primer paso a dar en cuanto haya dominio.
 
-### Almacenamiento propio (MinIO en el mismo servidor)
+### Almacenamiento propio (SeaweedFS en el mismo servidor)
 
 Sin `S3_*` la subida de fotos y videos falla con *«El almacenamiento no esta configurado»*. Para guardar los archivos en el propio VPS, sin Cloudflare R2 ni AWS, en el servidor y como root:
 
@@ -825,9 +825,9 @@ Sin `S3_*` la subida de fotos y videos falla con *«El almacenamiento no esta co
 bash /var/www/fantasylive/deploy/setup-storage.sh https://tudominio.com
 ```
 
-Instala MinIO escuchando solo en `127.0.0.1` y lo sirve bajo el **mismo dominio** de la web (`https://tudominio.com/fantasylive-content/…`), así que no hace falta DNS ni certificado nuevos. Nginx pasa esa ruta a MinIO sin tocarla (`deploy/nginx-storage.conf`), por lo que las URLs firmadas siguen siendo válidas, y al ser el mismo origen el navegador sube sin CORS. Crea el bucket y un usuario solo para la app, escribe las `S3_*` en `.env` (con copia `.env.bak-*`) y reinicia. Se puede repetir sin riesgo.
+Instala [SeaweedFS](https://github.com/seaweedfs/seaweedfs) (compatible S3; MinIO dejó de publicar sus binarios) escuchando solo en `127.0.0.1`, con puertos propios que no chocan con LiveKit (`deploy/seaweedfs.service`). Lo sirve bajo el **mismo dominio** de la web (`https://tudominio.com/fantasylive-content/…`), así que no hace falta DNS ni certificado nuevos: nginx pasa esa ruta sin tocarla (`deploy/nginx-storage.conf`), las URLs firmadas siguen siendo válidas y el navegador sube sin CORS. Crea el bucket y una credencial solo para la app, escribe las `S3_*` en `.env` (con copia `.env.bak-*`) y reinicia. Se puede repetir sin riesgo.
 
-Los archivos quedan en `/var/lib/minio`: **inclúyelo en las copias de seguridad**. Las credenciales de administrador de MinIO están en `/etc/default/minio` (solo root).
+Los archivos quedan en `/var/lib/seaweedfs`: **inclúyelo en las copias de seguridad**. La credencial de la app está en `/etc/seaweedfs/s3.json`.
 
 ### Actualizar
 

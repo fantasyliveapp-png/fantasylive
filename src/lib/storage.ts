@@ -24,6 +24,13 @@ function getClient(): S3Client | null {
       accessKeyId: config.storage.accessKeyId,
       secretAccessKey: config.storage.secretAccessKey,
     },
+    // Por defecto el SDK mete en cada URL firmada un checksum (CRC32) del
+    // cuerpo... que al firmar aun no existe, asi que es el de un cuerpo
+    // vacio. Los servidores S3 que lo comprueban (SeaweedFS, R2...) rechazan
+    // entonces toda subida real con BadDigest. Solo cuando la operacion lo
+    // exige.
+    requestChecksumCalculation: 'WHEN_REQUIRED',
+    responseChecksumValidation: 'WHEN_REQUIRED',
   });
   return client;
 }
