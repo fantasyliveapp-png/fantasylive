@@ -1,29 +1,26 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { BadgeCheck, Handshake, ShieldCheck, Users, Wallet } from 'lucide-react';
+import { BadgeCheck, Handshake, ShieldCheck, TrendingUp, Users, Wallet } from 'lucide-react';
 
 import { ReferralLink } from '@/components/model/referral-link';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+  MonthlyEarnings,
+  PaymentHistory,
+  RecruitEarnings,
+} from '@/components/recruiter/recruiter-stats';
 import { requireUser } from '@/lib/auth/guards';
 import { config } from '@/lib/config';
 import { prisma } from '@/lib/prisma';
-import { getRecruiterOverview, termsLabel, type RecruitStatus } from '@/lib/recruiters';
+import { getRecruiterOverview, termsLabel } from '@/lib/recruiters';
 import { tokensToPayoutCents } from '@/lib/tokens';
-import { cn, formatMoney, initials } from '@/lib/utils';
+import { cn, formatMoney } from '@/lib/utils';
 
 export const metadata: Metadata = { title: 'Panel de reclutador' };
 export const dynamic = 'force-dynamic';
 
-const STATUS: Record<RecruitStatus, { label: string; cls: string }> = {
-  registered: { label: 'Registrada', cls: 'bg-muted text-muted-foreground' },
-  verifying: { label: 'Verificandose', cls: 'bg-amber-500/15 text-amber-500' },
-  active: { label: 'Activa', cls: 'bg-state-connected/15 text-state-connected' },
-  out_of_quota: { label: 'Fuera de cupo', cls: 'bg-destructive/15 text-destructive' },
-};
-
 /**
- * PANEL DE RECLUTADOR: su enlace, sus condiciones, las creadoras que ha
- * traido (y en que punto estan) y lo que ha ganado y cobrado.
+ * PANEL DE RECLUTADOR: su enlace, sus condiciones, lo que ha ganado con cada
+ * creadora que trajo (y en que punto esta), mes a mes, y lo que ha cobrado.
  */
 export default async function RecruiterPage() {
   const user = await requireUser('/reclutador');
@@ -37,7 +34,7 @@ export default async function RecruiterPage() {
   const minPayoutCents = tokensToPayoutCents(config.economy.minPayoutTokens);
 
   return (
-    <div className="container max-w-2xl space-y-5 py-6">
+    <div className="container max-w-3xl space-y-5 py-6">
       <header>
         <h1 className="font-heading text-3xl uppercase tracking-wide">Panel de reclutador</h1>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -72,44 +69,53 @@ export default async function RecruiterPage() {
         </p>
       </section>
 
-      <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Stat icon={Users} label="Registradas" value={String(r.totals.registered)} />
-        <Stat icon={BadgeCheck} label="Verificados" value={String(r.totals.verified)} />
+      <section className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <Stat
+          icon={TrendingUp}
+          label="Este mes"
+          value={formatMoney(r.totals.earnedThisMonthCents)}
+          hint={`Mes pasado: ${formatMoney(r.totals.earnedLastMonthCents)}`}
+        />
+        <Stat
+          icon={Wallet}
+          label="Total ganado"
+          value={formatMoney(r.totals.earnedCents)}
+          hint={`${r.totals.salesCount} ventas`}
+        />
         <Stat
           icon={Wallet}
           label="Por cobrar"
           value={formatMoney(r.totals.pendingCents)}
-          hint={`Recibes ${formatMoney(r.totals.payNowCents)} (−10% al cobrar)`}
+          hint={
+            config.economy.payoutFeePercent > 0
+              ? `Recibes ${formatMoney(r.totals.payNowCents)} (−${config.economy.payoutFeePercent}% al cobrar)`
+              : undefined
+          }
           highlight
         />
         <Stat icon={Wallet} label="Ya cobrado" value={formatMoney(r.totals.paidCents)} />
+        <Stat icon={Users} label="Registradas" value={String(r.totals.registered)} />
+        <Stat icon={BadgeCheck} label="Verificadas" value={String(r.totals.verified)} />
       </section>
 
       <section>
         <h2 className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          Creadores que has traido
+          Tus ganancias por creador
         </h2>
-        {r.recruits.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-border/60 p-6 text-center text-sm text-muted-foreground">
-            Aun nadie se ha registrado con tu enlace.
-          </p>
-        ) : (
-          <ul className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/60 bg-card">
-            {r.recruits.map((c) => (
-              <li key={c.userId} className="flex items-center gap-3 px-4 py-3">
-                <Avatar className="h-10 w-10">
-                  {c.avatarUrl && <AvatarImage src={c.avatarUrl} alt="" />}
-                  <AvatarFallback>{initials(c.name)}</AvatarFallback>
-                </Avatar>
-                <span className="min-w-0 flex-1 truncate text-sm font-semibold">{c.name}</span>
-                <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', STATUS[c.status].cls)}>
-                  {STATUS[c.status].label}
-                </span>
-                <span className="w-16 text-right text-sm font-semibold">{formatMoney(c.earnedCents)}</span>
-              </li>
-            ))}
-          </ul>
-        )}
+        <RecruitEarnings
+          recruits={r.recruits}
+          months={r.months}
+          emptyText="Aun nadie se ha registrado con tu enlace."
+        />
+      </section>
+
+      <MonthlyEarnings monthly={r.monthly} />
+
+      <section>
+        <h2 className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          Tus cobros
+        </h2>
+        <PaymentHistory payments={r.payments} />
       </section>
 
       <section className="space-y-2 rounded-2xl border border-border/60 bg-card p-4 text-sm">
@@ -118,8 +124,14 @@ export default async function RecruiterPage() {
         </p>
         <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
           <li>
-            Te pagamos lo acumulado cada semana, a partir de {formatMoney(minPayoutCents)}. Al
-            cobrar se descuenta un 10%, igual que a los creadores.
+            Te pagamos lo acumulado cada semana, a partir de {formatMoney(minPayoutCents)}.
+            {config.economy.payoutFeePercent > 0
+              ? ` Al cobrar se descuenta un ${config.economy.payoutFeePercent}%, igual que a los creadores.`
+              : ' Sin descuentos al cobrar.'}
+          </li>
+          <li>
+            Ganas tu % de todo lo que gane cada creador: llamadas, regalos, directos, packs,
+            suscripciones, chats y publicaciones.
           </li>
           <li>Cada creador cuenta cuando verifica su identidad y hace su primera venta.</li>
           <li>Nada de spam, nada dirigido a menores y no te hagas pasar por FantasyLive.</li>

@@ -55,12 +55,6 @@ enum ModelTier {
   ELITE
 }
 
-enum ContentType {
-  PHOTO
-  VIDEO
-  BUNDLE
-}
-
 enum CallType {
   RANDOM // Omegle-style gratuito / bajo costo
   VIP_RANDOM // Aleatorio solo con modelos VIP, cobro por minuto
@@ -129,6 +123,9 @@ enum TransactionType {
   PAYOUT_FEE
   /// Programa de referidos: % de lo que genera una creadora invitada (+)
   REFERRAL_EARNING
+  /// Tokens que un distribuidor oficial le envia a un fan (+). Cuentan como
+  /// comprados: no se pueden retirar.
+  DISTRIBUTOR_CREDIT
 }
 
 /// Quien puede escribirle a una cuenta (ajuste de privacidad).
@@ -336,19 +333,23 @@ model User {
   /// Programa de referidos: la creadora que trajo esta cuenta (por su
   /// enlace). Si esta cuenta es fan, lo que gaste con ella le deja mas a la
   /// creadora; si se hace creadora, la que la invito cobra un %.
-  referredById     String?
-  referredBy       User?            @relation("Referrals", fields: [referredById], references: [id], onDelete: SetNull)
-  referrals        User[]           @relation("Referrals")
+  referredById         String?
+  referredBy           User?                 @relation("Referrals", fields: [referredById], references: [id], onDelete: SetNull)
+  couponsReceived      CreatorOffer[]        @relation("CouponFan")
+  distributor          Distributor?
+  distributorCredits   DistributorTransfer[] @relation("DistributorRecipient")
+  distributorPurchases DistributorSale[]     @relation("DistributorBuyer")
+  referrals            User[]                @relation("Referrals")
   /// Reclutador que trajo a esta cuenta (solo trae creadoras; cobra un %).
-  recruitedById    String?
-  recruitedBy      Recruiter?       @relation("RecruitedBy", fields: [recruitedById], references: [id], onDelete: SetNull)
+  recruitedById        String?
+  recruitedBy          Recruiter?            @relation("RecruitedBy", fields: [recruitedById], references: [id], onDelete: SetNull)
   /// Si esta cuenta es de un reclutador, sus condiciones.
-  recruiterAccount Recruiter?       @relation("RecruiterAccount")
-  supportTickets   SupportTicket[]
-  supportMessages  SupportMessage[]
-  pushSubscriptions PushSubscription[]
-  postImpressions  PostImpression[]
-  postHides        PostHide[]
+  recruiterAccount     Recruiter?            @relation("RecruiterAccount")
+  supportTickets       SupportTicket[]
+  supportMessages      SupportMessage[]
+  pushSubscriptions    PushSubscription[]
+  postImpressions      PostImpression[]
+  postHides            PostHide[]
 
   // Estado de plataforma
   isVip          Boolean   @default(false)
@@ -371,7 +372,6 @@ model User {
   callsInitiated           CallSession[]             @relation("CallCaller")
   callsReceived            CallSession[]             @relation("CallCallee")
   queueEntries             MatchQueueEntry[]
-  unlocks                  ContentUnlock[]
   bookings                 Booking[]                 @relation("BookingUser")
   giftsSent                Gift[]                    @relation("GiftSender")
   giftsReceived            Gift[]                    @relation("GiftReceiver")
@@ -403,6 +403,8 @@ model User {
   profileVisits            ProfileVisit[]
   greetingsReceived        AutoGreetingLog[]
   liveViews                LiveView[]
+  /// Inicio de la oferta "Te echamos de menos" (48 h tras 30 dias sin comprar).
+  winbackOfferStartedAt    DateTime?
 
   @@index([role, status])
   @@index([createdAt])
@@ -530,7 +532,6 @@ model Transaction {
   // Vinculos opcionales al origen del movimiento
   tokenPackageId      String?
   callSessionId       String?
-  contentPackageId    String?
   bookingId           String?
   giftId              String? @unique
   payoutRequestId     String?
@@ -550,7 +551,6 @@ model Transaction {
   user              User               @relation("UserTransactions", fields: [userId], references: [id], onDelete: Cascade)
   tokenPackage      TokenPackage?      @relation(fields: [tokenPackageId], references: [id], onDelete: SetNull)
   callSession       CallSession?       @relation(fields: [callSessionId], references: [id], onDelete: SetNull)
-  contentPackage    ContentPackage?    @relation(fields: [contentPackageId], references: [id], onDelete: SetNull)
   booking           Booking?           @relation(fields: [bookingId], references: [id], onDelete: SetNull)
   gift              Gift?              @relation(fields: [giftId], references: [id], onDelete: SetNull)
   payoutRequest     PayoutRequest?     @relation(fields: [payoutRequestId], references: [id], onDelete: SetNull)
@@ -580,6 +580,20 @@ model ModelProfile {
   founderNumber Int?      @unique
   /// Destacada por el equipo hasta esta fecha: sale mas en Descubrir.
   featuredUntil DateTime?
+
+  // ---------------------------------------------------------------------------
+  // TRATO NEGOCIADO (lo pone el equipo desde admin; ver src/lib/deals.ts)
+  // Mientras esta vigente sustituye a los % estandar. null = el estandar.
+  // ---------------------------------------------------------------------------
+  /// % que retiene la plataforma de sus ventas (estandar: PLATFORM_COMMISSION_PERCENT).
+  dealPlatformPercent   Int?
+  /// % que cobra por cada creadora que invite (estandar: 5%).
+  dealAmbassadorPercent Int?
+  /// Fin del trato. null = sin fecha de fin.
+  dealUntil             DateTime?
+  /// Lo acordado, para el equipo (no lo ve la creadora).
+  dealNotes             String?
+  dealUpdatedAt         DateTime?
 
   /// Boveda: precio sugerido (tokens) de cada nivel de contenido de pago.
   vaultPriceLevel1  Int @default(30)
@@ -611,13 +625,13 @@ model ModelProfile {
   // ---------------------------------------------------------------------------
   // TARIFAS POR MINUTO, EN CENTITOKENS (1 token = 100 centitokens)
   //
-  // La creadora puede pedir desde 1,75 hasta 25 tokens/min, y el minimo tiene
+  // La creadora puede pedir desde 17,5 hasta 250 tokens/min, y el minimo tiene
   // decimales, asi que un Int de tokens no sirve. Se guardan x100 para que el
   // calculo del cobro siga siendo aritmetica entera (ver src/lib/rates.ts):
-  //   175 = 1,75 tokens/min   250 = 2,50 (default)   2500 = 25 tokens/min
+  //   1750 = 17,5 tokens/min   2500 = 25 (default)   25000 = 250 tokens/min
   // ---------------------------------------------------------------------------
-  vipRateCentitokens     Int @default(250)
-  privateRateCentitokens Int @default(250)
+  vipRateCentitokens     Int @default(2500)
+  privateRateCentitokens Int @default(2500)
   /// Minutos que se facturan como minimo en una llamada de pago
   minPrivateMinutes      Int @default(5)
 
@@ -667,9 +681,13 @@ model ModelProfile {
   // DIRECTOS
   // ---------------------------------------------------------------------------
   /// Solo se puede activar con el KYC aprobado (ver setLiveEnabledAction).
-  liveEnabled Boolean @default(false)
+  liveEnabled      Boolean  @default(false)
   /// Clave de emision para OBS. Se regenera a peticion de la creadora.
-  streamKey   String? @unique
+  streamKey        String?  @unique
+  /// Palabras que se ocultan del chat de sus directos (en minusculas).
+  liveBlockedWords String[] @default([])
+  /// Menu de propinas de sus directos: [{ id, label, tokens }].
+  liveTipMenu      Json?
 
   // Metricas (denormalizadas para el catalogo)
   ratingAvg         Float @default(0)
@@ -706,7 +724,6 @@ model ModelProfile {
   updatedAt DateTime @updatedAt
 
   user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  contentPackages  ContentPackage[]
   bookings         Booking[]
   availability     AvailabilitySlot[]
   kycVerifications KycVerification[]
@@ -717,6 +734,8 @@ model ModelProfile {
   contentRequests  ContentRequest[]
   conversations    Conversation[]
   posts            Post[]
+  vaultPacks       VaultPack[]
+  creatorOffers    CreatorOffer[]
   streams          LiveStream[]
   liveViews        LiveView[]
   visits           ProfileVisit[]
@@ -788,6 +807,10 @@ model Follow {
   userId  String
   modelId String
 
+  /// Campanita del fan: avisarle cuando entre en directo / cuando publique.
+  notifyLive  Boolean @default(true)
+  notifyPosts Boolean @default(true)
+
   createdAt DateTime @default(now())
 
   user  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -830,8 +853,7 @@ model Subscription {
 }
 
 /// Pedido de contenido a medida: el usuario describe lo que quiere, la
-/// modelo cotiza, el usuario paga y la modelo entrega un ContentPackage
-/// privado (isPublished: false) desbloqueado solo para quien lo pidio.
+/// modelo cotiza, el usuario paga y la modelo lo entrega por chat (gratis).
 model ContentRequest {
   id      String @id @default(cuid())
   userId  String
@@ -843,16 +865,17 @@ model ContentRequest {
   quotedTokens Int?
   modelNote    String?
 
-  deliveredPackageId String? @unique
+  /// Entregado por chat: el mensaje con los archivos (ya pagado).
+  deliveredMessageId String? @unique
 
   createdAt   DateTime  @default(now())
   quotedAt    DateTime?
   paidAt      DateTime?
   deliveredAt DateTime?
 
-  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  model            ModelProfile    @relation(fields: [modelId], references: [id], onDelete: Cascade)
-  deliveredPackage ContentPackage? @relation(fields: [deliveredPackageId], references: [id], onDelete: SetNull)
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  model            ModelProfile  @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  deliveredMessage Message?      @relation(fields: [deliveredMessageId], references: [id], onDelete: SetNull)
   transactions     Transaction[]
 
   @@index([modelId, status])
@@ -872,6 +895,10 @@ model Conversation {
   lastMessageAt     DateTime  @default(now())
   /// La abrio la creadora (gratis) en vez del fan.
   startedByModel    Boolean   @default(false)
+  /// false = el chat existe solo por un pedido o una cita: el fan ve y
+  /// gestiona esas tarjetas, pero para escribir tiene que abrir el chat al
+  /// precio del creador (como cualquier otro chat de pago).
+  chatUnlocked      Boolean   @default(true)
   /// null = solicitud pendiente: la abrio la creadora y el fan aun no la
   /// acepto ni respondio. Las que abre y paga el fan nacen aceptadas.
   acceptedAt        DateTime?
@@ -945,9 +972,11 @@ model Message {
 
   createdAt DateTime @default(now())
 
-  conversation Conversation       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender       User               @relation(fields: [senderId], references: [id], onDelete: Cascade)
-  attachment   MessageAttachment?
+  conversation     Conversation       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender           User               @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  attachment       MessageAttachment?
+  /// Pedido a medida que se entrego con este mensaje.
+  deliveredRequest ContentRequest?
 
   @@index([conversationId, createdAt])
   @@map("messages")
@@ -955,7 +984,7 @@ model Message {
 
 /// Archivo adjunto a un mensaje. Si priceTokens es 0 es de acceso libre para
 /// quien reciba el mensaje; si no, hay que desbloquearlo (ver
-/// MessageAttachmentUnlock), igual que un ContentPackage pero a nivel mensaje.
+/// MessageAttachmentUnlock). Puede llevar varios archivos (ver MessageAttachmentFile).
 model MessageAttachment {
   id        String @id @default(cuid())
   messageId String @unique
@@ -963,7 +992,7 @@ model MessageAttachment {
   storageKey  String
   mimeType    String
   sizeBytes   Int?
-  priceTokens Int    @default(0)
+  priceTokens Int     @default(0)
   /// Enviado desde la Boveda (para saber que ya se le envio / que ya compro).
   vaultItemId String?
 
@@ -971,11 +1000,37 @@ model MessageAttachment {
 
   message      Message                   @relation(fields: [messageId], references: [id], onDelete: Cascade)
   vaultItem    VaultItem?                @relation(fields: [vaultItemId], references: [id], onDelete: SetNull)
+  /// Todos los archivos del envio (uno o varios, con UN precio y UNA compra).
+  /// storageKey/mimeType de arriba son los del primero, como portada.
+  files        MessageAttachmentFile[]
   unlocks      MessageAttachmentUnlock[]
   transactions Transaction[]
 
   @@index([vaultItemId])
   @@map("message_attachments")
+}
+
+/// Un archivo dentro de un envio de pago del chat.
+model MessageAttachmentFile {
+  id           String  @id @default(cuid())
+  attachmentId String
+  storageKey   String
+  /// Miniatura diminuta y borrosa que ve el fan antes de pagar.
+  previewKey   String?
+  mimeType     String
+  sizeBytes    Int?
+  /// Si salio de la Boveda (para saber que ya se le envio / que ya compro).
+  vaultItemId  String?
+  sortOrder    Int     @default(0)
+
+  createdAt DateTime @default(now())
+
+  attachment MessageAttachment @relation(fields: [attachmentId], references: [id], onDelete: Cascade)
+  vaultItem  VaultItem?        @relation(fields: [vaultItemId], references: [id], onDelete: SetNull)
+
+  @@index([attachmentId, sortOrder])
+  @@index([vaultItemId])
+  @@map("message_attachment_files")
 }
 
 model MessageAttachmentUnlock {
@@ -1019,80 +1074,6 @@ model Notification {
 // CONTENIDO DE PAGO
 // =============================================================================
 
-model ContentPackage {
-  id      String @id @default(cuid())
-  modelId String
-
-  title       String
-  description String?
-  type        ContentType @default(PHOTO)
-
-  /// 0 = gratis/publico
-  priceTokens    Int     @default(0)
-  isPublic       Boolean @default(false)
-  isPublished    Boolean @default(true)
-  /// Incluido gratis para suscriptores activos; no se compra suelto
-  subscriberOnly Boolean @default(false)
-
-  /// Miniatura visible sin desbloquear (borrosa/censurada en el cliente)
-  previewUrl String?
-  assetCount Int     @default(0)
-
-  purchaseCount Int @default(0)
-  tokensEarned  Int @default(0)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  model        ModelProfile    @relation(fields: [modelId], references: [id], onDelete: Cascade)
-  assets       ContentAsset[]
-  unlocks      ContentUnlock[]
-  transactions Transaction[]
-  deliveredFor ContentRequest?
-
-  @@index([modelId, isPublished])
-  @@map("content_packages")
-}
-
-model ContentAsset {
-  id        String @id @default(cuid())
-  packageId String
-
-  /// Clave privada en S3/R2. Nunca se expone; se sirve por URL firmada.
-  storageKey  String
-  mimeType    String
-  sizeBytes   Int?
-  width       Int?
-  height      Int?
-  durationSec Int?
-  /// Visible sin pagar (teaser)
-  isPreview   Boolean @default(false)
-  sortOrder   Int     @default(0)
-
-  createdAt DateTime @default(now())
-
-  package ContentPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
-
-  @@index([packageId, sortOrder])
-  @@map("content_assets")
-}
-
-model ContentUnlock {
-  id          String @id @default(cuid())
-  userId      String
-  packageId   String
-  tokensSpent Int
-
-  createdAt DateTime @default(now())
-
-  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  package ContentPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, packageId])
-  @@index([userId, createdAt])
-  @@map("content_unlocks")
-}
-
 // =============================================================================
 // LLAMADAS Y MATCHMAKING
 // =============================================================================
@@ -1110,7 +1091,12 @@ model CallSession {
 
   /// Tarifa aplicada en CENTITOKENS/minuto (0 en RANDOM gratuito).
   /// 1 token = 100 centitokens; ver src/lib/rates.ts.
-  rateCentitokens Int @default(0)
+  rateCentitokens  Int     @default(0)
+  /// Minimo que paga el fan si ES EL quien cuelga antes (lo fija el creador
+  /// al llamar). Si cuelga el creador antes, solo se cobra lo usado.
+  minBilledSeconds Int     @default(0)
+  /// Oferta del creador con la que empezo (happy hour, primera llamada, cupon).
+  creatorOfferId   String?
 
   startedAt    DateTime?
   endedAt      DateTime?
@@ -1451,22 +1437,26 @@ model Post {
   priceTokens Int     @default(0)
   isPublished Boolean @default(true)
 
-  likeCount     Int       @default(0)
-  commentCount  Int       @default(0)
-  unlockCount   Int       @default(0)
+  likeCount       Int       @default(0)
+  commentCount    Int       @default(0)
+  unlockCount     Int       @default(0)
   /// Personas distintas que la han visto en el feed (ver PostImpression).
-  viewCount     Int       @default(0)
-  tokensEarned  Int       @default(0)
+  viewCount       Int       @default(0)
+  tokensEarned    Int       @default(0)
+  /// EXCLUSIVA DE DIRECTO: no sale en el feed ni en el perfil (se queda con
+  /// isPublished = false) y solo se vende desde el menu "Pideme" de sus
+  /// directos. Fecha en que la creadora la dejo lista. null = normal.
+  liveExclusiveAt DateTime?
   /// Retirada por moderacion: deja de verse y la creadora no puede
   /// volver a publicarla.
-  removedAt     DateTime?
-  removedReason String?
+  removedAt       DateTime?
+  removedReason   String?
   /// Tiempo total que la han mirado (ms, max 60 s por persona).
-  watchMs       BigInt    @default(0)
+  watchMs         BigInt    @default(0)
   /// Personas que vieron el video (casi) entero.
-  completions   Int       @default(0)
+  completions     Int       @default(0)
   /// Personas que la pasaron de largo (menos de 1,5 s en pantalla).
-  skips         Int       @default(0)
+  skips           Int       @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1483,6 +1473,7 @@ model Post {
 
   @@index([isPublished, createdAt])
   @@index([modelId, createdAt])
+  @@index([modelId, liveExclusiveAt])
   @@map("posts")
 }
 
@@ -1501,11 +1492,14 @@ model PostAsset {
   height      Int?
   durationSec Int?
   sortOrder   Int     @default(0)
+  /// Huella (SHA-256) del archivo: para que no se repita entre chat y directos.
+  contentHash String?
 
   createdAt DateTime @default(now())
 
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
 
+  @@index([contentHash])
   @@index([postId, sortOrder])
   @@map("post_assets")
 }
@@ -1645,6 +1639,10 @@ model LiveStream {
 
   /// Meta de tokens visible en el directo ("500 tokens -> bailo").
   /// goalProgress cuenta lo que pagan los fans desde que se puso la meta.
+  /// La creadora acepta privados 1 a 1 durante este directo (se le pregunta
+  /// al empezar): los espectadores ven el boton para llamarle.
+  acceptsPrivate Boolean @default(false)
+
   goalLabel     String?
   goalTokens    Int?
   goalProgress  Int       @default(0)
@@ -1653,17 +1651,112 @@ model LiveStream {
   startedAt DateTime?
   endedAt   DateTime?
 
+  // ---------------------------------------------------------------------------
+  // CONTROLES EN VIVO (menu "Mas" de la creadora; ver actions/live-controls.ts)
+  // ---------------------------------------------------------------------------
+  /// En pausa ("vuelvo enseguida") desde esta fecha. null = emitiendo.
+  pausedAt                 DateTime?
+  /// Los espectadores ven la imagen volteada horizontalmente.
+  mirrored                 Boolean        @default(false)
+  /// Mensaje fijo arriba del chat.
+  pinnedMessage            String?
+  /// Quien puede verlo: todos, solo suscriptores o con entrada pagada.
+  accessMode               LiveAccessMode @default(PUBLIC)
+  /// Precio de la entrada (solo PAID).
+  ticketTokens             Int?
+  /// En un directo de pago, sus suscriptores entran sin pagar.
+  ticketFreeForSubscribers Boolean        @default(true)
+  /// Donde ha colocado la creadora cada panel (meta, encuesta, fijado):
+  /// { poll: { x, y } } en fracciones del escenario (0-1). Ver lib/live-state.ts.
+  widgetLayout             Json?
+  /// El menu de propinas se ve como panel sobre el directo.
+  tipMenuOnScreen          Boolean        @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  model        ModelProfile  @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  model        ModelProfile   @relation(fields: [modelId], references: [id], onDelete: Cascade)
   gifts        Gift[]
   transactions Transaction[]
   views        LiveView[]
+  polls        LivePoll[]
+  tickets      LiveTicket[]
+  sanctions    LiveSanction[]
 
   @@index([status, startedAt])
   @@index([modelId, createdAt])
   @@map("live_streams")
+}
+
+enum LiveAccessMode {
+  PUBLIC
+  /// Solo sus suscriptores activos
+  SUBSCRIBERS
+  /// Entrada pagada en tokens (una vez por directo)
+  PAID
+}
+
+/// Encuesta lanzada durante un directo. Un voto por persona.
+model LivePoll {
+  id       String    @id @default(cuid())
+  streamId String
+  question String
+  options  String[]
+  closedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  stream LiveStream     @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  votes  LivePollVote[]
+
+  @@index([streamId, createdAt])
+  @@map("live_polls")
+}
+
+model LivePollVote {
+  id     String @id @default(cuid())
+  pollId String
+  userId String
+  /// Indice de la opcion elegida
+  option Int
+
+  createdAt DateTime @default(now())
+
+  poll LivePoll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+
+  @@unique([pollId, userId])
+  @@map("live_poll_votes")
+}
+
+/// Entrada pagada a un directo de pago (una por persona y directo).
+model LiveTicket {
+  id       String @id @default(cuid())
+  streamId String
+  userId   String
+  tokens   Int
+
+  createdAt DateTime @default(now())
+
+  stream LiveStream @relation(fields: [streamId], references: [id], onDelete: Cascade)
+
+  @@unique([streamId, userId])
+  @@map("live_tickets")
+}
+
+/// Sancion de la creadora a un espectador durante un directo.
+/// MUTE: no puede escribir. KICK: no puede volver a entrar.
+model LiveSanction {
+  id       String @id @default(cuid())
+  streamId String
+  userId   String
+  kind     String
+
+  createdAt DateTime @default(now())
+
+  stream LiveStream @relation(fields: [streamId], references: [id], onDelete: Cascade)
+
+  @@unique([streamId, userId, kind])
+  @@map("live_sanctions")
 }
 
 /// Cuanto tiempo ha mirado cada persona cada directo. Es la senal de
@@ -1790,6 +1883,10 @@ model Recruiter {
   /// Cupo negociado: cuantas creadoras le cuentan como maximo. null = sin tope.
   maxCreators       Int?
   active            Boolean  @default(true)
+  /// Fraccion de token acumulada (en centesimas) que aun no se le ha
+  /// abonado: su % de ventas pequenas (un tramo de llamada de 1 token) no
+  /// llega a un token entero, asi que se acumula hasta completarlo.
+  commissionCarry   Int      @default(0)
   /// Notas internas de la negociacion (solo admin).
   notes             String?
   createdAt         DateTime @default(now())
@@ -1886,41 +1983,359 @@ model VaultFolder {
 /// BOVEDA: contenido privado de la creadora, listo para enviar por chat
 /// (ella o su equipo de chat) sin que el archivo salga de la plataforma.
 model VaultItem {
-  id         String       @id @default(cuid())
-  modelId    String
-  section    VaultSection
-  folderId   String?
-  storageKey String
-  mimeType   String
-  sizeBytes  Int?
+  id          String       @id @default(cuid())
+  modelId     String
+  section     VaultSection
+  folderId    String?
+  storageKey  String
+  mimeType    String
+  sizeBytes   Int?
   /// Nota corta para quien envia ("lenceria roja").
-  note       String?
+  note        String?
   /// Precio propio; null = el del nivel. Los de TEASER siempre van gratis.
   priceTokens Int?
-  createdAt  DateTime     @default(now())
+  createdAt   DateTime     @default(now())
 
-  model       ModelProfile        @relation(fields: [modelId], references: [id], onDelete: Cascade)
-  folder      VaultFolder?        @relation(fields: [folderId], references: [id], onDelete: SetNull)
-  attachments MessageAttachment[]
+  /// Miniatura borrosa (se crea la primera vez que se envia).
+  previewKey String?
+
+  /// Paquete al que pertenece: si lo tiene, solo se vende dentro del paquete.
+  packId      String?
+  /// Huella (SHA-256) del archivo: para que no se repita entre chat y directos.
+  contentHash String?
+
+  model           ModelProfile            @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  folder          VaultFolder?            @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  pack            VaultPack?              @relation(fields: [packId], references: [id], onDelete: SetNull)
+  attachments     MessageAttachment[]
+  attachmentFiles MessageAttachmentFile[]
 
   @@index([modelId, section, createdAt])
+  @@index([modelId, contentHash])
   @@map("vault_items")
+}
+
+/// Paquete de la Boveda: varios archivos que se venden juntos por un precio.
+model VaultPack {
+  id          String   @id @default(cuid())
+  modelId     String
+  name        String
+  priceTokens Int
+  createdAt   DateTime @default(now())
+
+  model ModelProfile @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  items VaultItem[]
+
+  @@index([modelId, createdAt])
+  @@map("vault_packs")
 }
 
 /// Movil u ordenador donde la persona activo los avisos (Web Push). Uno por
 /// navegador; se borra solo cuando el servicio de avisos dice que ya no vale.
 model PushSubscription {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   userId     String
-  endpoint   String   @unique
+  endpoint   String    @unique
   p256dh     String
   auth       String
   userAgent  String?
-  createdAt  DateTime @default(now())
+  createdAt  DateTime  @default(now())
   lastUsedAt DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@map("push_subscriptions")
+}
+
+/// PROMOCION DE TOKENS: el equipo rebaja el precio de todos los paquetes un
+/// % durante unas fechas. Se aplica al cobrar (lib/token-promos.ts) y se
+/// anuncia en el monedero y en los directos.
+model TokenPromo {
+  id          String   @id @default(cuid())
+  /// Lo que ven los fans ("Black Friday", "Fin de semana loco")
+  title       String
+  /// % de descuento sobre el precio de cada paquete
+  percentOff  Int
+  startsAt    DateTime
+  endsAt      DateTime
+  active      Boolean  @default(true)
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([active, startsAt, endsAt])
+  @@map("token_promos")
+}
+
+// =============================================================================
+// OFERTAS DEL CREADOR
+// -----------------------------------------------------------------------------
+// Rebajas que lanza el propio creador. El descuento sale de SU precio: la
+// plataforma cobra su % de lo que el fan paga de verdad, asi que nunca pierde.
+//   HAPPY_HOUR   -X% en privados durante 1-3 h
+//   FLASH_SALE   -X% en todo su contenido de pago durante 24-72 h
+//   FIRST_MONTH  -X% en el primer mes de quien se suscribe por primera vez
+//   FIRST_CALL   -X% en la primera videollamada de cada fan
+//   COUPON       cupon personal para un fan (llamada o contenido), 24 h, 1 uso
+// =============================================================================
+
+enum CreatorOfferKind {
+  HAPPY_HOUR
+  FLASH_SALE
+  FIRST_MONTH
+  FIRST_CALL
+  COUPON
+}
+
+enum CouponTarget {
+  CALL
+  CONTENT
+}
+
+model CreatorOffer {
+  id         String           @id @default(cuid())
+  modelId    String
+  kind       CreatorOfferKind
+  percentOff Int
+  startsAt   DateTime         @default(now())
+  /// null = sin fecha de fin (primer mes, primera llamada)
+  endsAt     DateTime?
+  active     Boolean          @default(true)
+  /// Cupon: para que fan es y en que se usa.
+  fanId      String?
+  target     CouponTarget?
+  usedAt     DateTime?
+  /// Ventas hechas con la oferta y tokens que pagaron los fans.
+  uses       Int              @default(0)
+  tokensPaid Int              @default(0)
+  createdAt  DateTime         @default(now())
+
+  model ModelProfile @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  fan   User?        @relation("CouponFan", fields: [fanId], references: [id], onDelete: Cascade)
+
+  @@index([modelId, kind, active])
+  @@index([fanId, usedAt])
+  @@map("creator_offers")
+}
+
+// =============================================================================
+// DISTRIBUIDORES OFICIALES (revendedores de tokens)
+// -----------------------------------------------------------------------------
+// Compran tokens al por mayor (solo por transferencia bancaria, nunca con
+// tarjeta) y los envian a fans verificados de su pais. Sus tokens ("stock")
+// no estan en su monedero: no puede gastarlos ni retirarlos, solo enviarlos.
+// Todo el programa esta apagado hasta que config.distributors.enabled = true.
+// =============================================================================
+
+enum DistributorStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum DistributorOrderStatus {
+  PENDING
+  PAID
+  CANCELLED
+}
+
+enum DistributorPayMethod {
+  WIRE
+  USDT
+}
+
+model Distributor {
+  id             String            @id @default(cuid())
+  userId         String            @unique
+  /// Nombre legal (persona o empresa) que figura en el contrato.
+  legalName      String
+  /// ISO 3166-1 alfa-2 del pais donde vende.
+  country        String
+  taxId          String?
+  /// Como lo contactan los fans (WhatsApp, Telegram, email...). Publico.
+  publicContact  String
+  /// Paises donde vende (ISO alfa-2): su pais + los de sus metodos de cobro (syncCoverage).
+  countries      String[]
+  /// Metodos de pago que acepta: salen de sus metodos de cobro activos (syncCoverage).
+  paymentMethods String[]
+  status         DistributorStatus @default(ACTIVE)
+  /// Lo pone el propio distribuidor: si ahora atiende pedidos o no.
+  isAvailable    Boolean           @default(true)
+
+  /// Precio especial por token (centavos) pactado con este distribuidor.
+  /// null = precio por tramos segun el tamaño del lote (lo normal).
+  centsPerToken    Int?
+  /// Tope de tokens que puede enviar al dia (todos sus fans).
+  dailyLimitTokens Int
+  /// Tokens comprados y aun no enviados.
+  stockTokens      Int  @default(0)
+
+  /// Cumplimiento: identidad verificada, revisado en la lista OFAC, contrato firmado.
+  idVerifiedAt       DateTime?
+  sanctionsCheckedAt DateTime?
+  contractSignedAt   DateTime?
+  notes              String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders    DistributorOrder[]
+  transfers DistributorTransfer[]
+  accounts  DistributorAccount[]
+  sales     DistributorSale[]
+
+  @@index([status, country])
+  @@map("distributors")
+}
+
+model DistributorOrder {
+  id              String                 @id @default(cuid())
+  distributorId   String
+  tokens          Int
+  /// Precio medio por token del lote, en milesimas de centavo (8700 = 8,7 ¢).
+  centsPerToken   Int
+  /// Descuento del tramo aplicado (0 si tenia precio especial).
+  discountPercent Int                    @default(0)
+  amountCents     Int
+  paymentMethod   DistributorPayMethod   @default(WIRE)
+  status          DistributorOrderStatus @default(PENDING)
+  /// Referencia de la transferencia o hash de la transaccion USDT.
+  paymentRef      String?
+  /// Recibo del pago que sube el distribuidor (obligatorio para confirmar el lote).
+  proofKey        String?
+  proofUploadedAt DateTime?
+  /// Motivo si el equipo rechaza el lote (no llego el pago...).
+  rejectReason    String?
+  confirmedById   String?
+  paidAt          DateTime?
+  createdAt       DateTime               @default(now())
+
+  distributor Distributor @relation(fields: [distributorId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([distributorId, createdAt])
+  @@map("distributor_orders")
+}
+
+model DistributorTransfer {
+  id            String   @id @default(cuid())
+  distributorId String
+  toUserId      String
+  tokens        Int
+  /// Chat desde el que se envio (el fan lo pidio en la app).
+  peerChatId    String?
+  /// Pedido con garantia que lo origino.
+  saleId        String?
+  createdAt     DateTime @default(now())
+
+  distributor Distributor @relation(fields: [distributorId], references: [id], onDelete: Cascade)
+  toUser      User        @relation("DistributorRecipient", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  @@index([distributorId, createdAt])
+  @@index([toUserId, createdAt])
+  @@map("distributor_transfers")
+}
+
+/// Cuenta de cobro de un distribuidor: un metodo de pago en un pais y una
+/// moneda, con su precio. Los datos para pagar solo los ve el fan dentro de
+/// un pedido.
+model DistributorAccount {
+  id            String   @id @default(cuid())
+  distributorId String
+  country       String
+  /// ISO 4217 (MXN, COP, USD...)
+  currency      String
+  /// Clave de PAYMENT_METHODS (lib/distributor-shared)
+  method        String
+  /// "Nequi 300 000 0000 a nombre de Ana Torres"
+  details       String
+  /// (Antiguo, sin uso) precio por 100 tokens. Ahora cada metodo tiene sus paquetes.
+  pricePer100   Int      @default(0)
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  distributor Distributor          @relation(fields: [distributorId], references: [id], onDelete: Cascade)
+  sales       DistributorSale[]
+  packages    DistributorPackage[]
+
+  @@index([distributorId, active])
+  @@map("distributor_accounts")
+}
+
+/// Paquete que vende un distribuidor con un metodo: "50 tokens = 95 MXN".
+/// El precio lo pone el; se le recomienda no ganar mas del 20%.
+model DistributorPackage {
+  id        String   @id @default(cuid())
+  accountId String
+  tokens    Int
+  /// Precio en la moneda del metodo, en centesimas.
+  price     Int
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  account DistributorAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  sales   DistributorSale[]
+
+  @@index([accountId, active])
+  @@map("distributor_packages")
+}
+
+enum DistributorSaleStatus {
+  /// Creado: los tokens del distribuidor quedan reservados. El fan debe pagar.
+  AWAITING_PAYMENT
+  /// El fan dice que pago. El distribuidor debe confirmar y liberar.
+  PAID
+  COMPLETED
+  CANCELLED
+  /// Lo revisa el equipo.
+  DISPUTED
+}
+
+/// Compra con garantia entre un fan y un distribuidor, dentro de la web.
+model DistributorSale {
+  id              String                @id @default(cuid())
+  distributorId   String
+  fanId           String
+  accountId       String
+  packageId       String?
+  tokens          Int
+  currency        String
+  /// Lo que paga el fan, en centesimas de su moneda.
+  amount          Int
+  /// Lo que valian esos tokens al cambio oficial del dia (centesimas). Solo referencia para disputas.
+  referenceAmount Int
+  status          DistributorSaleStatus @default(AWAITING_PAYMENT)
+  /// Referencia del pago que pone el fan.
+  paymentRef      String?
+  /// Captura del comprobante (obligatoria al marcar "Ya pagué").
+  paymentProofKey String?
+  expiresAt       DateTime
+  paidAt          DateTime?
+  completedAt     DateTime?
+  cancelledAt     DateTime?
+  cancelReason    String?
+  disputedAt      DateTime?
+  /// FAN o DISTRIBUTOR
+  disputeBy       String?
+  disputeReason   String?
+  /// Prueba que sube quien abre la disputa (captura de su cuenta, del chat...).
+  disputeEvidenceKey String?
+  resolvedById    String?
+  resolvedAt      DateTime?
+  /// Lo que decidio el equipo y por que (lo ven el fan y el distribuidor).
+  resolutionNote  String?
+  /// Valoracion del fan: 1 bien, -1 mal.
+  rating          Int?
+  createdAt       DateTime              @default(now())
+
+  distributor Distributor         @relation(fields: [distributorId], references: [id], onDelete: Cascade)
+  fan         User                @relation("DistributorBuyer", fields: [fanId], references: [id], onDelete: Cascade)
+  account     DistributorAccount  @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  package     DistributorPackage? @relation(fields: [packageId], references: [id], onDelete: SetNull)
+
+  @@index([distributorId, status])
+  @@index([fanId, createdAt])
+  @@index([status, expiresAt])
+  @@map("distributor_sales")
 }

@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 
 import { Logo } from '@/components/brand/logo';
+import { AvailabilitySwitch } from '@/components/calls/call-availability';
 import { CreateSheet } from '@/components/layout/create-sheet';
 import { NotificationBell } from '@/components/layout/notification-bell';
 import { SIDEBAR_LABEL, SIDEBAR_ROW } from '@/components/layout/sidebar-row';
@@ -44,6 +45,7 @@ export interface SideNavAccount {
   verified: boolean;
   balance: number;
   isRecruiter: boolean;
+  isDistributor: boolean;
 }
 
 /**
@@ -98,6 +100,13 @@ export function SideNav({ account }: { account: SideNavAccount | null }) {
         <div className="mb-6 flex justify-center lg:justify-start lg:px-3">
           <Logo wordmarkClassName="hidden lg:inline" />
         </div>
+
+        {/* Creadores: "Recibo llamadas", lo primero y siempre a la vista. */}
+        {isCreator && account?.verified && (
+          <div className="mb-4">
+            <AvailabilitySwitch variant="sidebar" />
+          </div>
+        )}
 
         <nav className="flex flex-1 flex-col gap-1 overflow-y-auto">
           {main.map((item) => {
@@ -187,6 +196,7 @@ export function SideNav({ account }: { account: SideNavAccount | null }) {
               <UserMenu
                 trigger="sidebar"
                 isRecruiter={account.isRecruiter}
+                isDistributor={account.isDistributor}
                 name={account.name}
                 email={account.email}
                 image={account.image}

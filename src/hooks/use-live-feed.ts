@@ -26,7 +26,7 @@ function writeQueue(queue: string[]) {
 /**
  * Cola de deslizar de esta sesion, como el feed de TikTok: el orden ya visto
  * no cambia (volver hacia atras lleva a donde estabas), y lo nuevo que
- * recomienda el algoritmo se anade al final.
+ * recomienda el algoritmo se añade al final.
  *
  * `feed` es el orden personalizado que manda el servidor en cada pagina; los
  * directos que ya no estan en el (terminados) se quitan de la cola.

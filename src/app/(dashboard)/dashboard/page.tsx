@@ -62,7 +62,11 @@ export default async function UserDashboardPage() {
         take: 3,
         include: { model: { select: { stageName: true, slug: true, avatarUrl: true } } },
       }),
-      prisma.contentUnlock.count({ where: { userId: user.id } }),
+      // Todo lo desbloqueado (publicaciones, packs de directo y envios del chat).
+      Promise.all([
+        prisma.postUnlock.count({ where: { userId: user.id } }),
+        prisma.messageAttachmentUnlock.count({ where: { userId: user.id } }),
+      ]).then(([posts, chat]) => posts + chat),
       prisma.callSession.aggregate({
         where: { callerId: user.id, status: 'ENDED' },
         _count: true,
@@ -119,7 +123,7 @@ export default async function UserDashboardPage() {
         />
         <MetricCard
           icon={Lock}
-          label="Packs desbloqueados"
+          label="Compras"
           value={formatTokens(unlocks)}
         />
       </div>

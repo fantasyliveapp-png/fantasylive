@@ -5,7 +5,7 @@ import { Loader2, Sparkles } from 'lucide-react';
 
 import { PostCard } from '@/components/feed/post-card';
 import type { FeedPost } from '@/lib/posts';
-import { loadDiscoverAction, loadFollowingAction } from '@/server/actions/feed';
+import { loadDiscoverAction, loadFollowingAction, loadSubscriptionsAction } from '@/server/actions/feed';
 
 /**
  * Feed con SCROLL INFINITO: al acercarse al final pide la siguiente tanda
@@ -17,10 +17,13 @@ export function InfiniteFeed({
   isAuthenticated,
   kind,
   sessionStart,
+  modelId,
 }: {
   initialPosts: FeedPost[];
   isAuthenticated: boolean;
-  kind: 'discover' | 'following';
+  kind: 'discover' | 'following' | 'subscriptions';
+  /** Solo 'subscriptions': las de una creadora concreta. */
+  modelId?: string | null;
   /** ms: cuando empezo a mirar (solo Descubrir) */
   sessionStart?: number;
 }) {
@@ -43,7 +46,9 @@ export function InfiniteFeed({
               exclude: posts.map((p) => p.id),
               sessionStart: sessionStart ?? Date.now(),
             })
-          : await loadFollowingAction(posts[posts.length - 1]!.id);
+          : kind === 'subscriptions'
+            ? await loadSubscriptionsAction(posts[posts.length - 1]!.id, modelId)
+            : await loadFollowingAction(posts[posts.length - 1]!.id);
       const seen = new Set(posts.map((p) => p.id));
       const fresh = next.filter((p) => !seen.has(p.id));
       if (fresh.length === 0) setDone(true);
@@ -54,7 +59,7 @@ export function InfiniteFeed({
       busy.current = false;
       setLoading(false);
     }
-  }, [done, kind, posts, sessionStart]);
+  }, [done, kind, modelId, posts, sessionStart]);
 
   useEffect(() => {
     const el = sentinel.current;

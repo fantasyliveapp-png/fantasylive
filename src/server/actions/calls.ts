@@ -1,5 +1,6 @@
 'use server';
 
+import { applyRateOffer, getCallOffer, markCallOfferUsed } from '@/lib/creator-offers';
 import { revalidatePath } from 'next/cache';
 import type { CallEndReason, Gender } from '@prisma/client';
 
@@ -33,6 +34,17 @@ import {
   registerSkip,
 } from '@/lib/matchmaking';
 import { randomRoomName } from '@/lib/utils';
+import {
+  RING_SECONDS,
+  RINGING_WHERE,
+  expireRingingCalls,
+  isFresh,
+  isInCall,
+  reapStalePresence,
+} from '@/lib/call-presence';
+import { ensureDealConversation } from '@/lib/deal-chat';
+import { broadcastLiveState } from '@/lib/live-controls';
+import { endStreamAction } from '@/server/actions/live';
 
 export interface CallActionResult<T = unknown> {
   ok: boolean;
@@ -50,6 +62,7 @@ export async function joinQueueAction(input: {
   countryPreference?: string;
 }): Promise<CallActionResult> {
   try {
+    await reapStalePresence();
     const user = await getAuthedUserOrThrow();
 
     const profile = await prisma.user.findUnique({
@@ -165,6 +178,14 @@ export async function getCallTokenAction(
       return { ok: false, error: 'Esta llamada ya ha finalizado.' };
     }
 
+    // Llamada directa que aun suena: quien llama no la activa (ni empieza a
+    // pagar) hasta que el creador la coge.
+    if (session.status === 'CANCELLED') {
+      return { ok: false, error: 'Esta llamada ya no esta disponible.' };
+    }
+    const stillRinging =
+      session.status === 'PENDING' && session.type === 'PRIVATE' && session.callerId === user.id;
+
     const token = await createLiveKitToken({
       roomName: session.roomName,
       identity: user.id,
@@ -172,7 +193,7 @@ export async function getCallTokenAction(
       metadata: { role: user.role, isVip: user.isVip },
     });
 
-    await activateCall(sessionId);
+    if (!stillRinging) await activateCall(sessionId);
 
     return {
       ok: true,
@@ -233,8 +254,9 @@ export async function getCallStateAction(
 }
 
 /**
- * Inicia una llamada privada directa con una modelo (fuera de reserva).
- * Verifica saldo para el minimo de minutos exigido por la modelo.
+ * Llama ahora a un creador que tiene activado "Recibo llamadas". La llamada
+ * SUENA en su pantalla (Aceptar / Rechazar) durante unos segundos; si no la
+ * coge, se da por perdida. No se cobra nada hasta que la acepta.
  */
 export async function startPrivateCallAction(
   modelSlug: string,
@@ -249,6 +271,7 @@ export async function startPrivateCallAction(
         userId: true,
         stageName: true,
         isOnline: true,
+        lastOnlineAt: true,
         privateRateCentitokens: true,
         minPrivateMinutes: true,
         kycStatus: true,
@@ -259,7 +282,7 @@ export async function startPrivateCallAction(
 
     if (!model) return { ok: false, error: 'Perfil no encontrado.' };
     if (model.userId === user.id) {
-      return { ok: false, error: 'No puedes llamarte a ti misma/o.' };
+      return { ok: false, error: 'No puedes llamarte a tu propio perfil.' };
     }
     if (await isBlockedForViewer(model.blockedCountries)) {
       return { ok: false, error: GEO_BLOCKED_MESSAGE };
@@ -270,23 +293,46 @@ export async function startPrivateCallAction(
         error: `${model.stageName} aun no esta ${gw(model.gender, { f: 'verificada', m: 'verificado', pl: 'verificados' })}.`,
       };
     }
-    if (!model.isOnline) {
+    // En directo: solo si al empezar dijo que acepta privados 1 a 1.
+    const live = await prisma.liveStream.findFirst({
+      where: { modelId: model.id, status: 'LIVE' },
+      select: { acceptsPrivate: true },
+    });
+    if (live && !live.acceptsPrivate) {
+      return { ok: false, error: `${model.stageName} esta en directo y ahora no acepta privados.` };
+    }
+    // Fuera de directo: "Recibo llamadas" activado y con la web abierta.
+    if (!live && (!model.isOnline || !isFresh(model.lastOnlineAt))) {
       return {
         ok: false,
-        error: 'La modelo no esta en linea. Reserva una videollamada privada.',
+        error: `${model.stageName} no recibe llamadas ahora. Puedes reservar una videollamada o escribirle.`,
       };
     }
+    if ((await isInCall(model.userId)) || (await prisma.callSession.findFirst({
+      where: { ...RINGING_WHERE, calleeId: model.userId, createdAt: { gt: new Date(Date.now() - RING_SECONDS * 1000) } },
+      select: { id: true },
+    }))) {
+      return { ok: false, error: `${model.stageName} esta en otra llamada. Prueba en unos minutos.` };
+    }
 
-    const subscription = await getActiveSubscription(user.id, model.id);
-    const rateCentitokens = subscription
+    const [subscription, offer] = await Promise.all([
+      getActiveSubscription(user.id, model.id),
+      // Happy hour, primera llamada o cupon del creador (sale de su precio).
+      getCallOffer({ id: model.id, userId: model.userId }, user.id),
+    ]);
+    const subscriberRate = subscription
       ? applySubscriberDiscount(
           model.privateRateCentitokens,
           subscription.discountPercent,
         )
       : model.privateRateCentitokens;
+    // No se suman: gana el descuento mayor.
+    const offerRate = offer ? applyRateOffer(model.privateRateCentitokens, offer.percentOff) : Infinity;
+    const usedOffer = offer && offerRate < subscriberRate ? offer : null;
+    const rateCentitokens = usedOffer ? offerRate : subscriberRate;
 
-    // Minimo facturable: hay que poder pagar los 5 minutos completos antes
-    // de empezar, porque se cobran igual si se cuelga antes.
+    // Minimo facturable: hay que poder pagar los minutos minimos completos
+    // antes de empezar, porque se cobran igual si se cuelga antes.
     const required = tokensForMinutes(rateCentitokens, model.minPrivateMinutes);
     const wallet = await prisma.wallet.findUnique({
       where: { userId: user.id },
@@ -300,30 +346,126 @@ export async function startPrivateCallAction(
       };
     }
 
-    const session = await prisma.callSession.create({
-      data: {
-        type: 'PRIVATE',
-        status: 'PENDING',
-        callerId: user.id,
-        calleeId: model.userId,
-        roomName: randomRoomName('priv'),
-        rateCentitokens,
-      },
-      select: { id: true },
+    const session = await prisma.$transaction(async (tx) => {
+      // La llamada queda tambien en su chat (tarjeta "Videollamada").
+      await ensureDealConversation(tx, user.id, model.id);
+      return tx.callSession.create({
+        data: {
+          type: 'PRIVATE',
+          status: 'PENDING',
+          callerId: user.id,
+          calleeId: model.userId,
+          roomName: randomRoomName('priv'),
+          rateCentitokens,
+          // El minimo que fija el creador: lo paga el fan si cuelga antes.
+          minBilledSeconds: model.minPrivateMinutes * 60,
+          creatorOfferId: usedOffer?.id ?? null,
+        },
+        select: { id: true },
+      });
     });
 
-    // Sin este aviso la creadora no se entera de nada y quien llama se queda
-    // esperando indefinidamente: no habia ninguna otra senal de llamada
-    // entrante en toda la aplicacion.
+    // Aviso de respaldo: la llamada suena en su web, pero si la tiene en
+    // segundo plano le llega tambien como notificacion (y push).
     await createNotification(prisma, {
       userId: model.userId,
       type: 'INCOMING_CALL',
       title: `${user.name ?? 'Alguien'} te esta llamando`,
-      body: `Videollamada privada a ${formatRate(rateCentitokens)}`,
+      body: `Videollamada privada a ${formatRate(rateCentitokens)}${usedOffer ? ` (${usedOffer.label} −${usedOffer.percentOff}%)` : ''}`,
       link: `/call/${session.id}`,
     });
 
     return { ok: true, data: { sessionId: session.id } };
+  } catch (error) {
+    return { ok: false, error: toMessage(error) };
+  }
+}
+
+/** Creador: coge la llamada que le suena. */
+export async function acceptCallAction(sessionId: string): Promise<CallActionResult> {
+  try {
+    const user = await getAuthedUserOrThrow();
+    await expireRingingCalls({ id: sessionId });
+    const done = await prisma.callSession.updateMany({
+      where: { id: sessionId, calleeId: user.id, ...RINGING_WHERE },
+      data: { status: 'ACTIVE', startedAt: new Date(), lastBilledAt: new Date() },
+    });
+    if (done.count === 0) return { ok: false, error: 'La llamada ya no esta sonando.' };
+    // Si empezo con una oferta del creador, cuenta ahora (un cupon se gasta al cogerla).
+    await markCallOfferUsed(sessionId);
+
+    // Estaba en directo: el directo termina y la sala se entera de por que.
+    if (user.modelProfileId) {
+      const live = await prisma.liveStream.findFirst({
+        where: { modelId: user.modelProfileId, status: { in: ['PREPARING', 'LIVE'] } },
+        select: { id: true, roomName: true },
+      });
+      if (live) {
+        await broadcastLiveState(live.roomName, { wentPrivate: true, acceptsPrivate: false });
+        await endStreamAction(live.id);
+      }
+    }
+    return { ok: true, data: { sessionId } };
+  } catch (error) {
+    return { ok: false, error: toMessage(error) };
+  }
+}
+
+/** Creador: rechaza la llamada. Al fan se le ofrece reservar o escribir. */
+export async function declineCallAction(sessionId: string): Promise<CallActionResult> {
+  try {
+    const user = await getAuthedUserOrThrow();
+    await prisma.callSession.updateMany({
+      where: { id: sessionId, calleeId: user.id, ...RINGING_WHERE },
+      data: { status: 'CANCELLED', endReason: 'PARTNER_HANGUP', endedAt: new Date() },
+    });
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: toMessage(error) };
+  }
+}
+
+/** Fan: cuelga antes de que la cojan. */
+export async function cancelRingingCallAction(sessionId: string): Promise<CallActionResult> {
+  try {
+    const user = await getAuthedUserOrThrow();
+    await prisma.callSession.updateMany({
+      where: { id: sessionId, callerId: user.id, ...RINGING_WHERE },
+      data: { status: 'CANCELLED', endReason: 'USER_HANGUP', endedAt: new Date() },
+    });
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: toMessage(error) };
+  }
+}
+
+/**
+ * Fan, mientras suena: si ya la han cogido, rechazado o se ha perdido.
+ * 'ringing' | 'accepted' | 'declined' | 'missed' | 'cancelled'
+ */
+export async function getRingStateAction(
+  sessionId: string,
+): Promise<CallActionResult<{ state: string; secondsLeft: number }>> {
+  try {
+    const user = await getAuthedUserOrThrow();
+    await expireRingingCalls({ id: sessionId });
+    const s = await prisma.callSession.findUnique({
+      where: { id: sessionId },
+      select: { callerId: true, status: true, endReason: true, createdAt: true },
+    });
+    if (!s || s.callerId !== user.id) return { ok: false, error: 'Llamada no encontrada.' };
+    const secondsLeft = Math.max(0, RING_SECONDS - Math.floor((Date.now() - s.createdAt.getTime()) / 1000));
+    const state =
+      s.status === 'PENDING'
+        ? 'ringing'
+        : s.status === 'ACTIVE'
+          ? 'accepted'
+          : s.endReason === 'PARTNER_HANGUP'
+            ? 'declined'
+            : s.endReason === 'TIMEOUT'
+              ? 'missed'
+              : 'cancelled';
+    return { ok: true, data: { state, secondsLeft } };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
   }

@@ -6,7 +6,7 @@ import type {
 
 import { prisma } from '@/lib/prisma';
 import { config } from '@/lib/config';
-import { payReferrers, referralSplit } from '@/lib/referrals';
+import { payReferrers, referralSplit, saleMetadata } from '@/lib/referrals';
 
 export class InsufficientTokensError extends Error {
   constructor(
@@ -91,7 +91,6 @@ export interface LedgerEntry {
   currency?: string;
   metadata?: Prisma.InputJsonValue;
   callSessionId?: string;
-  contentPackageId?: string;
   bookingId?: string;
   tokenPackageId?: string;
   giftId?: string;
@@ -237,7 +236,8 @@ export async function applyLedgerEntry(
       data: {
         balance: { increment: amount },
         lifetimePurchased: {
-          increment: entry.type === 'TOKEN_PURCHASE' ? amount : 0,
+          // Lo que envia un distribuidor oficial cuenta como comprado.
+          increment: entry.type === 'TOKEN_PURCHASE' || entry.type === 'DISTRIBUTOR_CREDIT' ? amount : 0,
         },
         lifetimeEarned: { increment: isEarning ? amount : 0 },
         pendingEarnings: { increment: isEarning ? amount : 0 },
@@ -261,7 +261,6 @@ export async function applyLedgerEntry(
       description: entry.description,
       metadata: entry.metadata,
       callSessionId: entry.callSessionId,
-      contentPackageId: entry.contentPackageId,
       bookingId: entry.bookingId,
       tokenPackageId: entry.tokenPackageId,
       giftId: entry.giftId,
@@ -289,10 +288,12 @@ export async function recordLedgerEntry(entry: LedgerEntry) {
  * Reparte tokens gastados por un usuario entre la modelo y la plataforma.
  * Devuelve el desglose para persistirlo en la sesion/paquete.
  */
-export function splitEarnings(tokensSpent: number) {
-  const fee = Math.round(
-    (tokensSpent * config.economy.platformCommissionPercent) / 100,
-  );
+export function splitEarnings(
+  tokensSpent: number,
+  /** % de la plataforma; por defecto el estandar (una creadora con trato tiene el suyo). */
+  platformPercent: number = config.economy.platformCommissionPercent,
+) {
+  const fee = Math.round((tokensSpent * platformPercent) / 100);
   return {
     platformFeeTokens: fee,
     modelTokens: tokensSpent - fee,
@@ -313,8 +314,7 @@ export async function transferWithCommission(
     creditType: TransactionType;
     description: string;
     callSessionId?: string;
-    contentPackageId?: string;
-    bookingId?: string;
+      bookingId?: string;
     giftId?: string;
     subscriptionId?: string;
     contentRequestId?: string;
@@ -326,11 +326,12 @@ export async function transferWithCommission(
   },
 ) {
   // Reparto con las reglas de referidos (fan propio / embajadora).
-  const { platformFeeTokens, modelTokens, referrers } = await referralSplit(tx, {
+  const split = await referralSplit(tx, {
     payerId: params.fromUserId,
     earnerId: params.toUserId,
     tokens: params.tokens,
   });
+  const { platformFeeTokens, modelTokens, referrers } = split;
 
   const debit = await applyLedgerEntry(tx, {
     userId: params.fromUserId,
@@ -338,7 +339,6 @@ export async function transferWithCommission(
     tokens: params.tokens,
     description: params.description,
     callSessionId: params.callSessionId,
-    contentPackageId: params.contentPackageId,
     bookingId: params.bookingId,
     giftId: params.giftId,
     subscriptionId: params.subscriptionId,
@@ -359,7 +359,6 @@ export async function transferWithCommission(
       tokens: modelTokens,
       description: params.description,
       callSessionId: params.callSessionId,
-      contentPackageId: params.contentPackageId,
       bookingId: params.bookingId,
       // giftId es unico en la tabla: el regalo queda enlazado al cargo del
       // fan (debit). Repetirlo aqui rompia todos los regalos con un error de
@@ -370,7 +369,7 @@ export async function transferWithCommission(
       messageAttachmentId: params.messageAttachmentId,
       postId: params.postId,
       liveStreamId: params.liveStreamId,
-      metadata: params.metadata,
+      metadata: saleMetadata(split, { payerId: params.fromUserId, tokens: params.tokens }, params.metadata),
     });
   }
 
@@ -391,7 +390,7 @@ export function tokensToPayoutCents(tokens: number): number {
 
 /**
  * Lo que de verdad le llega a la creadora por N tokens ganados: su valor en
- * dolares YA descontada la comision de retiro. Es lo que se le ensena en su
+ * dolares YA descontada la comision de retiro. Es lo que se le enseña en su
  * panel, para que el numero que ve sea el que cobra.
  */
 export function tokensToNetPayoutCents(tokens: number): number {

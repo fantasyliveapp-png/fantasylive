@@ -37,7 +37,7 @@ import {
   skipAndRequeueAction,
 } from '@/server/actions/calls';
 import { formatDuration, formatTokens, initials } from '@/lib/utils';
-import { MIN_BILLED_CALL_MINUTES, formatRateNumber } from '@/lib/rates';
+import { formatRateNumber, tokensForSeconds } from '@/lib/rates';
 
 export interface CallPartner {
   id: string;
@@ -57,6 +57,10 @@ interface VideoCallRoomProps {
   partner: CallPartner | null;
   /** Permite el boton "siguiente" (solo en modos aleatorios) */
   allowSkip: boolean;
+  /** Chat de esta pareja, para "Seguir hablando por chat". */
+  chatHref?: string | null;
+  /** Minimo de la llamada: lo paga el fan si cuelga el antes. */
+  minBilledSeconds?: number;
 }
 
 export function VideoCallRoom({
@@ -67,6 +71,8 @@ export function VideoCallRoom({
   initialBalance,
   partner,
   allowSkip,
+  chatHref,
+  minBilledSeconds = 0,
 }: VideoCallRoomProps) {
   const router = useRouter();
 
@@ -83,6 +89,8 @@ export function VideoCallRoom({
   const [waitedTooLong, setWaitedTooLong] = useState(false);
   const [showGifts, setShowGifts] = useState(false);
   const [showReport, setShowReport] = useState(false);
+  /** Colgar antes del minimo: se pregunta primero. */
+  const [confirmHang, setConfirmHang] = useState(false);
 
   // 1. Token de acceso al media server
   useEffect(() => {
@@ -161,7 +169,18 @@ export function VideoCallRoom({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [endedReason]);
 
+  // Aun no se ha llegado al minimo (y los dos estan conectados).
+  const minimumLeft = Math.max(0, minBilledSeconds - billing.elapsedSeconds);
+  const underMinimum =
+    minBilledSeconds > 0 && rateCentitokens > 0 && minimumLeft > 0 && room.status === 'partner-joined';
+
+  function requestHangUp() {
+    if (underMinimum) setConfirmHang(true);
+    else void hangUp();
+  }
+
   async function hangUp() {
+    setConfirmHang(false);
     setIsEnding(true);
     room.disconnect();
     await endCallAction(sessionId, 'USER_HANGUP');
@@ -197,6 +216,38 @@ export function VideoCallRoom({
 
   return (
     <div className="relative flex h-[100dvh] flex-col bg-black">
+      {confirmHang && (
+        <div className="absolute inset-0 z-50 flex items-end justify-center bg-black/70 p-4 sm:items-center">
+          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-zinc-900 p-5 text-white">
+            <h2 className="text-lg font-bold">¿Colgar antes del mínimo?</h2>
+            <p className="mt-2 text-sm text-white/70">
+              {isPayer ? (
+                <>
+                  Esta llamada tiene un mínimo de {Math.round(minBilledSeconds / 60)} min (
+                  <strong className="text-token">
+                    {formatTokens(tokensForSeconds(rateCentitokens, minBilledSeconds))} tokens
+                  </strong>
+                  ). Llevas {formatDuration(billing.elapsedSeconds)}: si cuelgas tú ahora,{' '}
+                  <strong className="text-white">se te cobra el mínimo completo</strong>.
+                </>
+              ) : (
+                <>
+                  Llevais {formatDuration(billing.elapsedSeconds)} de {Math.round(minBilledSeconds / 60)} min
+                  mínimos. Si cuelgas tú antes del mínimo, el fan solo paga el tiempo usado.
+                </>
+              )}
+            </p>
+            <div className="mt-5 flex flex-col gap-2">
+              <Button variant="brand" onClick={() => setConfirmHang(false)}>
+                Seguir en la llamada
+              </Button>
+              <Button variant="ghost" className="text-rose-400" onClick={hangUp} disabled={isEnding}>
+                {isPayer ? 'Colgar y pagar el mínimo' : 'Colgar igualmente'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* VIDEO REMOTO */}
       <div className="relative flex-1 overflow-hidden">
         <video
@@ -261,8 +312,8 @@ export function VideoCallRoom({
                       Parece que no esta disponible en este momento.
                     </p>
                     <div className="flex gap-2">
-                      {partner?.slug && (
-                        <Link href={`/dashboard/messages/${partner.slug}`}>
+                      {chatHref && (
+                        <Link href={chatHref}>
                           <Button variant="outline" size="sm">
                             <MessageCircle className="h-4 w-4" />
                             Dejarle un mensaje
@@ -343,13 +394,10 @@ export function VideoCallRoom({
                   -{formatRateNumber(rateCentitokens)}/min · ~
                   {billing.remainingMinutes} min
                 </Badge>
-                {billing.minimumPaddingSeconds > 0 && (
-                  <Badge
-                    variant="muted"
-                    className="hidden bg-black/50 backdrop-blur sm:flex"
-                  >
+                {minimumLeft > 0 && minBilledSeconds > 0 && (
+                  <Badge variant="muted" className="gap-1 bg-black/50 backdrop-blur" title="Si cuelgas antes, se cobra el minimo">
                     <Timer className="h-3 w-3" />
-                    Minimo {MIN_BILLED_CALL_MINUTES} min
+                    Minimo: quedan {formatDuration(minimumLeft)}
                   </Badge>
                 )}
               </>
@@ -441,7 +489,7 @@ export function VideoCallRoom({
         <Button
           variant="destructive"
           size="icon-lg"
-          onClick={hangUp}
+          onClick={requestHangUp}
           disabled={isEnding}
           title="Colgar"
         >
@@ -532,10 +580,9 @@ export function VideoCallRoom({
             )}
 
             <div className="mt-6 flex flex-col gap-2">
-              {/* Seguir por chat: solo tiene sentido con creadoras, que son
-                  quienes tienen conversacion en la plataforma. */}
-              {partner?.slug && (
-                <Link href={`/dashboard/messages/${partner.slug}`}>
+              {/* Seguir por chat: el de esta pareja fan-creador. */}
+              {chatHref && (
+                <Link href={chatHref}>
                   <Button variant="brand" className="w-full">
                     <MessageCircle className="h-4 w-4" />
                     Seguir hablando por chat

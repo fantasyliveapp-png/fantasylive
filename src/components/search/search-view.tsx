@@ -79,6 +79,8 @@ export function SearchView({
         const data = (await res.json()) as SearchResult;
         // Solo cuenta la respuesta de la ultima busqueda (las lentas llegan tarde).
         if (id === request.current) setResult(data);
+      } catch {
+        // Sin conexion: se queda el resultado anterior.
       } finally {
         if (id === request.current) setLoading(false);
       }
@@ -437,7 +439,10 @@ function MosaicTile({
             )}
           </span>
           {post.visibility === 'LOCKED' && (
-            <span className="rounded-full bg-token px-2 py-0.5 text-[10px] font-bold text-black">
+            <span className="flex items-center gap-1 rounded-full bg-token px-2 py-0.5 text-[10px] font-bold text-black">
+              {post.originalPriceTokens != null && (
+                <span className="font-medium line-through opacity-60">{formatTokens(post.originalPriceTokens)}</span>
+              )}
               {formatTokens(post.priceTokens)}
             </span>
           )}

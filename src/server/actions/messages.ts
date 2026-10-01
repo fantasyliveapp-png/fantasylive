@@ -1,5 +1,7 @@
 'use server';
 
+import { discountTokens } from '@/lib/creator-offer-rules';
+import { getContentOffer, recordOfferUse } from '@/lib/creator-offers';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
@@ -9,6 +11,14 @@ import { createNotification } from '@/lib/notifications';
 import { prisma } from '@/lib/prisma';
 import { checkNoContactInfo } from '@/lib/content-filter';
 import { isBlockedBetween } from '@/lib/chat';
+import {
+  bundleLabel,
+  createBundleMessage,
+  deliverableRequest,
+  makeBlurredPreview,
+  markRequestDelivered,
+  MAX_BUNDLE_FILES,
+} from '@/lib/chat-bundles';
 import { GEO_BLOCKED_MESSAGE, isBlockedForViewer } from '@/lib/geo';
 import {
   buildMessageAttachmentKey,
@@ -179,6 +189,14 @@ export async function sendMessageAction(input: {
     if (await isBlockedBetween(conversation.userId, conversation.model.userId)) {
       return { ok: false, error: 'No puedes escribir a esta persona.' };
     }
+    // Chat que existe solo por un pedido o una cita: hay que abrirlo antes.
+    if (isCustomer && !conversation.chatUnlocked) {
+      return {
+        ok: false,
+        conversationId: conversation.id,
+        error: 'Abre el chat para escribirle: tienes el boton en la conversacion.',
+      };
+    }
 
     // Chat abierto por la creadora y aun sin aceptar: ella no puede insistir;
     // si el fan responde, la solicitud queda aceptada.
@@ -278,17 +296,17 @@ export async function requestMessageAttachmentUploadUrlAction(input: {
 }
 
 /**
- * Envia un mensaje con un archivo adjunto ya subido a S3/R2. Si priceTokens
- * es 0 queda visible de inmediato para quien reciba el mensaje; si no, hay
- * que desbloquearlo con unlockMessageAttachmentAction.
+ * Envia uno o varios archivos ya subidos a S3/R2 en UN envio con UN precio.
+ * Si priceTokens es 0 se ven de inmediato; si no, el fan paga una vez con
+ * unlockMessageAttachmentAction y los ve todos. Con `requestId` entrega un
+ * pedido a medida ya pagado (va gratis).
  */
 export async function sendMessageAttachmentAction(input: {
   conversationId: string;
-  storageKey: string;
-  mimeType: string;
-  sizeBytes?: number;
+  files: { storageKey: string; mimeType: string; sizeBytes?: number }[];
   priceTokens: number;
   body?: string;
+  requestId?: string;
 }): Promise<MessageActionResult> {
   try {
     const user = await getAuthedUserOrThrow();
@@ -299,61 +317,116 @@ export async function sendMessageAttachmentAction(input: {
 
     const conversation = await prisma.conversation.findUnique({
       where: { id: input.conversationId },
-      include: { model: { select: { userId: true, slug: true } } },
+      include: { model: { select: { id: true, userId: true, slug: true, stageName: true } } },
     });
     if (!conversation) return { ok: false, error: 'Conversacion no encontrada.' };
     if (conversation.model.userId !== user.id) {
       return { ok: false, error: 'Solo la modelo puede adjuntar archivos.' };
     }
     // Solo archivos subidos a ESTE chat (la clave lleva el id de la conversacion).
-    if (!input.storageKey.startsWith(`messages/${conversation.id}/`)) {
-      return { ok: false, error: 'Archivo no valido.' };
-    }
+    const files = input.files
+      .slice(0, MAX_BUNDLE_FILES)
+      .filter(
+        (f) => f.storageKey.startsWith(`messages/${conversation.id}/`) && /^(image|video)\//.test(f.mimeType),
+      );
+    if (files.length === 0) return { ok: false, error: 'Archivo no valido.' };
     const bodyText = input.body?.trim() || null;
     if (bodyText) {
       const contactError = checkNoContactInfo(bodyText);
       if (contactError) return { ok: false, error: contactError };
     }
+    if (input.requestId) {
+      await deliverableRequest(input.requestId, conversation.model.id, conversation.userId);
+    }
+    const price = input.requestId ? 0 : input.priceTokens;
+
+    const previews = await Promise.all(
+      files.map((f) => makeBlurredPreview(f.storageKey, f.mimeType, `messages/${conversation.id}`)),
+    );
 
     await prisma.$transaction(async (tx) => {
-      const message = await tx.message.create({
-        data: {
-          conversationId: conversation.id,
-          senderId: user.id,
-          body: bodyText,
-        },
-        select: { id: true },
+      const message = await createBundleMessage(tx, {
+        conversationId: conversation.id,
+        senderId: user.id,
+        body: bodyText,
+        priceTokens: price,
+        files: files.map((f, i) => ({ ...f, previewKey: previews[i] })),
       });
-
-      await tx.messageAttachment.create({
-        data: {
-          messageId: message.id,
-          storageKey: input.storageKey,
-          mimeType: input.mimeType,
-          sizeBytes: input.sizeBytes ?? null,
-          priceTokens: input.priceTokens,
-        },
-      });
-
-      await tx.conversation.update({
-        where: { id: conversation.id },
-        data: { lastMessageAt: new Date() },
-      });
+      if (input.requestId) await markRequestDelivered(tx, input.requestId, message.id);
 
       await createNotification(tx, {
         userId: conversation.userId,
-        type: 'NEW_MESSAGE',
-        title:
-          input.priceTokens > 0
-            ? `${user.name ?? 'Alguien'} te envio un archivo de pago`
-            : `${user.name ?? 'Alguien'} te envio un archivo`,
+        type: input.requestId ? 'CONTENT_REQUEST_DELIVERED' : 'NEW_MESSAGE',
+        title: input.requestId
+          ? `${conversation.model.stageName} te entrego tu pedido`
+          : price > 0
+            ? `${conversation.model.stageName} te envio ${bundleLabel(files)} especiales`
+            : `${conversation.model.stageName} te envio ${bundleLabel(files)}`,
         link: `/mensajes/${conversation.id}`,
       });
     });
 
     revalidatePath(`/mensajes/${conversation.id}`);
+    if (input.requestId) revalidatePath('/dashboard/requests');
+    return {
+      ok: true,
+      message: input.requestId
+        ? 'Pedido entregado por chat.'
+        : files.length === 1
+          ? 'Archivo enviado.'
+          : `${files.length} archivos enviados en un solo envio.`,
+    };
+  } catch (error) {
+    return { ok: false, error: toMessage(error) };
+  }
+}
+
+/**
+ * Un chat que existe solo por un pedido o una cita: el fan lo abre para
+ * escribir pagando el precio de chat del creador (como un chat nuevo).
+ */
+export async function unlockDealChatAction(conversationId: string): Promise<MessageActionResult> {
+  try {
+    const user = await getAuthedUserOrThrow();
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: {
+        id: true,
+        userId: true,
+        chatUnlocked: true,
+        model: { select: { userId: true, messagingEnabled: true, messagePriceTokens: true, blockedCountries: true } },
+      },
+    });
+    if (!conversation || conversation.userId !== user.id) return { ok: false, error: 'Conversacion no encontrada.' };
+    if (conversation.chatUnlocked) return { ok: true, message: 'El chat ya esta abierto.' };
+    if (await isBlockedForViewer(conversation.model.blockedCountries)) {
+      return { ok: false, error: GEO_BLOCKED_MESSAGE };
+    }
+    if (!conversation.model.messagingEnabled) {
+      return { ok: false, error: 'Este perfil no tiene los mensajes activados.' };
+    }
+    const price = Math.max(0, conversation.model.messagePriceTokens);
+
+    await prisma.$transaction(async (tx) => {
+      // Solo una vez aunque se pulse dos veces.
+      const res = await tx.conversation.updateMany({
+        where: { id: conversation.id, chatUnlocked: false },
+        data: { chatUnlocked: true, unlockPriceTokens: price },
+      });
+      if (res.count === 0 || price === 0) return;
+      await transferWithCommission(tx, {
+        fromUserId: user.id,
+        toUserId: conversation.model.userId,
+        tokens: price,
+        debitType: 'MESSAGE_UNLOCK',
+        creditType: 'MESSAGE_UNLOCK_EARNING',
+        description: 'Desbloqueo de conversacion',
+        conversationId: conversation.id,
+      });
+    });
+
     revalidatePath(`/mensajes/${conversation.id}`);
-    return { ok: true, message: 'Archivo enviado.' };
+    return { ok: true, message: price > 0 ? `Chat abierto por ${price} tokens.` : 'Chat abierto.' };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
   }
@@ -374,7 +447,7 @@ export async function unlockMessageAttachmentAction(
             conversation: {
               include: {
                 model: {
-                  select: { userId: true, slug: true, blockedCountries: true },
+                  select: { id: true, userId: true, slug: true, blockedCountries: true },
                 },
               },
             },
@@ -401,11 +474,16 @@ export async function unlockMessageAttachmentAction(
     });
     if (already) return { ok: true, message: 'Ya desbloqueaste este archivo.' };
 
+    // Rebajas flash o cupon del creador: sale de su precio.
+    const offer = await getContentOffer(conversation.model.id, user.id);
+    const price = offer ? discountTokens(attachment.priceTokens, offer.percentOff) : attachment.priceTokens;
+
     await prisma.$transaction(async (tx) => {
+      if (offer) await recordOfferUse(tx, offer, price);
       await transferWithCommission(tx, {
         fromUserId: user.id,
         toUserId: conversation.model.userId,
-        tokens: attachment.priceTokens,
+        tokens: price,
         debitType: 'MESSAGE_ATTACHMENT_UNLOCK',
         creditType: 'MESSAGE_ATTACHMENT_EARNING',
         description: 'Desbloqueo de archivo adjunto',
@@ -417,20 +495,20 @@ export async function unlockMessageAttachmentAction(
         data: {
           userId: user.id,
           attachmentId: attachment.id,
-          tokensSpent: attachment.priceTokens,
+          tokensSpent: price,
         },
       });
 
       await createNotification(tx, {
         userId: conversation.model.userId,
         type: 'MESSAGE_ATTACHMENT_UNLOCKED',
-        title: `${user.name ?? 'Alguien'} desbloqueo tu archivo por ${attachment.priceTokens} tokens`,
+        title: `${user.name ?? 'Alguien'} desbloqueo tu envio por ${price} tokens${offer ? ` (${offer.label} −${offer.percentOff}%)` : ''}`,
         link: '/mensajes',
       });
     });
 
     revalidatePath(`/mensajes/${conversation.id}`);
-    return { ok: true, message: 'Archivo desbloqueado.' };
+    return { ok: true, message: 'Desbloqueado. Ya es tuyo.' };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
   }

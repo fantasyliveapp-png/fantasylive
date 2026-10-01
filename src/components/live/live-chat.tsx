@@ -97,11 +97,20 @@ export function LiveChatFeed({
   messages,
   hostLabel,
   className,
+  onSelectAuthor,
+  onReply,
+  myName,
 }: {
   messages: LiveChatMessage[];
   /** Etiqueta de quien emite, segun su genero ("Creadora" / "Creador"). */
   hostLabel?: string;
   className?: string;
+  /** Solo la creadora: tocar el nombre de alguien para moderarle. */
+  onSelectAuthor?: (author: { identity: string; name: string }) => void;
+  /** Tocar un mensaje para responderle. */
+  onReply?: (message: LiveChatMessage) => void;
+  /** Tu nombre: se resaltan las respuestas a tus mensajes. */
+  myName?: string;
 }) {
   const { t } = useI18n();
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -135,7 +144,46 @@ export function LiveChatFeed({
       )}
 
       {messages.map((message) =>
-        message.kind === 'gift' ? (
+        message.kind === 'system' ? (
+          <p
+            key={message.id}
+            className="w-fit max-w-full rounded-full bg-black/40 px-3 py-1 text-[12px] text-white/85"
+          >
+            {message.body}
+          </p>
+        ) : message.kind === 'pack' ? (
+          <div
+            key={message.id}
+            className="flex w-fit max-w-full items-center gap-2 rounded-2xl bg-gradient-to-r from-champagne-gold/40 to-transparent py-1 pl-1 pr-3 text-[13px] text-white"
+          >
+            <Initial name={message.from} avatar={message.avatar} />
+            <span className="min-w-0 break-words">
+              <span className="font-semibold text-champagne-gold">{message.from}</span> ha desbloqueado 📦{' '}
+              <span className="font-bold">“{message.body}”</span>
+            </span>
+          </div>
+        ) : message.kind === 'ticket' ? (
+          <div
+            key={message.id}
+            className="flex w-fit max-w-full items-center gap-2 rounded-full bg-gradient-to-r from-fantazy-red/40 to-transparent py-0.5 pl-0.5 pr-3 text-[13px] text-white"
+          >
+            <Initial name={message.from} avatar={message.avatar} />
+            <span className="min-w-0 break-words">
+              <span className="font-semibold">{message.from}</span> ha comprado su entrada 🎟️
+            </span>
+          </div>
+        ) : message.kind === 'gift' && message.request ? (
+          <div
+            key={message.id}
+            className="flex w-fit max-w-full items-center gap-2 rounded-2xl bg-gradient-to-r from-champagne-gold/45 to-transparent py-1 pl-1 pr-3 text-[13px] text-white"
+          >
+            <Initial name={message.from} avatar={message.avatar} />
+            <span className="min-w-0 break-words">
+              <span className="font-semibold text-champagne-gold">{message.from}</span> ha pedido{' '}
+              <span className="font-bold">“{message.request}”</span> ⭐ {message.tokens}
+            </span>
+          </div>
+        ) : message.kind === 'gift' ? (
           <div
             key={message.id}
             className="flex w-fit max-w-full items-center gap-2 rounded-full bg-gradient-to-r from-champagne-gold/35 to-transparent py-0.5 pl-0.5 pr-3 text-[13px] text-white"
@@ -150,7 +198,13 @@ export function LiveChatFeed({
         ) : (
           <div
             key={message.id}
-            className="flex max-w-full items-start gap-2 text-[13px] leading-snug text-white [text-shadow:0_1px_2px_rgb(0_0_0/0.6)]"
+            onClick={onReply && !message.isMine ? () => onReply(message) : undefined}
+            className={cn(
+              'flex max-w-full items-start gap-2 rounded-xl text-[13px] leading-snug text-white [text-shadow:0_1px_2px_rgb(0_0_0/0.6)]',
+              onReply && !message.isMine && 'cursor-pointer',
+              myName && message.replyTo?.from === myName && !message.isMine &&
+                'bg-champagne-gold/15 py-1 pr-2 ring-1 ring-champagne-gold/30',
+            )}
           >
             <Initial
               name={message.from}
@@ -158,7 +212,28 @@ export function LiveChatFeed({
               className={cn(message.isHost && 'ring-2 ring-fantazy-red')}
             />
             <p className="min-w-0 break-words pt-0.5">
-              <span className="mr-1.5 font-semibold text-white/65">
+              {message.replyTo && (
+                <span className="mb-0.5 block truncate text-[11px] text-white/55 [text-shadow:none]">
+                  ↪ <span className="font-semibold text-champagne-gold/90">@{message.replyTo.from}</span>{' '}
+                  {message.replyTo.body}
+                </span>
+              )}
+              <span
+                className={cn(
+                  'mr-1.5 font-semibold text-white/65',
+                  onSelectAuthor && message.identity && !message.isHost && !message.isMine &&
+                    'cursor-pointer underline-offset-2 hover:underline',
+                )}
+                onClick={
+                  onSelectAuthor && message.identity && !message.isHost && !message.isMine
+                    ? (e) => {
+                        // El nombre abre la moderacion, no la respuesta.
+                        e.stopPropagation();
+                        onSelectAuthor({ identity: message.identity!, name: message.from });
+                      }
+                    : undefined
+                }
+              >
                 {message.from}
                 {message.isHost && (
                   <span className="ml-1 rounded-sm bg-fantazy-red px-1 py-px align-[1px] text-[9px] font-bold uppercase tracking-wide text-white [text-shadow:none]">
@@ -185,13 +260,24 @@ export function LiveChatComposer({
   placeholder,
   children,
   className,
+  replyTo,
+  onCancelReply,
+  dock,
 }: {
   onSend: (text: string) => Promise<boolean>;
   disabled?: boolean;
   placeholder: string;
+  /** Respondiendo a este mensaje (se enseña encima de la caja). */
+  replyTo?: { from: string; body: string } | null;
+  onCancelReply?: () => void;
   /** Botones redondos a la derecha (regalos, compartir...). */
   children?: ReactNode;
   className?: string;
+  /**
+   * Dock: caja y botones dentro de una sola barra de cristal, con una linea
+   * que los separa (pantalla del espectador).
+   */
+  dock?: boolean;
 }) {
   const { t } = useI18n();
   const [draft, setDraft] = useState('');
@@ -208,11 +294,34 @@ export function LiveChatComposer({
   }
 
   return (
-    <div className={cn('flex items-center gap-2', className)}>
+    <div className={cn('space-y-1.5', className)}>
+    {replyTo && (
+      <div className={cn('flex items-center gap-2 rounded-full py-1 pl-3 pr-1 text-[12px] text-white', glass)}>
+        <span className="min-w-0 flex-1 truncate">
+          Respondiendo a <span className="font-semibold text-champagne-gold">@{replyTo.from}</span>
+          <span className="text-white/55"> · {replyTo.body}</span>
+        </span>
+        <button
+          type="button"
+          onClick={onCancelReply}
+          aria-label="Cancelar respuesta"
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-white/70 hover:bg-white/10"
+        >
+          ×
+        </button>
+      </div>
+    )}
+    <div
+      className={cn(
+        'flex items-center gap-2',
+        dock && 'rounded-[22px] p-1.5 shadow-[0_8px_30px_rgb(0_0_0/0.45)] ring-1 ring-champagne-gold/15',
+        dock && glass,
+      )}
+    >
       <div
         className={cn(
-          'flex h-11 min-w-0 flex-1 items-center rounded-full pl-4 pr-1',
-          glass,
+          'flex h-11 min-w-0 flex-1 items-center pl-4 pr-1',
+          dock ? 'rounded-2xl bg-white/[0.06]' : cn('rounded-full', glass),
         )}
       >
         <input
@@ -224,7 +333,7 @@ export function LiveChatComposer({
               void submit();
             }
           }}
-          placeholder={placeholder}
+          placeholder={replyTo ? `Responde a @${replyTo.from}...` : placeholder}
           maxLength={280}
           disabled={disabled}
           enterKeyHint="send"
@@ -242,7 +351,9 @@ export function LiveChatComposer({
           </button>
         )}
       </div>
+      {dock && children && <span className="h-7 w-px shrink-0 bg-white/15" aria-hidden />}
       {children}
+    </div>
     </div>
   );
 }

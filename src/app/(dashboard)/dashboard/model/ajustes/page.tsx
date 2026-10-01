@@ -6,12 +6,10 @@ import {
   ChevronRight,
   Coins,
   Crown,
-  Images,
   MessageCircle,
   MessageSquareHeart,
   Pencil,
   ShieldBan,
-  Gem,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -38,11 +36,10 @@ export const dynamic = 'force-dynamic';
  */
 export default async function SettingsPage() {
   const { user, profile } = await requireModel();
-  const [legacyPacks, account, vaultCount] = await Promise.all([
-    prisma.contentPackage.count({ where: { modelId: profile.id } }),
-    prisma.user.findUniqueOrThrow({ where: { id: user.id }, select: { messagePrivacy: true } }),
-    prisma.vaultItem.count({ where: { modelId: profile.id } }),
-  ]);
+  const account = await prisma.user.findUniqueOrThrow({
+    where: { id: user.id },
+    select: { messagePrivacy: true },
+  });
 
   const kycOk = profile.kycStatus === 'APPROVED';
 
@@ -64,7 +61,7 @@ export default async function SettingsPage() {
     },
     {
       icon: CalendarDays,
-      label: 'Citas por videollamada',
+      label: 'Videollamadas reservadas',
       on: profile.acceptsBookings,
       detail: `${formatRateNumber(profile.privateRateCentitokens)} tokens/min`,
     },
@@ -118,7 +115,7 @@ export default async function SettingsPage() {
           href="/dashboard/model/rates"
           icon={Coins}
           title="Precios y herramientas"
-          hint="Suscripcion, mensajes, citas y sala VIP"
+          hint="Suscripcion, mensajes, reservas y sala VIP"
         />
         <div className="grid gap-2 border-t border-border/60 p-3 sm:grid-cols-2">
           {tools.map((tool) => (
@@ -166,19 +163,6 @@ export default async function SettingsPage() {
         </p>
       </Group>
 
-      <Group title="Vender por chat">
-        <Row
-          href="/dashboard/model/boveda"
-          icon={Gem}
-          title="Boveda"
-          hint={
-            vaultCount > 0
-              ? `${vaultCount} ${vaultCount === 1 ? 'archivo listo' : 'archivos listos'} para enviar por chat`
-              : 'Guarda fotos y videos para enviarlos por chat'
-          }
-        />
-      </Group>
-
       <Group title="Cuentas bloqueadas">
         <BlockedAccounts userId={user.id} />
       </Group>
@@ -219,16 +203,6 @@ export default async function SettingsPage() {
         />
       </Group>
 
-      {legacyPacks > 0 && (
-        <Group title="Contenido antiguo">
-          <Row
-            href="/dashboard/model/content"
-            icon={Images}
-            title="Packs anteriores"
-            hint={`${legacyPacks} ${legacyPacks === 1 ? 'pack' : 'packs'} de antes. Lo nuevo se publica en el feed.`}
-          />
-        </Group>
-      )}
     </div>
   );
 }

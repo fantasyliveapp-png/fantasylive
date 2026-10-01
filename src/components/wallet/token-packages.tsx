@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import { Check, Coins, Loader2, Sparkles } from 'lucide-react';
+import { Check, Coins, Gift, Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
-import type { TokenPackage } from '@prisma/client';
+import type { PricedPackage } from '@/lib/token-offers';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -47,7 +47,8 @@ export function TokenPackages({
   packages,
   balance,
 }: {
-  packages: TokenPackage[];
+  /** Paquetes con las ofertas de este fan ya aplicadas (lib/token-offers.ts). */
+  packages: PricedPackage[];
   balance: number;
 }) {
   const t = useTranslate();
@@ -97,7 +98,7 @@ export function TokenPackages({
     closeCheckout();
   }, [balance, checkout, closeCheckout, t]);
 
-  function buy(pkg: TokenPackage) {
+  function buy(pkg: PricedPackage) {
     setPendingId(pkg.id);
 
     // La pestana se abre AQUI, todavia dentro del gesto del usuario. Abrirla
@@ -151,27 +152,31 @@ export function TokenPackages({
     <>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {packages.map((pkg) => {
-          const total = pkg.tokens + pkg.bonusTokens;
-          const pricePerToken = pkg.priceCents / total;
+          const offer = pkg.offer;
+          const pricePerToken = pkg.priceCents / pkg.totalTokens;
           const isPending = pendingId === pkg.id;
 
           return (
             <Card
               key={pkg.id}
               className={
-                pkg.isPopular
+                pkg.isPopular || offer
                   ? 'relative border-primary transition-shadow hover:shadow-lg hover:shadow-primary/10'
                   : 'relative transition-shadow hover:shadow-lg'
               }
             >
-              {pkg.isPopular && (
-                <Badge
-                  variant="vip"
-                  className="absolute -top-2.5 left-1/2 -translate-x-1/2 gap-1"
-                >
-                  <Sparkles className="h-3 w-3" />
-                  {t('wallet.mostPopular')}
+              {offer ? (
+                <Badge className="absolute -top-2.5 left-1/2 max-w-[90%] -translate-x-1/2 gap-1 truncate border-0 bg-gradient-to-r from-fantazy-red to-champagne-gold text-white">
+                  <Gift className="h-3 w-3 shrink-0" />
+                  {offer.label}
                 </Badge>
+              ) : (
+                pkg.isPopular && (
+                  <Badge variant="vip" className="absolute -top-2.5 left-1/2 -translate-x-1/2 gap-1">
+                    <Sparkles className="h-3 w-3" />
+                    {t('wallet.mostPopular')}
+                  </Badge>
+                )
               )}
 
               <CardContent className="pt-6">
@@ -182,20 +187,39 @@ export function TokenPackages({
                 <div className="mt-3 flex items-baseline gap-1.5">
                   <Coins className="h-5 w-5 text-token" />
                   <span className="text-3xl font-bold text-token">
-                    {formatTokens(total)}
+                    {formatTokens(pkg.totalTokens)}
                   </span>
                 </div>
 
-                {pkg.bonusTokens > 0 && (
-                  <Badge variant="success" className="mt-2 gap-1">
-                    <Check className="h-3 w-3" />
-                    {t('wallet.bonus', { tokens: pkg.bonusTokens })}
-                  </Badge>
-                )}
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {pkg.bonusTokens > 0 && (
+                    <Badge variant="success" className="gap-1">
+                      <Check className="h-3 w-3" />
+                      {t('wallet.bonus', { tokens: pkg.bonusTokens })}
+                    </Badge>
+                  )}
+                  {pkg.offerBonusTokens > 0 && (
+                    <Badge className="gap-1 border-0 bg-champagne-gold/20 text-champagne-gold">
+                      <Gift className="h-3 w-3" />+{formatTokens(pkg.offerBonusTokens)} de {offer?.label.toLowerCase()}
+                    </Badge>
+                  )}
+                </div>
 
-                <p className="mt-4 text-2xl font-semibold">
-                  {formatMoney(pkg.priceCents, pkg.currency)}
-                </p>
+                {pkg.priceCents < pkg.basePriceCents ? (
+                  <div className="mt-4">
+                    <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <span className="line-through">{formatMoney(pkg.basePriceCents, pkg.currency)}</span>
+                      <span className="rounded-full bg-gradient-to-r from-fantazy-red to-champagne-gold px-2 py-0.5 text-[11px] font-bold text-white">
+                        −{offer?.percentOff}%
+                      </span>
+                    </p>
+                    <p className="text-2xl font-semibold text-state-connected">{formatMoney(pkg.priceCents, pkg.currency)}</p>
+                  </div>
+                ) : (
+                  <p className="mt-4 text-2xl font-semibold">
+                    {formatMoney(pkg.priceCents, pkg.currency)}
+                  </p>
+                )}
                 <p className="text-xs text-muted-foreground">
                   {t('wallet.perToken', {
                     amount: (pricePerToken / 100).toFixed(3),
@@ -209,7 +233,7 @@ export function TokenPackages({
                 )}
 
                 <Button
-                  variant={pkg.isPopular ? 'brand' : 'outline'}
+                  variant={pkg.isPopular || offer ? 'brand' : 'outline'}
                   className="mt-4 w-full"
                   onClick={() => buy(pkg)}
                   disabled={pendingId !== null || checkout !== null}

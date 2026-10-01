@@ -62,6 +62,7 @@ export const liveStreamSelect = {
   viewerCount: true,
   startedAt: true,
   source: true,
+  accessMode: true,
   model: {
     select: {
       id: true,

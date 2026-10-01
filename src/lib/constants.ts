@@ -75,7 +75,7 @@ export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
   IN_PROGRESS: 'En curso',
   COMPLETED: 'Completada',
   CANCELLED_BY_USER: 'Cancelada por el usuario',
-  CANCELLED_BY_MODEL: 'Cancelada por la modelo',
+  CANCELLED_BY_MODEL: 'Cancelada por el creador',
   NO_SHOW: 'No asistio',
   REFUNDED: 'Reembolsada',
 };
@@ -144,6 +144,7 @@ export const TRANSACTION_TYPE_LABELS: Record<TransactionType, string> = {
   POST_EARNING: 'Ganancia por publicacion',
   PAYOUT_FEE: 'Comision de retiro',
   REFERRAL_EARNING: 'Referidos (embajadora)',
+  DISTRIBUTOR_CREDIT: 'Tokens de distribuidor oficial',
 };
 
 /** Cantidades rapidas del boton de regalo durante una llamada */

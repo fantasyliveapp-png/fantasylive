@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { createNotification } from '@/lib/notifications';
 import { assertCreatorVerified } from '@/lib/creator-kyc';
+import { dealChatHref, ensureDealConversation } from '@/lib/deal-chat';
 import { prisma } from '@/lib/prisma';
 import { checkNoContactInfo } from '@/lib/content-filter';
 import { GEO_BLOCKED_MESSAGE, isBlockedForViewer } from '@/lib/geo';
@@ -16,6 +17,8 @@ export interface ContentRequestActionResult {
   error?: string;
   message?: string;
   requestId?: string;
+  /** Chat con ese creador, donde vive el pedido. */
+  conversationId?: string;
 }
 
 async function requireModelProfile() {
@@ -64,29 +67,33 @@ export async function createContentRequestAction(input: {
       return { ok: false, error: GEO_BLOCKED_MESSAGE };
     }
 
-    const request = await prisma.contentRequest.create({
-      data: {
-        userId: user.id,
-        modelId: parsed.data.modelId,
-        description: parsed.data.description,
-      },
-      select: { id: true },
-    });
-
-    await createNotification(prisma, {
-      userId: model.userId,
-      type: 'CONTENT_REQUEST_RECEIVED',
-      title: `${user.name ?? 'Alguien'} te pidio contenido a medida`,
-      link: '/dashboard/model/requests',
+    // El pedido vive en el chat con ese creador (se crea si no existia).
+    const { request, conversationId } = await prisma.$transaction(async (tx) => {
+      const request = await tx.contentRequest.create({
+        data: {
+          userId: user.id,
+          modelId: parsed.data.modelId,
+          description: parsed.data.description,
+        },
+        select: { id: true },
+      });
+      const conversationId = await ensureDealConversation(tx, user.id, parsed.data.modelId);
+      await createNotification(tx, {
+        userId: model.userId,
+        type: 'CONTENT_REQUEST_RECEIVED',
+        title: `${user.name ?? 'Alguien'} te pidio contenido a medida`,
+        link: `/mensajes/${conversationId}`,
+      });
+      return { request, conversationId };
     });
 
     revalidatePath(`/models/${model.slug}`);
-    revalidatePath('/dashboard/requests');
-    revalidatePath('/dashboard/model/requests');
+    revalidatePath('/mensajes');
     return {
       ok: true,
       requestId: request.id,
-      message: 'Pedido enviado. Te avisamos cuando la modelo lo cotice.',
+      conversationId,
+      message: 'Pedido enviado. Te avisamos en el chat cuando le ponga precio.',
     };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
@@ -128,13 +135,12 @@ export async function quoteContentRequestAction(input: {
     await createNotification(prisma, {
       userId: request.userId,
       type: 'CONTENT_REQUEST_QUOTED',
-      title: `Tu pedido fue cotizado en ${input.quotedTokens} tokens`,
-      link: '/dashboard/requests',
+      title: `Tu pedido ya tiene precio: ${input.quotedTokens} tokens`,
+      link: await dealChatHref(request.userId, profile.id),
     });
 
-    revalidatePath('/dashboard/model/requests');
-    revalidatePath('/dashboard/requests');
-    return { ok: true, message: 'Cotizacion enviada.' };
+    revalidatePath('/mensajes', 'layout');
+    return { ok: true, message: 'Precio enviado.' };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
   }
@@ -160,9 +166,14 @@ export async function declineContentRequestAction(input: {
       where: { id: request.id },
       data: { status: 'DECLINED', modelNote: input.note?.trim() || null },
     });
+    await createNotification(prisma, {
+      userId: request.userId,
+      type: 'CONTENT_REQUEST_QUOTED',
+      title: `${profile.stageName} no puede hacer tu pedido`,
+      link: await dealChatHref(request.userId, profile.id),
+    });
 
-    revalidatePath('/dashboard/model/requests');
-    revalidatePath('/dashboard/requests');
+    revalidatePath('/mensajes', 'layout');
     return { ok: true, message: 'Pedido rechazado.' };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
@@ -189,8 +200,7 @@ export async function cancelContentRequestAction(
       data: { status: 'CANCELLED' },
     });
 
-    revalidatePath('/dashboard/requests');
-    revalidatePath('/dashboard/model/requests');
+    revalidatePath('/mensajes', 'layout');
     return { ok: true, message: 'Pedido cancelado.' };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
@@ -233,82 +243,20 @@ export async function payContentRequestAction(
         where: { id: request.id },
         data: { status: 'PAID', paidAt: new Date() },
       });
+      await createNotification(tx, {
+        userId: request.model.userId,
+        type: 'CONTENT_REQUEST_RECEIVED',
+        title: `${user.name ?? 'Un fan'} pago su pedido: ya puedes entregarlo`,
+        link: await dealChatHref(user.id, request.modelId),
+      });
     });
 
-    revalidatePath('/dashboard/requests');
-    revalidatePath('/dashboard/model/requests');
+    revalidatePath('/mensajes', 'layout');
     revalidatePath('/wallet');
     return {
       ok: true,
-      message: `Pagaste ${request.quotedTokens} tokens. La modelo ya puede entregar tu pedido.`,
+      message: `Pagaste ${request.quotedTokens} tokens. Te lo entregara en este chat.`,
     };
-  } catch (error) {
-    return { ok: false, error: toMessage(error) };
-  }
-}
-
-/**
- * La modelo entrega el pedido enlazando un ContentPackage ya creado (sin
- * publicar) y le da acceso gratuito solo a quien lo pidio y pago.
- */
-export async function deliverContentRequestAction(input: {
-  requestId: string;
-  packageId: string;
-}): Promise<ContentRequestActionResult> {
-  try {
-    const { profile } = await requireModelProfile();
-    await assertCreatorVerified({ modelId: profile.id });
-
-    const request = await prisma.contentRequest.findFirst({
-      where: { id: input.requestId, modelId: profile.id },
-    });
-    if (!request) return { ok: false, error: 'Pedido no encontrado.' };
-    if (request.status !== 'PAID') {
-      return { ok: false, error: 'Este pedido todavia no fue pagado.' };
-    }
-
-    const pkg = await prisma.contentPackage.findFirst({
-      where: { id: input.packageId, modelId: profile.id },
-      select: { id: true, assetCount: true, isPublished: true },
-    });
-    if (!pkg) return { ok: false, error: 'Paquete no encontrado.' };
-    if (pkg.assetCount === 0) {
-      return { ok: false, error: 'Sube al menos un archivo antes de entregar.' };
-    }
-    if (pkg.isPublished) {
-      return {
-        ok: false,
-        error: 'Oculta el paquete antes de entregarlo: es privado, solo para quien lo pidio.',
-      };
-    }
-
-    await prisma.$transaction(async (tx) => {
-      await tx.contentRequest.update({
-        where: { id: request.id },
-        data: {
-          status: 'DELIVERED',
-          deliveredPackageId: pkg.id,
-          deliveredAt: new Date(),
-        },
-      });
-      await tx.contentUnlock.upsert({
-        where: {
-          userId_packageId: { userId: request.userId, packageId: pkg.id },
-        },
-        create: { userId: request.userId, packageId: pkg.id, tokensSpent: 0 },
-        update: {},
-      });
-      await createNotification(tx, {
-        userId: request.userId,
-        type: 'CONTENT_REQUEST_DELIVERED',
-        title: 'Tu pedido a medida ya esta listo',
-        link: '/dashboard/requests',
-      });
-    });
-
-    revalidatePath('/dashboard/model/requests');
-    revalidatePath('/dashboard/requests');
-    return { ok: true, message: 'Pedido entregado.' };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
   }

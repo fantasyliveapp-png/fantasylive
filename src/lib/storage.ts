@@ -39,21 +39,6 @@ export function isStorageConfigured(): boolean {
   return config.storage.configured;
 }
 
-/**
- * Construye una clave privada y predecible para el contenido de una modelo.
- * Ej: models/<modelId>/packages/<packageId>/<uuid>.jpg
- */
-export function buildContentKey(params: {
-  modelId: string;
-  packageId: string;
-  filename: string;
-}): string {
-  const ext = params.filename.split('.').pop()?.toLowerCase() || 'bin';
-  const id = crypto.randomUUID();
-  return `models/${params.modelId}/packages/${params.packageId}/${id}.${ext}`;
-}
-
-/** Ej: messages/<conversationId>/<uuid>.jpg */
 export function buildMessageAttachmentKey(params: {
   conversationId: string;
   filename: string;
@@ -156,6 +141,26 @@ export function buildKycKey(params: {
   return `kyc/${params.modelId}/${params.kind}-${id}.${ext}`;
 }
 
+/** Comprobante de pago de una compra a un distribuidor (privado). */
+export function buildDistributorProofKey(params: { saleId: string; filename: string }): string {
+  const ext = params.filename.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+  return `distributor-proofs/${params.saleId}/${crypto.randomUUID()}.${ext}`;
+}
+
+export function isDistributorProofKeyOf(saleId: string, key: string): boolean {
+  return key.startsWith(`distributor-proofs/${saleId}/`) && !key.includes('..');
+}
+
+/** Recibo del pago de un lote que envia el distribuidor (privado). */
+export function buildDistributorLotProofKey(params: { orderId: string; filename: string }): string {
+  const ext = params.filename.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+  return `distributor-lots/${params.orderId}/${crypto.randomUUID()}.${ext}`;
+}
+
+export function isDistributorLotProofKeyOf(orderId: string, key: string): boolean {
+  return key.startsWith(`distributor-lots/${orderId}/`) && !key.includes('..');
+}
+
 /** URL firmada para SUBIR un objeto directamente desde el navegador. */
 export async function createUploadUrl(params: {
   key: string;
@@ -209,6 +214,16 @@ export async function getObjectBuffer(key: string): Promise<Buffer | null> {
   } catch {
     return null;
   }
+}
+
+/** Sube desde el servidor un archivo pequeno (p. ej. una miniatura). */
+export async function putObject(key: string, body: Buffer, contentType: string): Promise<boolean> {
+  const s3 = getClient();
+  if (!s3) return false;
+  await s3.send(
+    new PutObjectCommand({ Bucket: config.storage.bucket, Key: key, Body: body, ContentType: contentType }),
+  );
+  return true;
 }
 
 export async function deleteObject(key: string): Promise<void> {

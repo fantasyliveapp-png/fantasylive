@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { AutoGreetingForm } from '@/components/model/auto-greeting-form';
 import { requireModel } from '@/lib/auth/guards';
 import { config } from '@/lib/config';
+import { effectiveTerms } from '@/lib/deals';
 import { prisma } from '@/lib/prisma';
 import { resolveAssetUrl } from '@/lib/storage';
 import { tokensToNetPayoutCents } from '@/lib/tokens';
@@ -61,7 +62,7 @@ export default async function GreetingPage() {
         photoPreviewUrl={previewUrl}
         sentToday={sentToday}
         economy={{
-          platformCommissionPercent: config.economy.platformCommissionPercent,
+          platformCommissionPercent: effectiveTerms(profile).platformPercent,
           payoutCentsPerToken: config.economy.modelPayoutCentsPerToken,
           payoutFeePercent: config.economy.payoutFeePercent,
         }}

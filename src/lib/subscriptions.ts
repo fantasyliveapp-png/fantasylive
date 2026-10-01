@@ -27,6 +27,6 @@ export async function getActiveSubscription(userId: string, modelId: string) {
  * Tarifa por minuto (en CENTITOKENS) ya con el descuento de suscriptor.
  *
  * Reexporta la implementacion de rates.ts para no duplicar el suelo minimo:
- * el descuento no puede dejar la tarifa por debajo de 1,75 tokens/min.
+ * el descuento no puede dejar la tarifa por debajo de 17,5 tokens/min.
  */
 export { applyDiscountToRate as applySubscriberDiscount } from '@/lib/rates';

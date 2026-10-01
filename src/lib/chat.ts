@@ -99,6 +99,15 @@ export interface InboxThread {
   pendingOut: boolean;
   /** Chat de pago con una creadora (fan -> creadora). */
   paid: boolean;
+  /** Pedido o cita en marcha en este chat (lo mas urgente). */
+  deal: InboxDeal | null;
+}
+
+export interface InboxDeal {
+  kind: 'request' | 'booking';
+  label: string;
+  /** Te toca hacer algo (poner precio, entregar, confirmar, pagar). */
+  action: boolean;
 }
 
 function preview(text: string | null | undefined, mine: boolean, hasFile = false) {
@@ -176,6 +185,7 @@ export async function getInbox(userId: string, modelProfileId: string | null): P
         unlockPriceTokens: true,
         lastMessageAt: true,
         userReadAt: true,
+        modelId: true,
         model: { select: { slug: true, stageName: true, avatarUrl: true } },
         messages: { ...lastMessage, select: { body: true, senderId: true, createdAt: true, attachment: { select: { id: true } } } },
       },
@@ -192,11 +202,17 @@ export async function getInbox(userId: string, modelProfileId: string | null): P
             unlockPriceTokens: true,
             lastMessageAt: true,
             modelReadAt: true,
+            userId: true,
             user: { select: { name: true, username: true, image: true } },
             messages: { ...lastMessage, select: { body: true, senderId: true, createdAt: true, attachment: { select: { id: true } } } },
           },
         })
       : Promise.resolve([]),
+  ]);
+
+  const [fanDeals, creatorDeals] = await Promise.all([
+    activeDeals({ userId }, 'fan'),
+    modelProfileId ? activeDeals({ modelId: modelProfileId }, 'creator') : Promise.resolve(new Map<string, InboxDeal>()),
   ]);
 
   const threads: InboxThread[] = [
@@ -222,6 +238,7 @@ export async function getInbox(userId: string, modelProfileId: string | null): P
         isRequest: pending && c.createdById !== userId,
         pendingOut: pending && c.createdById === userId,
         paid: false,
+        deal: null,
       };
     }),
     ...asFan.map((c): InboxThread => {
@@ -240,6 +257,7 @@ export async function getInbox(userId: string, modelProfileId: string | null): P
         isRequest: pending && c.startedByModel,
         pendingOut: false,
         paid: c.unlockPriceTokens > 0,
+        deal: fanDeals.get(c.modelId) ?? null,
       };
     }),
     ...asCreator.map((c): InboxThread => {
@@ -257,9 +275,62 @@ export async function getInbox(userId: string, modelProfileId: string | null): P
         isRequest: false,
         pendingOut: c.acceptedAt === null && c.startedByModel,
         paid: c.unlockPriceTokens > 0,
+        deal: creatorDeals.get(c.userId) ?? null,
       };
     }),
   ];
 
   return threads.sort((a, b) => b.lastAt.getTime() - a.lastAt.getTime());
+}
+
+/**
+ * Pedidos y citas en marcha, por la otra parte del chat (el creador si miras
+ * como fan, el fan si miras como creador). Se queda lo mas urgente.
+ */
+async function activeDeals(
+  where: { userId: string } | { modelId: string },
+  as: 'fan' | 'creator',
+): Promise<Map<string, InboxDeal>> {
+  const [requests, bookings] = await Promise.all([
+    prisma.contentRequest.findMany({
+      where: { ...where, status: { in: ['PENDING', 'QUOTED', 'PAID'] } },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+      select: { userId: true, modelId: true, status: true },
+    }),
+    prisma.booking.findMany({
+      where: {
+        ...where,
+        OR: [{ status: 'PENDING_CONFIRMATION' }, { status: 'CONFIRMED', startsAt: { gte: new Date() } }],
+      },
+      orderBy: { startsAt: 'asc' },
+      take: 200,
+      select: { userId: true, modelId: true, status: true, startsAt: true },
+    }),
+  ]);
+
+  const REQUEST: Record<string, { creator: [string, boolean]; fan: [string, boolean] }> = {
+    PENDING: { creator: ['Pedido · ponle precio', true], fan: ['Pedido · esperando precio', false] },
+    QUOTED: { creator: ['Pedido · esperando pago', false], fan: ['Pedido · paga para recibirlo', true] },
+    PAID: { creator: ['Pedido pagado · entregalo', true], fan: ['Pedido pagado · en camino', false] },
+  };
+  const deals = new Map<string, InboxDeal>();
+  const put = (key: string, deal: InboxDeal) => {
+    const cur = deals.get(key);
+    if (!cur || (deal.action && !cur.action)) deals.set(key, deal);
+  };
+  for (const r of requests) {
+    const [label, action] = REQUEST[r.status]![as];
+    put(as === 'fan' ? r.modelId : r.userId, { kind: 'request', label, action });
+  }
+  for (const b of bookings) {
+    const pendingConfirm = b.status === 'PENDING_CONFIRMATION';
+    const label = pendingConfirm
+      ? as === 'creator'
+        ? 'Reserva por confirmar'
+        : 'Reserva · esperando confirmacion'
+      : `Videollamada el ${b.startsAt.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}`;
+    put(as === 'fan' ? b.modelId : b.userId, { kind: 'booking', label, action: pendingConfirm && as === 'creator' });
+  }
+  return deals;
 }

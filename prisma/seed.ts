@@ -16,7 +16,6 @@ import {
   CallEndReason,
   CallStatus,
   CallType,
-  ContentType,
   DocumentType,
   Gender,
   KycStatus,
@@ -126,8 +125,8 @@ const MODEL_SEEDS: ModelSeed[] = [
     bio: 'Bailarina y creadora de contenido. Me encanta conocer gente nueva y crear experiencias personalizadas. Habla conmigo antes del show.',
     languages: ['Espanol', 'Ingles'],
     tags: ['latina', 'curvy', 'tatuajes', 'roleplay'],
-    vipRate: 450,
-    privateRate: 900,
+    vipRate: 4500,
+    privateRate: 9000,
     isOnline: true,
     vipEnabled: true,
     kyc: KycStatus.APPROVED,
@@ -145,8 +144,8 @@ const MODEL_SEEDS: ModelSeed[] = [
     bio: 'Me gusta lo intimo y sin prisas. Sesiones privadas con foco total en ti.',
     languages: ['Italiano', 'Ingles', 'Espanol'],
     tags: ['europea', 'rubia', 'fitness'],
-    vipRate: 350,
-    privateRate: 700,
+    vipRate: 3500,
+    privateRate: 7000,
     isOnline: true,
     vipEnabled: true,
     kyc: KycStatus.APPROVED,
@@ -164,8 +163,8 @@ const MODEL_SEEDS: ModelSeed[] = [
     bio: 'Sesiones de rol y dominacion suave. Escribeme tus limites antes de empezar y los respetamos.',
     languages: ['Espanol', 'Ingles'],
     tags: ['domina', 'morena', 'fetiche', 'piercing'],
-    vipRate: 500,
-    privateRate: 1000,
+    vipRate: 5000,
+    privateRate: 10000,
     isOnline: false,
     vipEnabled: true,
     kyc: KycStatus.APPROVED,
@@ -183,8 +182,8 @@ const MODEL_SEEDS: ModelSeed[] = [
     bio: 'Brasileno, fitness y buen rollo. Sesiones divertidas y sin postureo.',
     languages: ['Portugues', 'Espanol', 'Ingles'],
     tags: ['fitness', 'tatuajes', 'moreno'],
-    vipRate: 300,
-    privateRate: 600,
+    vipRate: 3000,
+    privateRate: 6000,
     isOnline: true,
     vipEnabled: true,
     kyc: KycStatus.APPROVED,
@@ -202,8 +201,8 @@ const MODEL_SEEDS: ModelSeed[] = [
     bio: 'Musico de noche, modelo de dia. Me gusta charlar tanto como el show.',
     languages: ['Ingles', 'Aleman'],
     tags: ['europea', 'gamer', 'tatuajes'],
-    vipRate: 220,
-    privateRate: 450,
+    vipRate: 2200,
+    privateRate: 4500,
     isOnline: false,
     vipEnabled: false,
     kyc: KycStatus.PENDING,
@@ -221,8 +220,8 @@ const MODEL_SEEDS: ModelSeed[] = [
     bio: 'Espacio seguro, sin juicios. Cosplay y roleplay a medida.',
     languages: ['Ruso', 'Ingles'],
     tags: ['cosplay', 'pelirroja', 'roleplay'],
-    vipRate: 380,
-    privateRate: 750,
+    vipRate: 3800,
+    privateRate: 7500,
     isOnline: true,
     vipEnabled: true,
     kyc: KycStatus.APPROVED,
@@ -240,8 +239,8 @@ const MODEL_SEEDS: ModelSeed[] = [
     bio: 'Ilustrador/a y streamer. Cosplay a peticion y sesiones creativas.',
     languages: ['Ingles', 'Espanol'],
     tags: ['asiatica', 'cosplay', 'gamer'],
-    vipRate: 250,
-    privateRate: 500,
+    vipRate: 2500,
+    privateRate: 5000,
     isOnline: true,
     vipEnabled: true,
     kyc: KycStatus.APPROVED,
@@ -259,8 +258,8 @@ const MODEL_SEEDS: ModelSeed[] = [
     bio: 'Nada de prisas. Me gusta escuchar y que la sesion fluya.',
     languages: ['Espanol'],
     tags: ['milf', 'latina', 'morena'],
-    vipRate: 280,
-    privateRate: 550,
+    vipRate: 2800,
+    privateRate: 5500,
     isOnline: false,
     vipEnabled: true,
     kyc: KycStatus.APPROVED,
@@ -278,8 +277,8 @@ const MODEL_SEEDS: ModelSeed[] = [
     bio: 'Somos pareja en la vida real. Sesiones para uno o para dos.',
     languages: ['Frances', 'Ingles'],
     tags: ['pareja', 'europea', 'fitness'],
-    vipRate: 600,
-    privateRate: 1200,
+    vipRate: 6000,
+    privateRate: 12000,
     isOnline: true,
     vipEnabled: true,
     kyc: KycStatus.APPROVED,
@@ -297,8 +296,8 @@ const MODEL_SEEDS: ModelSeed[] = [
     bio: 'Sesiones autenticas y sin guion. Comunidad queer bienvenida.',
     languages: ['Espanol', 'Ingles'],
     tags: ['latina', 'tatuajes', 'fitness'],
-    vipRate: 260,
-    privateRate: 520,
+    vipRate: 2600,
+    privateRate: 5200,
     isOnline: false,
     vipEnabled: false,
     kyc: KycStatus.REJECTED,
@@ -316,8 +315,8 @@ const MODEL_SEEDS: ModelSeed[] = [
     bio: 'Bailarina profesional. Las sesiones empiezan siempre con musica.',
     languages: ['Frances', 'Ingles', 'Espanol'],
     tags: ['morena', 'curvy', 'roleplay'],
-    vipRate: 400,
-    privateRate: 800,
+    vipRate: 4000,
+    privateRate: 8000,
     isOnline: true,
     vipEnabled: true,
     kyc: KycStatus.APPROVED,
@@ -335,8 +334,8 @@ const MODEL_SEEDS: ModelSeed[] = [
     bio: 'Prefiero calidad a cantidad. Pocas sesiones, muy cuidadas.',
     languages: ['Ingles', 'Aleman'],
     tags: ['europea', 'rubio', 'fitness'],
-    vipRate: 240,
-    privateRate: 480,
+    vipRate: 2400,
+    privateRate: 4800,
     isOnline: false,
     vipEnabled: true,
     kyc: KycStatus.NOT_SUBMITTED,
@@ -356,19 +355,18 @@ const USER_SEEDS = [
 
 const TOKEN_PACKAGES = [
   { sku: 'starter-100', name: 'Starter', tokens: 100, bonus: 0, cents: 999, popular: false, desc: 'Ideal para probar la plataforma' },
-  { sku: 'basic-300', name: 'Basic', tokens: 300, bonus: 25, cents: 2799, popular: false, desc: '25 tokens de regalo' },
-  { sku: 'popular-750', name: 'Popular', tokens: 750, bonus: 100, cents: 5999, popular: true, desc: 'El mas elegido: 100 tokens extra' },
-  { sku: 'premium-1600', name: 'Premium', tokens: 1600, bonus: 300, cents: 11999, popular: false, desc: '300 tokens extra + acceso anticipado' },
-  { sku: 'whale-4000', name: 'Elite', tokens: 4000, bonus: 1000, cents: 27999, popular: false, desc: '1000 tokens extra + soporte prioritario' },
+  { sku: 'basic-300', name: 'Basic', tokens: 300, bonus: 15, cents: 2999, popular: false, desc: '15 tokens de regalo' },
+  { sku: 'popular-750', name: 'Popular', tokens: 750, bonus: 50, cents: 6999, popular: true, desc: 'El mas elegido: 50 tokens extra' },
+  { sku: 'premium-1600', name: 'Premium', tokens: 1600, bonus: 150, cents: 14999, popular: false, desc: '150 tokens extra + acceso anticipado' },
+  { sku: 'whale-4000', name: 'Elite', tokens: 4000, bonus: 400, cents: 34999, popular: false, desc: '400 tokens extra + soporte prioritario' },
 ];
 
+/** Publicaciones de ejemplo: gratis (0) o de pago, con varias fotos. */
 const CONTENT_TEMPLATES = [
-  { title: 'Sesion de fotos en estudio', type: ContentType.PHOTO, price: 45 },
-  { title: 'Backstage exclusivo', type: ContentType.PHOTO, price: 30 },
-  { title: 'Video personalizado 5 min', type: ContentType.VIDEO, price: 120 },
-  { title: 'Pack completo del mes', type: ContentType.BUNDLE, price: 250 },
-  { title: 'Galeria de bienvenida', type: ContentType.PHOTO, price: 0 },
-  { title: 'Show grabado en directo', type: ContentType.VIDEO, price: 180 },
+  { title: 'Sesion de fotos en estudio', price: 45 },
+  { title: 'Backstage exclusivo', price: 30 },
+  { title: 'Pack completo del mes', price: 250 },
+  { title: 'Galeria de bienvenida', price: 0 },
 ];
 
 // ---------------------------------------------------------------------------
@@ -387,9 +385,6 @@ async function main() {
   await prisma.matchQueueEntry.deleteMany();
   await prisma.callSession.deleteMany();
   await prisma.booking.deleteMany();
-  await prisma.contentUnlock.deleteMany();
-  await prisma.contentAsset.deleteMany();
-  await prisma.contentPackage.deleteMany();
   await prisma.availabilitySlot.deleteMany();
   await prisma.review.deleteMany();
   await prisma.payoutRequest.deleteMany();
@@ -656,40 +651,31 @@ async function main() {
       });
     }
 
-    // --- Paquetes de contenido ---
+    // --- Publicaciones (gratis y de pago) ---
     const templates = pickMany(CONTENT_TEMPLATES, randInt(2, 4));
     for (const [idx, t] of templates.entries()) {
-      const assetCount = t.type === ContentType.VIDEO ? randInt(1, 3) : randInt(4, 12);
-      const pkg = await prisma.contentPackage.create({
+      const assetCount = randInt(3, 10);
+      const post = await prisma.post.create({
         data: {
           modelId: profile.id,
-          title: `${t.title} - ${m.stageName}`,
-          description:
-            t.price === 0
-              ? 'Contenido gratuito para conocer mi estilo.'
-              : 'Contenido exclusivo solo para quien lo desbloquea. Sin reventa.',
-          type: t.type,
+          body: `${t.title} - ${m.stageName}`,
+          visibility: t.price > 0 ? 'LOCKED' : 'PUBLIC',
           priceTokens: t.price,
-          isPublic: t.price === 0,
-          isPublished: true,
-          previewUrl: photo(`${m.stageName}-${idx}`),
-          assetCount,
-          purchaseCount: t.price === 0 ? 0 : randInt(3, 220),
-          tokensEarned: t.price === 0 ? 0 : t.price * randInt(3, 220),
+          createdAt: daysAgo(randInt(1, 60)),
         },
       });
-
       for (let a = 0; a < assetCount; a++) {
-        await prisma.contentAsset.create({
+        const key = photo(`${m.stageName}-${idx}-${a}`);
+        await prisma.postAsset.create({
           data: {
-            packageId: pkg.id,
-            storageKey: photo(`${m.stageName}-${idx}-${a}`),
-            mimeType: t.type === ContentType.VIDEO ? 'video/mp4' : 'image/jpeg',
+            postId: post.id,
+            storageKey: key,
+            // Miniatura diminuta y borrosa (lo que se ve sin pagar).
+            previewKey: `${key.replace(/\/\d+\/\d+$/, '/32/40')}?blur=2`,
+            mimeType: 'image/jpeg',
             sizeBytes: randInt(200_000, 8_000_000),
             width: 800,
             height: 1000,
-            durationSec: t.type === ContentType.VIDEO ? randInt(60, 600) : null,
-            isPreview: a === 0,
             sortOrder: a,
           },
         });
@@ -778,40 +764,43 @@ async function main() {
   }
 
   // -------------------------------------------------------------------------
-  // 6. Desbloqueos de contenido
+  // 6. Desbloqueos de publicaciones de pago
   // -------------------------------------------------------------------------
   console.log('[seed] Desbloqueos de contenido...');
-  const paidPackages = await prisma.contentPackage.findMany({
-    where: { priceTokens: { gt: 0 } },
-    include: { model: { select: { userId: true, stageName: true } } },
+  const paidPosts = await prisma.post.findMany({
+    where: { visibility: 'LOCKED' },
+    include: { model: { select: { userId: true } } },
   });
 
   for (const user of users.slice(0, 5)) {
-    for (const pkg of pickMany(paidPackages, randInt(1, 4))) {
-      const exists = await prisma.contentUnlock.findUnique({
-        where: { userId_packageId: { userId: user.id, packageId: pkg.id } },
+    for (const post of pickMany(paidPosts, randInt(1, 4))) {
+      const exists = await prisma.postUnlock.findUnique({
+        where: { userId_postId: { userId: user.id, postId: post.id } },
       });
       if (exists) continue;
 
-      const fee = Math.round((pkg.priceTokens * COMMISSION) / 100);
+      const fee = Math.round((post.priceTokens * COMMISSION) / 100);
       const createdAt = daysAgo(randInt(1, 45));
+      const title = post.body ?? 'publicacion';
 
-      await prisma.contentUnlock.create({
+      await prisma.postUnlock.create({
+        data: { userId: user.id, postId: post.id, tokensSpent: post.priceTokens, createdAt },
+      });
+      await prisma.post.update({
+        where: { id: post.id },
         data: {
-          userId: user.id,
-          packageId: pkg.id,
-          tokensSpent: pkg.priceTokens,
-          createdAt,
+          unlockCount: { increment: 1 },
+          tokensEarned: { increment: post.priceTokens - fee },
         },
       });
 
       await prisma.transaction.create({
         data: {
           userId: user.id,
-          type: TransactionType.CONTENT_UNLOCK,
-          tokens: -pkg.priceTokens,
-          description: `Desbloqueo: ${pkg.title}`,
-          contentPackageId: pkg.id,
+          type: TransactionType.POST_UNLOCK,
+          tokens: -post.priceTokens,
+          description: `Desbloqueo: ${title}`,
+          postId: post.id,
           platformFeeTokens: fee,
           createdAt,
         },
@@ -819,11 +808,11 @@ async function main() {
 
       await prisma.transaction.create({
         data: {
-          userId: pkg.model.userId,
-          type: TransactionType.CONTENT_EARNING,
-          tokens: pkg.priceTokens - fee,
-          description: `Venta: ${pkg.title}`,
-          contentPackageId: pkg.id,
+          userId: post.model.userId,
+          type: TransactionType.POST_EARNING,
+          tokens: post.priceTokens - fee,
+          description: `Venta: ${title}`,
+          postId: post.id,
           createdAt,
         },
       });
@@ -1109,7 +1098,7 @@ async function main() {
     usuarios: await prisma.user.count(),
     modelos: await prisma.modelProfile.count(),
     paquetesTokens: await prisma.tokenPackage.count(),
-    paquetesContenido: await prisma.contentPackage.count(),
+    publicaciones: await prisma.post.count(),
     llamadas: await prisma.callSession.count(),
     transacciones: await prisma.transaction.count(),
     reservas: await prisma.booking.count(),

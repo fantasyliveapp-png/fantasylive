@@ -23,7 +23,7 @@ export interface RecruiterActionResult {
   message?: string;
 }
 
-/** Tope para que la plataforma siempre gane algo (40% - 5% embajadora - 10%). */
+/** Tope para que la plataforma siempre gane algo (su % - 5% embajadora - este tope). */
 const MAX_PERCENT = 10;
 
 async function requireAdminUser() {

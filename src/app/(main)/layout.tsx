@@ -1,3 +1,4 @@
+import { CallAvailabilityProvider } from '@/components/calls/call-availability';
 import { BottomNav } from '@/components/layout/bottom-nav';
 import { Footer } from '@/components/layout/footer';
 import { Navbar } from '@/components/layout/navbar';
@@ -16,7 +17,7 @@ export default async function MainLayout({
     getOwnUsername(user?.id),
   ]);
 
-  return (
+  const page = (
     // En escritorio grande la navegacion es la barra lateral (SideNav): el
     // contenido deja su ancho a la izquierda y la barra de arriba se oculta.
     <div className="flex min-h-screen flex-col md:pl-[72px] lg:pl-60">
@@ -34,5 +35,14 @@ export default async function MainLayout({
         username={username}
       />
     </div>
+  );
+
+  // Creadores: el interruptor "Recibo llamadas" y la llamada entrante, en
+  // toda la web.
+  if (!profile) return page;
+  return (
+    <CallAvailabilityProvider initialAvailable={profile.callsAvailable} canStream={profile.verified}>
+      {page}
+    </CallAvailabilityProvider>
   );
 }

@@ -3,6 +3,7 @@ import 'server-only';
 import type { Gender, QueueMode } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
+import { MIN_BILLED_CALL_SECONDS } from '@/lib/rates';
 import { config } from '@/lib/config';
 import { isCountryBlocked } from '@/lib/geo';
 import { randomRoomName } from '@/lib/utils';
@@ -278,6 +279,8 @@ export async function tryMatch(entryId: string): Promise<MatchResult | null> {
         calleeId,
         roomName: randomRoomName(isVipCall ? 'vip' : 'rnd'),
         rateCentitokens,
+        // VIP al azar: el minimo de la plataforma (si el fan cuelga antes).
+        minBilledSeconds: isVipCall ? MIN_BILLED_CALL_SECONDS : 0,
       },
       select: { id: true, roomName: true, rateCentitokens: true },
     });

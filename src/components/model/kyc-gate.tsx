@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils';
 const LOCKED: { icon: LucideIcon; label: string }[] = [
   { icon: SquarePen, label: 'Publicar fotos, videos y encuestas' },
   { icon: Radio, label: 'Hacer directos y videollamadas' },
-  { icon: CreditCard, label: 'Cobrar: suscripcion, mensajes, citas y pedidos' },
+  { icon: CreditCard, label: 'Cobrar: suscripcion, mensajes, reservas y pedidos' },
   { icon: MessageSquareHeart, label: 'Mensaje de bienvenida' },
   { icon: Wallet, label: 'Retirar dinero' },
 ];

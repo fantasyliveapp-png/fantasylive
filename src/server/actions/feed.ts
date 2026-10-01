@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { ANON_TASTE_COOKIE, decodeAnonTaste } from '@/lib/anon-taste';
 import { getCurrentUser } from '@/lib/auth/guards';
 import { getVisibilityContext } from '@/lib/geo';
-import { getFollowingFeed, type FeedPost } from '@/lib/posts';
+import { getFollowingFeed, getSubscriptionsFeed, type FeedPost } from '@/lib/posts';
 import { getForYouFeed } from '@/lib/recommend';
 
 const PAGE_SIZE = 10;
@@ -46,4 +46,16 @@ export async function loadFollowingAction(cursor: string): Promise<FeedPost[]> {
   if (!viewer || typeof cursor !== 'string' || cursor.length > 40) return [];
   const { filter: geoFilter } = await getVisibilityContext();
   return getFollowingFeed({ viewerId: viewer.id, geoFilter, take: PAGE_SIZE, cursor });
+}
+
+/** Siguiente tanda de las exclusivas de sus suscripciones (perfil del fan). */
+export async function loadSubscriptionsAction(
+  cursor: string,
+  modelId?: string | null,
+): Promise<FeedPost[]> {
+  const viewer = await getCurrentUser();
+  if (!viewer || typeof cursor !== 'string' || cursor.length > 40) return [];
+  if (modelId != null && (typeof modelId !== 'string' || modelId.length > 40)) return [];
+  const { filter: geoFilter } = await getVisibilityContext();
+  return getSubscriptionsFeed({ viewerId: viewer.id, geoFilter, modelId, take: PAGE_SIZE, cursor });
 }

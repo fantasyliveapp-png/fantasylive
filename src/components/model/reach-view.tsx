@@ -79,7 +79,7 @@ export function ReachView({ reach }: { reach: CreatorReach }) {
         <div className="space-y-1">
           <p className="font-semibold">Todos los creadores tienen la misma oportunidad</p>
           <p className="text-xs leading-relaxed text-muted-foreground">
-            Cada publicacion nueva se ensena a unas 40 personas aunque tengas pocos
+            Cada publicacion nueva se enseña a unas 40 personas aunque tengas pocos
             seguidores (fase de prueba). Despues, cuanto mas gusta (me gusta, comentarios,
             desbloqueos, tiempo que la miran), a mas gente llega. No depende de cuantos
             seguidores tengas.

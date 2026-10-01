@@ -13,10 +13,12 @@ import {
   Loader2,
   Power,
   Target,
-  Trophy,
   Mic,
   MicOff,
   Monitor,
+  Phone,
+  PhoneOff,
+  SlidersHorizontal,
   Radio,
   RefreshCw,
   Square,
@@ -49,6 +51,9 @@ import {
   RailButton,
   glass,
 } from '@/components/live/live-chat';
+import { LivePollCard, LiveWidget, PausedOverlay, PinnedMessage, TipMenuPanel } from '@/components/live/live-extras';
+import { LiveMoreMenu, ViewerActionsSheet } from '@/components/live/live-more-menu';
+import { GoLiveSetup } from '@/components/live/go-live-setup';
 import { LiveStage, StageNotice } from '@/components/live/live-stage';
 import { useI18n } from '@/components/providers/i18n-provider';
 import { useLiveRoom } from '@/hooks/use-live-room';
@@ -59,9 +64,12 @@ import {
   markStreamLiveAction,
   regenerateStreamKeyAction,
   setStreamGoalAction,
+  setStreamPrivateAction,
   startStreamAction,
   type StreamSummary,
 } from '@/server/actions/live';
+import { closeLivePollAction, hideLivePollAction, setWidgetLayoutAction } from '@/server/actions/live-controls';
+import { DEFAULT_WIDGET_LAYOUT, type LiveWidgetId, type WidgetPos } from '@/lib/live-state';
 import { creatorLabel } from '@/lib/gender-words';
 import { cn, formatTokens, initials } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -295,7 +303,12 @@ export function BroadcastPanel({
   gender,
   existing,
   totals,
+  privateRate,
+  privateMinMinutes,
 }: {
+  /** Tarifa del privado 1 a 1, ya formateada ("9 tokens/min"). */
+  privateRate: string;
+  privateMinMinutes: number;
   kycApproved: boolean;
   obsConfigured: boolean;
   slug: string;
@@ -318,6 +331,10 @@ export function BroadcastPanel({
   const { t } = useI18n();
 
   const [title, setTitle] = useState('');
+  /** Respuesta a "¿Quieres recibir privados 1 a 1?" (null = sin contestar). */
+  const [acceptsPrivate, setAcceptsPrivate] = useState<boolean | null>(null);
+  /** Vista previa de la camara en la pantalla de empezar. */
+  const previewRef = useRef<MediaStream | null>(null);
   const [source, setSource] = useState<Source>(
     existing?.source ?? (obsConfigured ? 'OBS_RTMP' : 'BROWSER'),
   );
@@ -333,6 +350,9 @@ export function BroadcastPanel({
     data: StreamSummary | null;
   } | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [selectedAuthor, setSelectedAuthor] = useState<{ identity: string; name: string } | null>(null);
+  const [replyTo, setReplyTo] = useState<{ from: string; body: string } | null>(null);
   const [isPending, startTransition] = useTransition();
   const markedRef = useRef(false);
 
@@ -356,6 +376,18 @@ export function BroadcastPanel({
 
   const canChat = room.status === 'playing' || room.status === 'waiting-video';
 
+  const posOf = (id: LiveWidgetId) => room.liveState.layout[id] ?? DEFAULT_WIDGET_LAYOUT[id];
+
+  /** Coloca un panel: se ve al momento y se guarda para los fans. */
+  function moveWidget(id: LiveWidgetId, pos: WidgetPos) {
+    if (!active) return;
+    const next = { ...room.liveState.layout, [id]: pos };
+    room.setLiveState((prev) => ({ ...prev, layout: next }));
+    void setWidgetLayoutAction(active.streamId, next).then((r) => {
+      if (!r.ok) toast.error(r.error ?? t('common.somethingWentWrong'));
+    });
+  }
+
   useEffect(() => {
     if (!active) return;
     const timer = setInterval(async () => {
@@ -374,12 +406,14 @@ export function BroadcastPanel({
 
   function start() {
     startTransition(async () => {
+      // Suelta la camara de la vista previa: la va a coger el directo.
+      previewRef.current?.getTracks().forEach((t) => t.stop());
+      previewRef.current = null;
+      // La meta se pone ya dentro del directo (boton "Meta").
       const result = await startStreamAction({
         title: title || undefined,
         source,
-        goal: goalIsValid(goalDraft)
-          ? { label: goalDraft.label.trim(), tokens: Number(goalDraft.tokens) }
-          : undefined,
+        acceptsPrivate: acceptsPrivate === true,
       });
       if (!result.ok || !result.data) {
         toast.error(result.error ?? t('common.somethingWentWrong'));
@@ -388,6 +422,8 @@ export function BroadcastPanel({
       markedRef.current = false;
       setSummary(null);
       room.setGoal(result.data.goal);
+      if (result.data.state) room.setLiveState(result.data.state);
+      room.setPoll(null);
       setStartedAt(Date.now());
       setNow(Date.now());
       setActive({
@@ -409,6 +445,8 @@ export function BroadcastPanel({
       room.disconnect();
       setActive(null);
       setGoalSheet(false);
+      setMoreOpen(false);
+      setSelectedAuthor(null);
       markedRef.current = false;
       if (result.ok) {
         router.refresh();
@@ -428,6 +466,19 @@ export function BroadcastPanel({
         }
       } else {
         toast.error(result.error ?? t('common.somethingWentWrong'));
+      }
+    });
+  }
+
+  function togglePrivate(next: boolean) {
+    if (!active) return;
+    room.setLiveState((prev) => ({ ...prev, acceptsPrivate: next }));
+    startTransition(async () => {
+      const r = await setStreamPrivateAction(active.streamId, next);
+      if (r.ok) toast.success(r.message ?? '');
+      else {
+        room.setLiveState((prev) => ({ ...prev, acceptsPrivate: !next }));
+        toast.error(r.error ?? t('common.somethingWentWrong'));
       }
     });
   }
@@ -535,89 +586,20 @@ export function BroadcastPanel({
           onAgain={() => setSummary(null)}
         />
       ) : !active ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('live.startStream')}</CardTitle>
-            <CardDescription>
-              Apareceras en la portada y en /live mientras emitas. Los
-              espectadores pueden enviarte regalos en tokens.
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="streamTitle">{t('live.streamTitle')}</Label>
-              <Input
-                id="streamTitle"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Charlamos un rato..."
-                maxLength={120}
-              />
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => setSource('BROWSER')}
-                className={`rounded-lg border p-4 text-left transition-colors ${
-                  source === 'BROWSER'
-                    ? 'border-primary bg-primary/5'
-                    : 'border-border hover:border-primary/40'
-                }`}
-              >
-                <Video className="h-5 w-5 text-primary" />
-                <p className="mt-2 text-sm font-medium">
-                  {t('live.sourceBrowser')}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Lo mas rapido: das permiso de camara y ya estas emitiendo.
-                </p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => obsConfigured && setSource('OBS_RTMP')}
-                disabled={!obsConfigured}
-                className={`rounded-lg border p-4 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                  source === 'OBS_RTMP'
-                    ? 'border-primary bg-primary/5'
-                    : 'border-border hover:border-primary/40'
-                }`}
-              >
-                <Monitor className="h-5 w-5 text-primary" />
-                <p className="mt-2 text-sm font-medium">{t('live.sourceObs')}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {obsConfigured
-                    ? 'Escenas, overlays y mejor calidad. Te damos servidor y clave.'
-                    : t('live.obsNotConfigured')}
-                </p>
-              </button>
-            </div>
-
-            <div className="space-y-2 rounded-xl border border-champagne-gold/25 bg-champagne-gold/5 p-4">
-              <Label className="flex items-center gap-1.5">
-                <Trophy className="h-4 w-4 text-champagne-gold" />
-                {t('live.goalOptional')}
-              </Label>
-              <p className="text-xs text-muted-foreground">{t('live.goalHelp')}</p>
-              <GoalFields
-                label={goalDraft.label}
-                tokens={goalDraft.tokens}
-                onChange={setGoalDraft}
-              />
-            </div>
-
-            <Button variant="brand" onClick={start} disabled={isPending}>
-              {isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Radio className="h-4 w-4" />
-              )}
-              {t('live.goLive')}
-            </Button>
-          </CardContent>
-        </Card>
+        <GoLiveSetup
+          title={title}
+          onTitle={setTitle}
+          source={source}
+          onSource={setSource}
+          obsConfigured={obsConfigured}
+          acceptsPrivate={acceptsPrivate}
+          onAcceptsPrivate={setAcceptsPrivate}
+          privateRate={privateRate}
+          privateMinMinutes={privateMinMinutes}
+          onStart={start}
+          pending={isPending}
+          previewRef={previewRef}
+        />
       ) : (
         <>
           {/* Credenciales de OBS */}
@@ -678,110 +660,91 @@ export function BroadcastPanel({
             videoRef={room.videoRef}
             audioRef={room.audioRef}
             muted={active.source === 'BROWSER'}
-            mirror={active.source === 'BROWSER'}
+            // Su vista previa: como un espejo con la camara frontal.
+            mirror={active.source === 'BROWSER' && room.facingMode === 'user'}
             immersive={active.source === 'BROWSER'}
           >
-            {/* Cabecera: directo, tiempo, audiencia, ganancias y terminar */}
-            <div className="absolute inset-x-0 top-0 flex items-start gap-2 px-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-              <div className="flex min-w-0 flex-col gap-2">
-                <div className="flex items-center gap-1.5">
-                  <span className="flex items-center gap-1.5 rounded-full bg-fantazy-red px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white">
-                    <span className="live-dot !h-1.5 !w-1.5 bg-white" />
-                    {t('common.live')}
-                  </span>
-                  <span className={cn('rounded-full px-2.5 py-1 font-mono text-[11px] text-white', glass)}>
-                    {formatElapsed(now - (startedAt ?? now))}
-                  </span>
-                  <span className={cn('flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold tabular-nums text-white', glass)}>
-                    <Eye className="h-3.5 w-3.5" />
-                    {viewerCount}
-                  </span>
-                  <span className={cn('flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold tabular-nums text-white', glass)}>
-                    <Heart className="h-3.5 w-3.5 fill-[#ff2d55] text-[#ff2d55]" />
-                    {formatTokens(room.likeCount)}
-                  </span>
-                </div>
-                {room.goal && (
-                  <GoalBar goal={room.goal} onClick={() => openGoalSheet()} />
-                )}
-              </div>
+            {room.liveState.paused && <PausedOverlay host />}
 
-              <div className="ml-auto flex shrink-0 flex-col items-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (window.confirm(t('live.endConfirm'))) stop(active.streamId);
+            {/* Cabecera: una sola linea, todo a la misma altura */}
+            <div className="absolute inset-x-0 top-0 flex h-[calc(max(0.75rem,env(safe-area-inset-top))+2.25rem)] items-end gap-1.5 px-3">
+              <span className="flex h-7 items-center gap-1.5 rounded-full bg-fantazy-red px-2.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                <span className="live-dot !h-1.5 !w-1.5 bg-white" />
+                {t('common.live')}
+              </span>
+              <span className={cn('flex h-7 items-center rounded-full px-2.5 font-mono text-[11px] text-white', glass)}>
+                {formatElapsed(now - (startedAt ?? now))}
+              </span>
+              <span className={cn('flex h-7 items-center gap-1 rounded-full px-2.5 text-[11px] font-semibold tabular-nums text-white', glass)}>
+                <Eye className="h-3.5 w-3.5" />
+                {viewerCount}
+              </span>
+              <span className={cn('hidden h-7 items-center gap-1 rounded-full px-2.5 text-[11px] font-semibold tabular-nums text-white min-[380px]:flex', glass)}>
+                <Heart className="h-3.5 w-3.5 fill-[#ff2d55] text-[#ff2d55]" />
+                {formatTokens(room.likeCount)}
+              </span>
+
+              <span
+                className="ml-auto flex h-7 items-center gap-1 rounded-full bg-gradient-to-r from-fantazy-red to-champagne-gold px-2.5 text-xs font-bold tabular-nums text-white shadow-lg"
+                title={t('live.streamGifts', {
+                  count: room.giftTotals.count,
+                  tokens: formatTokens(room.giftTotals.tokens),
+                })}
+              >
+                <Coins className="h-3.5 w-3.5" />
+                {formatTokens(room.giftTotals.tokens)}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm(t('live.endConfirm'))) stop(active.streamId);
+                }}
+                disabled={isPending}
+                aria-label={t('live.endStream')}
+                className={cn('flex h-7 w-7 items-center justify-center rounded-full text-white disabled:opacity-60', glass)}
+              >
+                {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Power className="h-3.5 w-3.5" />}
+              </button>
+            </div>
+
+            {/* Paneles: los arrastra por el asa dorada y los fans los ven ahi */}
+            {room.goal && (
+              <LiveWidget pos={posOf('goal')} editable onMove={(p) => moveWidget('goal', p)} label="la meta" className="w-60 max-w-[70%]">
+                <GoalBar goal={room.goal} onClick={() => openGoalSheet()} className="w-full" />
+              </LiveWidget>
+            )}
+            {room.poll && (
+              <LiveWidget pos={posOf('poll')} editable onMove={(p) => moveWidget('poll', p)} label="la encuesta" className="w-64 max-w-[72%]">
+                <LivePollCard
+                  poll={room.poll}
+                  myVote={null}
+                  host
+                  onClose={() => {
+                    const pollId = room.poll!.id;
+                    void closeLivePollAction(active.streamId, pollId).then((r) => {
+                      if (r.ok && r.data) room.setPoll(r.data);
+                    });
                   }}
-                  disabled={isPending}
-                  aria-label={t('live.endStream')}
-                  className={cn('flex h-8 w-8 items-center justify-center rounded-full text-white disabled:opacity-60', glass)}
-                >
-                  {isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Power className="h-4 w-4" />
-                  )}
-                </button>
-                <span
-                  className="flex items-center gap-1 rounded-full bg-gradient-to-r from-fantazy-red to-champagne-gold px-2.5 py-1 text-xs font-bold tabular-nums text-white shadow-lg"
-                  title={t('live.streamGifts', {
-                    count: room.giftTotals.count,
-                    tokens: formatTokens(room.giftTotals.tokens),
-                  })}
-                >
-                  <Coins className="h-3.5 w-3.5" />
-                  {formatTokens(room.giftTotals.tokens)}
-                </span>
-              </div>
-            </div>
+                  onDismiss={() => {
+                    void hideLivePollAction(active.streamId).then((r) => {
+                      if (r.ok) room.setPoll(null);
+                    });
+                  }}
+                />
+              </LiveWidget>
+            )}
+            {room.liveState.pinned && (
+              <LiveWidget pos={posOf('pinned')} editable onMove={(p) => moveWidget('pinned', p)} label="el mensaje fijado" className="w-72 max-w-[78%]">
+                <PinnedMessage text={room.liveState.pinned} />
+              </LiveWidget>
+            )}
+            {room.liveState.tipMenuOnScreen && room.liveState.tipMenu.length > 0 && (
+              <LiveWidget pos={posOf('tipmenu')} editable onMove={(p) => moveWidget('tipmenu', p)} label="tus Especiales" className="w-52 max-w-[60%]">
+                <TipMenuPanel items={room.liveState.tipMenu} />
+              </LiveWidget>
+            )}
 
-            {/* Columna derecha: herramientas de la creadora */}
-            <div className="absolute bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+4.25rem)] right-3 flex flex-col items-center gap-4">
-              <RailButton
-                onClick={() => openGoalSheet()}
-                label={room.goal ? t('live.editGoal') : t('live.setGoal')}
-                caption={t('live.goal')}
-                className={cn(!room.goal && 'bg-champagne-gold/80 text-black ring-0')}
-              >
-                <Target className="h-5 w-5" />
-              </RailButton>
-              {active.source === 'BROWSER' && (
-                <>
-                  <RailButton onClick={room.toggleMic} label="Microfono" caption="Mic">
-                    {room.isMicEnabled ? (
-                      <Mic className="h-5 w-5" />
-                    ) : (
-                      <MicOff className="h-5 w-5 text-[#ff2d55]" />
-                    )}
-                  </RailButton>
-                  <RailButton onClick={room.toggleCamera} label="Camara" caption="Cam">
-                    {room.isCameraEnabled ? (
-                      <Video className="h-5 w-5" />
-                    ) : (
-                      <VideoOff className="h-5 w-5 text-[#ff2d55]" />
-                    )}
-                  </RailButton>
-                </>
-              )}
-              <Link
-                href={`/live/${slug}`}
-                target="_blank"
-                aria-label={t('live.viewAsFan')}
-                title={t('live.viewAsFan')}
-                className={cn('hidden h-11 w-11 items-center justify-center rounded-full text-white lg:flex', glass)}
-              >
-                <ExternalLink className="h-5 w-5" />
-              </Link>
-            </div>
-
-            <GiftBursts
-              messages={room.messages}
-              className={cn(
-                room.goal
-                  ? 'top-[calc(max(0.75rem,env(safe-area-inset-top))+7rem)]'
-                  : 'top-[calc(max(0.75rem,env(safe-area-inset-top))+3.5rem)]',
-              )}
-            />
+            <GiftBursts messages={room.messages} className="top-[calc(max(0.75rem,env(safe-area-inset-top))+3rem)]" />
             <GiftSpotlight messages={room.messages} />
             <GoalCelebration goal={room.goal} messages={room.messages} />
             <FloatingHearts hearts={room.hearts} />
@@ -793,48 +756,113 @@ export function BroadcastPanel({
               </StageNotice>
             )}
             {room.status === 'waiting-video' && (
-              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center">
+              <div className="pointer-events-none absolute inset-x-0 top-[38%] flex flex-col items-center gap-3 p-6 text-center">
                 <Monitor className="h-7 w-7 text-white/70" />
-                <p className="max-w-xs text-sm text-white/80">
-                  {t('live.waitingForVideo')}
-                </p>
+                <p className="max-w-xs text-sm text-white/80">{t('live.waitingForVideo')}</p>
               </div>
             )}
             {room.status === 'error' && (
               <StageNotice>
-                <p className="text-sm text-white">
-                  {room.error ?? t('common.somethingWentWrong')}
-                </p>
+                <p className="text-sm text-white">{room.error ?? t('common.somethingWentWrong')}</p>
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" onClick={room.connect}>
                     <RefreshCw className="h-4 w-4" />
                     {t('common.retry')}
                   </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => stop(active.streamId)}
-                    disabled={isPending}
-                  >
+                  <Button variant="destructive" size="sm" onClick={() => stop(active.streamId)} disabled={isPending}>
                     {t('live.endStream')}
                   </Button>
                 </div>
               </StageNotice>
             )}
 
-            {/* Chat: la creadora lee y responde sin salir de su imagen */}
-            <div className="absolute inset-x-0 bottom-0 space-y-3 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-              <LiveChatFeed
-                messages={room.messages}
-                hostLabel={creatorLabel(gender)}
-                className="max-h-[30dvh] w-[calc(100%-4.5rem)] lg:max-h-64"
-              />
+            {/* Parte de abajo: chat y herramientas alineados en una rejilla */}
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[15] space-y-3 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+              <div className="pointer-events-none flex items-end gap-3 [&>*]:pointer-events-auto">
+                <LiveChatFeed
+                  messages={room.messages}
+                  hostLabel={creatorLabel(gender)}
+                  className="max-h-[30dvh] min-w-0 flex-1 lg:max-h-64"
+                  onSelectAuthor={setSelectedAuthor}
+                  onReply={(m) => setReplyTo({ from: m.from, body: m.body })}
+                  myName={stageName}
+                />
+                <div className="flex w-14 shrink-0 flex-col items-center gap-3">
+                  {/* Panel de control: aro con los colores de la marca */}
+                  <button type="button" onClick={() => setMoreOpen(true)} aria-label="Panel de control" className="group flex w-14 flex-col items-center gap-1">
+                    <span className="rounded-2xl bg-gradient-to-br from-fantazy-red via-[#e0566b] to-champagne-gold p-[2px] shadow-[0_0_18px_rgb(201_168_118/0.35)] transition group-active:scale-95">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-black/70 text-white backdrop-blur">
+                        <SlidersHorizontal className="h-5 w-5" />
+                      </span>
+                    </span>
+                    <span className="text-[10px] font-semibold text-white [text-shadow:0_1px_2px_rgb(0_0_0/0.7)]">Control</span>
+                  </button>
+                  <HostTile onClick={() => openGoalSheet()} label={room.goal ? t('live.editGoal') : t('live.setGoal')} caption={t('live.goal')} highlight={!room.goal}>
+                    <Target className="h-5 w-5" />
+                  </HostTile>
+                  <HostTile
+                    onClick={() => togglePrivate(!room.liveState.acceptsPrivate)}
+                    label={room.liveState.acceptsPrivate ? 'Dejar de aceptar privados' : 'Aceptar privados 1 a 1'}
+                    caption="1 a 1"
+                    on={room.liveState.acceptsPrivate}
+                  >
+                    {room.liveState.acceptsPrivate ? <Phone className="h-5 w-5" /> : <PhoneOff className="h-5 w-5" />}
+                  </HostTile>
+                  {active.source === 'BROWSER' && (
+                    <>
+                      <HostTile onClick={room.toggleMic} label="Microfono" caption="Mic">
+                        {room.isMicEnabled ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5 text-[#ff2d55]" />}
+                      </HostTile>
+                      <HostTile onClick={room.toggleCamera} label="Camara" caption="Cam">
+                        {room.isCameraEnabled ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5 text-[#ff2d55]" />}
+                      </HostTile>
+                    </>
+                  )}
+                  <Link
+                    href={`/live/${slug}`}
+                    target="_blank"
+                    aria-label={t('live.viewAsFan')}
+                    title={t('live.viewAsFan')}
+                    className={cn('hidden h-10 w-10 items-center justify-center rounded-2xl text-white lg:flex', glass)}
+                  >
+                    <ExternalLink className="h-5 w-5" />
+                  </Link>
+                </div>
+              </div>
               <LiveChatComposer
-                onSend={room.sendChat}
+                className="pointer-events-auto"
+                onSend={async (text) => {
+                  const sent = await room.sendChat(text, replyTo ?? undefined);
+                  if (sent) setReplyTo(null);
+                  return sent;
+                }}
                 disabled={!canChat}
                 placeholder={t('live.chatHostPlaceholder')}
+                replyTo={replyTo}
+                onCancelReply={() => setReplyTo(null)}
               />
             </div>
+
+            {moreOpen && (
+              <LiveMoreMenu
+                streamId={active.streamId}
+                browserSource={active.source === 'BROWSER'}
+                room={room}
+                onClose={() => setMoreOpen(false)}
+              />
+            )}
+            {selectedAuthor && (
+              <ViewerActionsSheet
+                streamId={active.streamId}
+                author={selectedAuthor}
+                onClose={() => setSelectedAuthor(null)}
+                onReply={(name) => {
+                  const last = [...room.messages].reverse().find((m) => m.identity === selectedAuthor.identity);
+                  setReplyTo({ from: name, body: last?.body ?? '' });
+                  setSelectedAuthor(null);
+                }}
+              />
+            )}
 
             {/* Hoja para poner o cambiar la meta sin dejar de emitir */}
             {goalSheet && (
@@ -906,5 +934,38 @@ export function BroadcastPanel({
         </Card>
       )}
     </div>
+  );
+}
+
+/** Herramienta de la columna derecha de la creadora (cuadrado suave). */
+function HostTile({
+  onClick,
+  label,
+  caption,
+  highlight,
+  on,
+  children,
+}: {
+  onClick: () => void;
+  label: string;
+  caption: string;
+  /** Destacada en dorado (p. ej. "pon una meta"). */
+  highlight?: boolean;
+  /** Interruptor encendido (verde). */
+  on?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button type="button" onClick={onClick} aria-label={label} title={label} className="group flex w-14 flex-col items-center gap-1">
+      <span
+        className={cn(
+          'flex h-10 w-10 items-center justify-center rounded-2xl text-white transition group-active:scale-90',
+          highlight ? 'bg-champagne-gold/85 text-black' : on ? 'bg-state-connected text-white' : glass,
+        )}
+      >
+        {children}
+      </span>
+      <span className="text-[10px] font-semibold text-white [text-shadow:0_1px_2px_rgb(0_0_0/0.7)]">{caption}</span>
+    </button>
   );
 }

@@ -22,6 +22,7 @@ import {
   Sun,
   Wallet,
   type LucideIcon,
+  HeartHandshake,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -49,6 +50,7 @@ const ICONS = {
   inbox: Inbox,
   money: Wallet,
   settings: Settings,
+  fans: HeartHandshake,
 } satisfies Record<string, LucideIcon>;
 
 export type CreatorNavIcon = keyof typeof ICONS;

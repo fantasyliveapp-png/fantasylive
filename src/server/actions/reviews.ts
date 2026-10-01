@@ -21,7 +21,7 @@ const reviewSchema = z.object({
   comment: z.string().max(600).optional(),
 });
 
-/** Crea la resena del usuario o actualiza la que ya tenia para esta modelo. */
+/** Crea la reseña del usuario o actualiza la que ya tenia para esta modelo. */
 export async function upsertReviewAction(input: {
   modelId: string;
   slug: string;
@@ -75,7 +75,7 @@ export async function upsertReviewAction(input: {
         await createNotification(tx, {
           userId: model.userId,
           type: 'NEW_REVIEW',
-          title: `${user.name ?? 'Alguien'} te dejo una resena de ${parsed.data.rating} estrellas`,
+          title: `${user.name ?? 'Alguien'} te dejo una reseña de ${parsed.data.rating} estrellas`,
           link: `/models/${parsed.data.slug}`,
         });
       }
@@ -96,7 +96,7 @@ export async function upsertReviewAction(input: {
     });
 
     revalidatePath(`/models/${parsed.data.slug}`);
-    return { ok: true, message: 'Gracias por tu resena.' };
+    return { ok: true, message: 'Gracias por tu reseña.' };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
   }
@@ -104,8 +104,8 @@ export async function upsertReviewAction(input: {
 
 function toMessage(error: unknown): string {
   if (error instanceof Error) {
-    if (error.message === 'UNAUTHORIZED') return 'Debes iniciar sesion para dejar una resena.';
+    if (error.message === 'UNAUTHORIZED') return 'Debes iniciar sesion para dejar una reseña.';
     return error.message;
   }
-  return 'No se pudo guardar la resena. Intenta de nuevo.';
+  return 'No se pudo guardar la reseña. Intenta de nuevo.';
 }

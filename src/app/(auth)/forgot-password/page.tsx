@@ -13,13 +13,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { config } from '@/lib/config';
 
-export const metadata: Metadata = { title: 'Recuperar contrasena' };
+export const metadata: Metadata = { title: 'Recuperar contraseña' };
 
 export default function ForgotPasswordPage() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-2xl">Recuperar contrasena</CardTitle>
+        <CardTitle className="text-2xl">Recuperar contraseña</CardTitle>
         <CardDescription>
           Te enviaremos un enlace para restablecerla.
         </CardDescription>
@@ -39,7 +39,7 @@ export default function ForgotPasswordPage() {
           El envio de emails transaccionales aun no esta conectado. Configura un
           proveedor (Resend, SendGrid o Amazon SES) y activa el proveedor
           &ldquo;email&rdquo; de Auth.js para habilitar este flujo. Mientras
-          tanto, un administrador puede restablecer la contrasena manualmente
+          tanto, un administrador puede restablecer la contraseña manualmente
           desde{' '}
           <span className="font-mono">{config.moderation.adminAlertEmail}</span>.
         </div>

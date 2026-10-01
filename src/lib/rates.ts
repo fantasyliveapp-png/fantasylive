@@ -1,15 +1,15 @@
 /**
  * TARIFAS POR MINUTO EN CENTITOKENS
  *
- * La creadora fija su precio por minuto entre 1,75 y 25 tokens. El minimo
+ * La creadora fija su precio por minuto entre 17,5 y 250 tokens. El minimo
  * tiene decimales, asi que guardar la tarifa como un Int de tokens no sirve:
  * se guarda multiplicada por 100 ("centitokens") y todo el calculo del cobro
  * sigue siendo aritmetica entera, sin errores de coma flotante acumulados a lo
  * largo de una llamada de una hora.
  *
- *   175  = 1,75 tokens/min  (minimo)
- *   250  = 2,50 tokens/min  (default)
- *   2500 = 25 tokens/min    (maximo)
+ *   1750  = 17,5 tokens/min (minimo)
+ *   2500  = 25 tokens/min   (default)
+ *   25000 = 250 tokens/min  (maximo)
  *
  * Lo que se DEBITA del monedero siguen siendo tokens enteros: el redondeo se
  * hace una sola vez sobre el total acumulado de la llamada (ver
@@ -22,14 +22,14 @@
 /** 1 token = 100 centitokens. */
 export const CENTITOKENS_PER_TOKEN = 100;
 
-/** Tarifa minima que puede fijar una creadora: 1,75 tokens/min. */
-export const MIN_RATE_CENTITOKENS = 175;
+/** Tarifa minima que puede fijar una creadora: 17,5 tokens/min. */
+export const MIN_RATE_CENTITOKENS = 1750;
 
-/** Tarifa maxima: 25 tokens/min. */
-export const MAX_RATE_CENTITOKENS = 2500;
+/** Tarifa maxima: 250 tokens/min. */
+export const MAX_RATE_CENTITOKENS = 25000;
 
-/** Tarifa por defecto de un perfil nuevo: 2,50 tokens/min. */
-export const DEFAULT_RATE_CENTITOKENS = 250;
+/** Tarifa por defecto de un perfil nuevo: 25 tokens/min. */
+export const DEFAULT_RATE_CENTITOKENS = 2500;
 
 /**
  * Duracion minima FACTURABLE de una llamada de pago.
@@ -63,7 +63,7 @@ export function centitokensToTokens(centitokens: number): number {
 }
 
 /**
- * Tokens escritos por la creadora (ej. 1.75) -> centitokens.
+ * Tokens escritos por la creadora (ej. 17.5) -> centitokens.
  * Acepta coma decimal, que es lo que teclea la mayoria en espanol.
  */
 export function tokensToCentitokens(tokens: number | string): number {
@@ -74,14 +74,14 @@ export function tokensToCentitokens(tokens: number | string): number {
 }
 
 /**
- * Etiqueta de la tarifa: "2,5 tokens/min". Sin decimales cuando es redonda,
+ * Etiqueta de la tarifa: "17,5 tokens/min". Sin decimales cuando es redonda,
  * para no llenar la interfaz de ",00".
  */
 export function formatRate(centitokens: number): string {
   return `${formatRateNumber(centitokens)} tokens/min`;
 }
 
-/** Solo el numero: "1,75" / "25". */
+/** Solo el numero: "17,5" / "25". */
 export function formatRateNumber(centitokens: number): string {
   const tokens = centitokensToTokens(centitokens);
   const text = Number.isInteger(tokens)

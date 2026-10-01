@@ -1,3 +1,4 @@
+import { CallAvailabilityProvider } from '@/components/calls/call-availability';
 import { BottomNav } from '@/components/layout/bottom-nav';
 import { Navbar } from '@/components/layout/navbar';
 import { SideNavServer } from '@/components/layout/side-nav-server';
@@ -15,7 +16,7 @@ export default async function DashboardGroupLayout({
     getOwnUsername(user?.id),
   ]);
 
-  return (
+  const page = (
     <div className="flex min-h-screen flex-col md:pl-[72px] lg:pl-60">
       <SideNavServer />
       <Navbar />
@@ -31,5 +32,14 @@ export default async function DashboardGroupLayout({
         username={username}
       />
     </div>
+  );
+
+  // Creadores: el interruptor "Recibo llamadas" y la llamada entrante, en
+  // toda la web.
+  if (!profile) return page;
+  return (
+    <CallAvailabilityProvider initialAvailable={profile.callsAvailable} canStream={profile.verified}>
+      {page}
+    </CallAvailabilityProvider>
   );
 }

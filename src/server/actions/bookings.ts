@@ -5,10 +5,12 @@ import { z } from 'zod';
 
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { assertCreatorVerified } from '@/lib/creator-kyc';
+import { ensureDealConversation } from '@/lib/deal-chat';
+import { createNotification } from '@/lib/notifications';
 import { prisma } from '@/lib/prisma';
 import { tokensForMinutes } from '@/lib/rates';
 import { GEO_BLOCKED_MESSAGE, isBlockedForViewer } from '@/lib/geo';
-import { payReferrers, referralSplit } from '@/lib/referrals';
+import { payReferrers, referralSplit, saleMetadata } from '@/lib/referrals';
 import { applyLedgerEntry, InsufficientTokensError } from '@/lib/tokens';
 import { applySubscriberDiscount, getActiveSubscription } from '@/lib/subscriptions';
 import { randomRoomName } from '@/lib/utils';
@@ -19,6 +21,8 @@ export interface BookingActionResult {
   message?: string;
   bookingId?: string;
   sessionId?: string;
+  /** Chat con ese creador, donde vive la cita. */
+  conversationId?: string;
 }
 
 const createSchema = z.object({
@@ -62,7 +66,7 @@ export async function createBookingAction(input: {
       },
     });
 
-    if (!model) return { ok: false, error: 'Modelo no encontrada.' };
+    if (!model) return { ok: false, error: 'Perfil no encontrado.' };
     if (model.userId === user.id) {
       return { ok: false, error: 'No puedes reservar contigo misma/o.' };
     }
@@ -70,12 +74,12 @@ export async function createBookingAction(input: {
       return { ok: false, error: GEO_BLOCKED_MESSAGE };
     }
     if (!model.acceptsBookings || model.kycStatus !== 'APPROVED') {
-      return { ok: false, error: 'Esta modelo no acepta reservas ahora mismo.' };
+      return { ok: false, error: 'Este perfil no acepta reservas ahora mismo.' };
     }
     if (parsed.data.durationMinutes < model.minPrivateMinutes) {
       return {
         ok: false,
-        error: `La duracion minima con esta modelo es de ${model.minPrivateMinutes} minutos.`,
+        error: `La duracion minima con este perfil es de ${model.minPrivateMinutes} minutos.`,
       };
     }
 
@@ -135,15 +139,26 @@ export async function createBookingAction(input: {
         bookingId: created.id,
       });
 
-      return created;
+      // La cita vive en el chat con ese creador (se crea si no existia).
+      const conversationId = await ensureDealConversation(tx, user.id, model.id);
+      await createNotification(tx, {
+        userId: model.userId,
+        type: 'NEW_MESSAGE',
+        title: `${user.name ?? 'Un fan'} quiere reservar una videollamada contigo`,
+        link: `/mensajes/${conversationId}`,
+      });
+
+      return { ...created, conversationId };
     });
 
     revalidatePath('/bookings');
+    revalidatePath('/mensajes');
     revalidatePath(`/models/${parsed.data.modelSlug}`);
 
     return {
       ok: true,
       bookingId: booking.id,
+      conversationId: booking.conversationId,
       message: `Reserva creada. Se han retenido ${totalTokens} tokens hasta la sesion.`,
     };
   } catch (error) {
@@ -179,6 +194,7 @@ export async function confirmBookingAction(
 
     revalidatePath('/dashboard/model/bookings');
     revalidatePath('/bookings');
+    revalidatePath('/mensajes', 'layout');
     return { ok: true, message: 'Reserva confirmada.' };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
@@ -244,6 +260,7 @@ export async function cancelBookingAction(
 
     revalidatePath('/bookings');
     revalidatePath('/dashboard/model/bookings');
+    revalidatePath('/mensajes', 'layout');
 
     return {
       ok: true,
@@ -377,6 +394,7 @@ export async function settleBookingAction(
         tokens: modelTokens,
         description: `Reserva completada (${booking.durationMinutes} min)`,
         bookingId: booking.id,
+        metadata: saleMetadata(split, { payerId: booking.userId, tokens: booking.totalTokens }),
       });
 
       await tx.booking.update({

@@ -49,6 +49,7 @@ import {
 } from '@/server/actions/posts';
 import {
   createBlurredPreview,
+  readVideoDuration,
   createVideoPreview,
   putToSignedUrl,
   readImageSize,
@@ -65,6 +66,7 @@ import {
   type CropState,
   type PostFormatId,
 } from '@/lib/post-formats';
+import { tokensForCreatorCents } from '@/components/money/creator-price';
 import { estimateEarnings, type EconomyParams } from '@/lib/earnings';
 import { cn, formatMoney, formatTokens, initials } from '@/lib/utils';
 
@@ -116,6 +118,8 @@ interface ProcessedMedia {
   /** Miniatura difuminada; solo se sube si la publicacion no es publica. */
   previewBlob?: Blob;
   previewUrl?: string;
+  /** Solo videos: duracion en segundos (el fan la ve antes de comprar). */
+  durationSec?: number;
 }
 
 export interface StudioModel {
@@ -142,6 +146,7 @@ export function PostStudio({
   model,
   onClose,
   onDone,
+  initialLiveExclusive = false,
 }: {
   initialFiles: File[];
   /** Parametros de la economia para mostrar lo que se gana en dolares. */
@@ -152,6 +157,8 @@ export function PostStudio({
   onClose: () => void;
   /** Cerrar despues de publicar ("Listo"). Por defecto, como onClose. */
   onDone?: () => void;
+  /** Abre ya como pack de directo (de pago y exclusivo del directo). */
+  initialLiveExclusive?: boolean;
 }) {
   const router = useRouter();
   const { t } = useI18n();
@@ -164,7 +171,9 @@ export function PostStudio({
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const [body, setBody] = useState('');
-  const [visibility, setVisibility] = useState<Visibility>('PUBLIC');
+  const [visibility, setVisibility] = useState<Visibility>(initialLiveExclusive ? 'LOCKED' : 'PUBLIC');
+  // Solo de pago: se guarda para venderlo en directo y no sale en el feed.
+  const [liveExclusive, setLiveExclusive] = useState(initialLiveExclusive);
   const [priceTokens, setPriceTokens] = useState(50);
   const [poll, setPoll] = useState<PollDraft | null>(null);
   /** Valor de datetime-local si se programa; null = publicar ya. */
@@ -292,7 +301,7 @@ export function PostStudio({
       if (added.length === 0) return;
       setMedia((prev) => [...prev, ...added]);
       setSelectedId(added[0]!.id);
-      // Anadir fotos desde el paso final vuelve al encuadre.
+      // Añadir fotos desde el paso final vuelve al encuadre.
       setStep((s) => (s === 'share' ? 'edit' : s));
     },
     [],
@@ -397,7 +406,9 @@ export function PostStudio({
         // para que la tarjeta use la misma proporcion. Su miniatura borrosa
         // sale de un fotograma, para poder publicarlo de pago.
         const poster = await createVideoPreview(item.file, aspectRatio);
+        const durationSec = (await readVideoDuration(item.file)) ?? undefined;
         result.push({
+          durationSec,
           previewBlob: poster?.blob,
           previewUrl: poster ? URL.createObjectURL(poster.blob) : undefined,
           id: item.id,
@@ -516,7 +527,7 @@ export function PostStudio({
    */
   function validate(final = true): string | null {
     if (!body.trim() && media.length === 0 && !poll) {
-      return 'Escribe algo, anade una foto o crea una encuesta.';
+      return 'Escribe algo, añade una foto o crea una encuesta.';
     }
     if (final && poll) {
       const pollError = pollDraftError(poll);
@@ -630,6 +641,7 @@ export function PostStudio({
           sizeBytes: item.blob.size,
           width: item.width,
           height: item.height,
+          durationSec: item.durationSec,
         });
         if (!attached.ok) {
           setProgress(null);
@@ -641,7 +653,11 @@ export function PostStudio({
       setProgress({ label: 'Publicando...', value: 100 });
       const published = await publishPostAction(postId, {
         publishAt: scheduleAt ? new Date(scheduleAt).toISOString() : null,
+        liveExclusive: visibility === 'LOCKED' && liveExclusive,
       });
+      if (published.ok && visibility === 'LOCKED' && liveExclusive) {
+        toast.success(published.message ?? 'Guardado para tus directos.');
+      }
       setProgress(null);
 
       if (published.ok) {
@@ -664,6 +680,8 @@ export function PostStudio({
     body: body.trim() || null,
     visibility,
     priceTokens: visibility === 'LOCKED' ? priceTokens : 0,
+    originalPriceTokens: null,
+    offerLabel: null,
     likeCount: 0,
     commentCount: 0,
     unlockCount: 0,
@@ -967,7 +985,7 @@ export function PostStudio({
                         {formatTokens(priceTokens)} tokens
                         <span className="text-white/40">→</span>
                         <span className="font-semibold text-state-connected">
-                          ganas {formatMoney(estimateEarnings(priceTokens, economy).grossCents)} por fan
+                          ganas {formatMoney(estimateEarnings(priceTokens, economy).netCents)} por fan
                         </span>
                       </div>
                     )}
@@ -1181,10 +1199,10 @@ export function PostStudio({
                           icon={Lock}
                           title="Pago por ver"
                           hint="Se ve borrosa hasta que el fan paga el precio que tu pongas."
-                          // El dinero se ensena ANTES de elegir: es lo que decide.
+                          // El dinero se enseña ANTES de elegir: es lo que decide.
                           badge={
                             <span className="whitespace-nowrap rounded-full bg-state-connected/15 px-2 py-0.5 text-[11px] font-semibold text-state-connected">
-                              +{formatMoney(estimateEarnings(priceTokens, economy).grossCents)} / fan
+                              +{formatMoney(estimateEarnings(priceTokens, economy).netCents)} / fan
                             </span>
                           }
                           disabled={media.length === 0}
@@ -1196,6 +1214,23 @@ export function PostStudio({
                             economy={economy}
                             label={t('feed.price')}
                           />
+                          {/* Exclusiva de directo: no sale en el feed ni en tu perfil */}
+                          <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-xl border border-champagne-gold/30 bg-champagne-gold/5 p-3">
+                            <input
+                              type="checkbox"
+                              checked={liveExclusive}
+                              onChange={(e) => setLiveExclusive(e.target.checked)}
+                              className="mt-0.5 h-4 w-4 accent-[#C9A876]"
+                            />
+                            <span className="text-xs">
+                              <span className="block text-sm font-semibold text-foreground">Exclusivo para mis directos</span>
+                              <span className="text-muted-foreground">
+                                No sale en el feed ni en tu perfil: se guarda y solo lo vendes desde tu menu
+                                &quot;Especiales&quot; mientras emites. Regla: lo que vendes en directo tiene que ser
+                                exclusivo del directo, no lo publiques tambien en tu perfil.
+                              </span>
+                            </span>
+                          </label>
                         </AudienceOption>
                         <AudienceOption
                           active={visibility === 'SUBSCRIBERS'}
@@ -1207,7 +1242,7 @@ export function PostStudio({
                             subscriptionEnabled && model.subscriptionPriceTokens > 0 ? (
                               <span className="whitespace-nowrap rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
                                 {formatMoney(
-                                  estimateEarnings(model.subscriptionPriceTokens, economy).grossCents,
+                                  estimateEarnings(model.subscriptionPriceTokens, economy).netCents,
                                 )}{' '}
                                 / mes
                               </span>
@@ -1224,7 +1259,7 @@ export function PostStudio({
                             No se cobra aparte: premia a quien ya te paga{' '}
                             {formatTokens(model.subscriptionPriceTokens)} tokens al mes (
                             {formatMoney(
-                              estimateEarnings(model.subscriptionPriceTokens, economy).grossCents,
+                              estimateEarnings(model.subscriptionPriceTokens, economy).netCents,
                             )}{' '}
                             para ti por suscriptor) y ayuda a que renueven.
                           </p>
@@ -1278,7 +1313,7 @@ export function PostStudio({
                       >
                         <BarChart3 className="h-5 w-5 text-primary" />
                         <span>
-                          <span className="block font-medium">Anadir encuesta</span>
+                          <span className="block font-medium">Añadir encuesta</span>
                           <span className="block text-xs text-muted-foreground">
                             Pregunta a tus fans y ve los resultados en directo.
                           </span>
@@ -1294,7 +1329,7 @@ export function PostStudio({
                       >
                         <ImagePlus className="h-5 w-5 text-primary" />
                         <span>
-                          <span className="block font-medium">Anadir fotos o video</span>
+                          <span className="block font-medium">Añadir fotos o video</span>
                           <span className="block text-xs text-muted-foreground">
                             O publica solo texto o una encuesta.
                           </span>
@@ -1336,7 +1371,7 @@ export function PostStudio({
               <p className="mb-2 text-center text-xs text-muted-foreground">
                 Ganas{' '}
                 <strong className="text-state-connected">
-                  {formatMoney(estimateEarnings(priceTokens, economy).grossCents)}
+                  {formatMoney(estimateEarnings(priceTokens, economy).netCents)}
                 </strong>{' '}
                 por cada fan que la desbloquee
               </p>
@@ -1358,9 +1393,9 @@ export function PostStudio({
 }
 
 /**
- * Precio de una publicacion de pago con lo que gana la modelo al lado, en
- * dolares, para que ponga el precio sabiendo lo que le llega. El desglose
- * (comision, retiro) queda plegado para no abrumar.
+ * Precio de una publicacion de pago con lo que le llega al creador al lado, en
+ * dolares. Se puede escribir en cualquiera de los dos. Las comisiones las
+ * cubre la plataforma: no se ensenan.
  */
 function PriceEditor({
   priceTokens,
@@ -1375,6 +1410,8 @@ function PriceEditor({
 }) {
   const e = estimateEarnings(priceTokens, economy);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  // Mientras se escribe en dolares, el texto tal cual (si no, se recalcula).
+  const [usdDraft, setUsdDraft] = useState<string | null>(null);
   const [custom, setCustom] = useState(
     () => !(PRICE_PRESETS as readonly number[]).includes(priceTokens),
   );
@@ -1430,15 +1467,31 @@ function PriceEditor({
           </span>
         </label>
 
-        <div className="rounded-xl border border-state-connected/40 bg-state-connected/10 p-3">
+        <label className="rounded-xl border border-state-connected/40 bg-state-connected/10 p-3 focus-within:border-state-connected">
           <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-            Tu ganas
+            Ganas
           </span>
-          <span className="mt-1 block font-heading text-3xl leading-none text-state-connected">
-            {formatMoney(e.grossCents)}
+          <span className="mt-1 flex items-center gap-1 font-heading text-3xl leading-none text-state-connected">
+            <input
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step="0.01"
+              value={usdDraft ?? (e.netCents / 100).toFixed(2)}
+              onFocus={() => setUsdDraft((e.netCents / 100).toFixed(2))}
+              onChange={(ev) => {
+                setUsdDraft(ev.target.value);
+                const cents = Math.round((Number(ev.target.value) || 0) * 100);
+                onChange(clampPrice(tokensForCreatorCents(cents, economy)));
+              }}
+              onBlur={() => setUsdDraft(null)}
+              className="w-full min-w-0 bg-transparent outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+              aria-label="Lo que ganas en dolares"
+            />
+            <span className="text-xl">$</span>
           </span>
-          <span className="mt-1 block text-[11px] text-muted-foreground">por cada fan</span>
-        </div>
+          <span className="mt-1 block text-[11px] text-muted-foreground">por cada fan · también se puede escribir</span>
+        </label>
       </div>
 
       <div className="flex flex-wrap gap-1.5">
@@ -1454,7 +1507,7 @@ function PriceEditor({
                 : 'border-border hover:border-token/60',
             )}
           >
-            {formatTokens(p)} → {formatMoney(estimateEarnings(p, economy).grossCents)}
+            {formatTokens(p)} → {formatMoney(estimateEarnings(p, economy).netCents)}
           </button>
         ))}
         <button
@@ -1513,38 +1566,10 @@ function PriceEditor({
 
       <p className="text-xs text-muted-foreground">
         Si la desbloquean 10 fans ganas{' '}
-        <strong className="text-foreground">{formatMoney(e.grossCents * 10)}</strong>; con 100,{' '}
-        <strong className="text-foreground">{formatMoney(e.grossCents * 100)}</strong>.
+        <strong className="text-foreground">{formatMoney(e.netCents * 10)}</strong>; con 100,{' '}
+        <strong className="text-foreground">{formatMoney(e.netCents * 100)}</strong>.
       </p>
 
-      <details className="group text-xs">
-        <summary className="cursor-pointer list-none text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
-          <span className="underline-offset-2 group-open:underline">Como se calcula</span>
-        </summary>
-        <dl className="mt-2 space-y-1 rounded-lg bg-background/50 p-3">
-          <div className="flex justify-between text-muted-foreground">
-            <dt>Precio para el fan</dt>
-            <dd>{formatTokens(priceTokens)} tokens</dd>
-          </div>
-          <div className="flex justify-between text-muted-foreground">
-            <dt>Comision plataforma ({economy.platformCommissionPercent}%)</dt>
-            <dd>-{formatTokens(e.feeTokens)} tokens</dd>
-          </div>
-          <div className="flex justify-between font-medium">
-            <dt>Para ti</dt>
-            <dd>
-              {formatTokens(e.modelTokens)} × {formatMoney(economy.payoutCentsPerToken)} ={' '}
-              {formatMoney(e.grossCents)}
-            </dd>
-          </div>
-          {economy.payoutFeePercent > 0 && (
-            <div className="flex justify-between text-muted-foreground">
-              <dt>Al retirar (-{economy.payoutFeePercent}%) te llegan</dt>
-              <dd>{formatMoney(e.netCents)}</dd>
-            </div>
-          )}
-        </dl>
-      </details>
     </div>
   );
 }
@@ -1640,7 +1665,7 @@ function AudienceStage({
               >
                 <span className="block text-[9px] font-bold uppercase tracking-wider">Ganas</span>
                 <span className="block font-heading text-xl leading-none">
-                  {formatMoney(earnings.grossCents)}
+                  {formatMoney(earnings.netCents)}
                 </span>
                 <span className="block text-[9px] font-semibold">por fan</span>
               </span>
@@ -1688,7 +1713,7 @@ function AudienceSummary({
             <>
               Ganas{' '}
               <strong className="text-state-connected">
-                {formatMoney(estimateEarnings(priceTokens, economy).grossCents)}
+                {formatMoney(estimateEarnings(priceTokens, economy).netCents)}
               </strong>{' '}
               por cada fan
             </>
@@ -1764,7 +1789,7 @@ function EmptyStage({
         <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-white">
           <ImagePlus className="h-7 w-7" />
         </span>
-        <span className="text-sm font-semibold">Anadir fotos o videos</span>
+        <span className="text-sm font-semibold">Añadir fotos o videos</span>
         <span className="text-xs text-white/50">Hasta 20 · de la galeria o la camara</span>
       </button>
       <div className="grid grid-cols-2 gap-2">
@@ -1945,7 +1970,7 @@ function Filmstrip({
           type="button"
           onClick={onAdd}
           className="flex h-[84px] w-[68px] shrink-0 items-center justify-center rounded-xl border-2 border-dashed border-border text-muted-foreground transition-colors hover:border-primary/60 hover:text-primary"
-          aria-label="Anadir"
+          aria-label="Añadir"
         >
           <ImagePlus className="h-5 w-5" />
         </button>
@@ -2048,7 +2073,7 @@ function ScheduleToggle({
         role="switch"
         aria-checked={on}
         onClick={() =>
-          // Por defecto, manana a la misma hora redondeada: un buen punto de partida.
+          // Por defecto, mañana a la misma hora redondeada: un buen punto de partida.
           onChange(
             on
               ? null

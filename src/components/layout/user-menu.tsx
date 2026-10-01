@@ -8,6 +8,7 @@ import {
   Coins,
   Crown,
   Handshake,
+  Store,
   Heart,
   LayoutDashboard,
   LogOut,
@@ -55,6 +56,8 @@ interface UserMenuProps {
   trigger?: 'avatar' | 'menu' | 'sidebar';
   /** Cuenta de reclutador: acceso a su panel. */
   isRecruiter?: boolean;
+  /** Distribuidor oficial de tokens: acceso a su panel. */
+  isDistributor?: boolean;
 }
 
 export function UserMenu({
@@ -67,6 +70,7 @@ export function UserMenu({
   username,
   trigger = 'avatar',
   isRecruiter = false,
+  isDistributor = false,
 }: UserMenuProps) {
   // Ya instalada como app: no se ofrece instalarla.
   const [installed, setInstalled] = useState(true);
@@ -124,7 +128,7 @@ export function UserMenu({
         <DropdownMenuSeparator />
 
         {/* Una sola cuenta: todos tienen su perfil y todos pueden usar la app
-            como fans. La creadora suma su panel; el resto ve "Hazte creadora". */}
+            como fans. El creador suma su panel; el resto ve "Hazte creador". */}
         {(profileSlug || username) && (
           <DropdownMenuItem asChild>
             <Link href={profileSlug ? `/models/${profileSlug}` : `/u/${username}`}>
@@ -139,7 +143,8 @@ export function UserMenu({
             </Link>
           </DropdownMenuItem>
         ) : (
-          role !== 'ADMIN' && (
+          role !== 'ADMIN' &&
+          !isDistributor && (
             <DropdownMenuItem asChild>
               <Link href="/hazte-creador" className="font-medium text-primary">
                 <Sparkles /> Hazte creador
@@ -154,6 +159,13 @@ export function UserMenu({
           <DropdownMenuItem asChild>
             <Link href="/reclutador" className="font-medium text-primary">
               <Handshake /> Panel de reclutador
+            </Link>
+          </DropdownMenuItem>
+        )}
+        {isDistributor && (
+          <DropdownMenuItem asChild>
+            <Link href="/distribuidor" className="font-medium text-primary">
+              <Store /> Panel de distribuidor
             </Link>
           </DropdownMenuItem>
         )}

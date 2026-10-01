@@ -1,6 +1,6 @@
 /**
  * Diccionario base (espanol). Es la referencia: cualquier otro idioma se
- * declara con el tipo `Dictionary` derivado de aqui, asi que al anadir una
+ * declara con el tipo `Dictionary` derivado de aqui, asi que al añadir una
  * clave nueva TypeScript obliga a traducirla en el resto de idiomas.
  */
 export const es = {
@@ -86,7 +86,7 @@ export const es = {
     published: 'Publicacion creada.',
     visibility: 'Visibilidad',
     price: 'Precio de desbloqueo (tokens)',
-    addPhotos: 'Anadir fotos o videos',
+    addPhotos: 'Añadir fotos o videos',
     blurNotice:
       'La miniatura que se ve sin pagar es una version reducida y difuminada. El archivo original nunca se envia al navegador hasta que se paga.',
   },
@@ -180,7 +180,7 @@ export const es = {
     posts: 'Publicaciones',
     content: 'Contenido',
     about: 'Sobre mi',
-    reviews: 'Resenas',
+    reviews: 'Reseñas',
     rates: 'Tarifas',
     minimumMinutes: 'Minimo {minutes} min por llamada.',
     blockedCountry: 'Este perfil no esta disponible en tu pais.',

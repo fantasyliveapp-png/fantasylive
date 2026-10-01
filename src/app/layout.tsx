@@ -29,7 +29,7 @@ export const metadata: Metadata = {
     // iPhone con iOS antiguo: abrirla a pantalla completa al instalarla.
     'apple-mobile-web-app-capable': 'yes',
   },
-  // App instalable en iPhone ("Anadir a pantalla de inicio").
+  // App instalable en iPhone ("Añadir a pantalla de inicio").
   appleWebApp: { capable: true, title: config.app.name, statusBarStyle: 'black' },
   formatDetection: { telephone: false },
 };

@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import { discountTokens } from '@/lib/creator-offer-rules';
+import { applyRateOffer, getProfileOffers } from '@/lib/creator-offers';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import {
@@ -7,24 +9,24 @@ import {
   Clock,
   Coins,
   Crown,
-  Gem,
   Globe,
   Grid3x3,
+  Gift,
+  Image as ImageIcon,
   Info,
   LayoutDashboard,
   Lock,
-  MessageCircle,
   Pencil,
   Plus,
   Radio,
   Settings,
+  ShoppingBag,
   Star,
   Users,
   Video,
 } from 'lucide-react';
 
 import { BookingWidget } from '@/components/bookings/booking-widget';
-import { ContentGallery } from '@/components/content/content-gallery';
 import { RequestContentDialog } from '@/components/content/request-content-dialog';
 import { FollowButton } from '@/components/models/follow-button';
 import { MessageButton } from '@/components/messages/message-button';
@@ -37,6 +39,11 @@ import { ProfileEditorButton } from '@/components/model/profile-editor';
 import { OwnAccountMenu } from '@/components/layout/own-account-menu';
 import { ExpandableText } from '@/components/models/expandable-text';
 import { ProfilePostGrid } from '@/components/models/profile-post-grid';
+import { PurchasesFeed } from '@/components/content/purchases-feed';
+import { SubscriptionsTab } from '@/components/subscriptions/subscriptions-tab';
+import { getMySubscriptions } from '@/lib/my-subscriptions';
+import { getPurchases } from '@/lib/purchases';
+
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -51,8 +58,9 @@ import { getModelPosts } from '@/lib/posts';
 import { recordProfileVisit } from '@/lib/visits';
 import { formatRateNumber } from '@/lib/rates';
 import { GENDER_LABELS, ORIENTATION_LABELS } from '@/lib/constants';
+import { canCallNow } from '@/lib/call-presence';
 import { peerPair } from '@/lib/chat';
-import { founderLabel, onlineLabel } from '@/lib/gender-words';
+import { founderLabel } from '@/lib/gender-words';
 import { prisma } from '@/lib/prisma';
 import { applySubscriberDiscount, getActiveSubscription } from '@/lib/subscriptions';
 import { cn, formatDate, formatTokens, initials, relativeTime } from '@/lib/utils';
@@ -88,21 +96,17 @@ export default async function ModelProfilePage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ editar?: string; post?: string }>;
+  searchParams: Promise<{ editar?: string; post?: string; tab?: string; de?: string }>;
 }) {
   const { slug } = await params;
-  const { editar, post: openPostId } = await searchParams;
+  const { editar, post: openPostId, tab: tabParam, de } = await searchParams;
   const viewer = await getCurrentUser();
 
   const model = await prisma.modelProfile.findUnique({
     where: { slug },
     include: {
-      user: { select: { id: true, status: true, lastSeenAt: true } },
+      user: { select: { id: true, status: true, lastSeenAt: true, username: true } },
       availability: { orderBy: [{ weekday: 'asc' }, { startMinute: 'asc' }] },
-      contentPackages: {
-        where: { isPublished: true },
-        orderBy: [{ priceTokens: 'asc' }, { createdAt: 'desc' }],
-      },
       reviews: {
         orderBy: { createdAt: 'desc' },
         take: 10,
@@ -178,6 +182,9 @@ export default async function ModelProfilePage({
     select: { id: true },
   });
   const isLiveNow = Boolean(activeCall);
+  // Se le puede llamar ya (fuera de directo con "Recibo llamadas", o en un
+  // directo en el que acepta privados).
+  const callable = await canCallNow(model);
 
   const isFollowing = viewer
     ? Boolean(
@@ -202,12 +209,27 @@ export default async function ModelProfilePage({
       )
     : false;
 
-  const effectivePrivateRate = activeSubscription
+  // Ofertas del creador para quien mira (happy hour, primera llamada, cupon,
+  // rebajas, primer mes). El propio creador las gestiona en Mi panel > Ofertas.
+  const offers = isOwner
+    ? { call: null, content: null, firstMonth: null }
+    : await getProfileOffers({ id: model.id, userId: model.userId }, viewer?.id ?? null);
+
+  const subscriberRate = activeSubscription
     ? applySubscriberDiscount(
         model.privateRateCentitokens,
         activeSubscription.discountPercent,
       )
     : model.privateRateCentitokens;
+  // Igual que al cobrar: gana el descuento mayor.
+  const offerRate = offers.call ? applyRateOffer(model.privateRateCentitokens, offers.call.percentOff) : Infinity;
+  const callOffer = offers.call && offerRate < subscriberRate ? offers.call : null;
+  const effectivePrivateRate = callOffer ? offerRate : subscriberRate;
+  const firstMonthPrice = offers.firstMonth
+    ? discountTokens(model.subscriptionPriceTokens, offers.firstMonth.percentOff)
+    : null;
+  const until = (iso: string | null) =>
+    iso ? ` · hasta ${new Date(iso).toLocaleString('es', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}` : '';
 
   const feedPosts = await getModelPosts({
     modelId: model.id,
@@ -216,19 +238,6 @@ export default async function ModelProfilePage({
     includeScheduled: isOwner,
   });
 
-  // Paquetes ya desbloqueados por quien mira
-  const unlockedIds = viewer
-    ? (
-        await prisma.contentUnlock.findMany({
-          where: {
-            userId: viewer.id,
-            packageId: { in: model.contentPackages.map((p) => p.id) },
-          },
-          select: { packageId: true },
-        })
-      ).map((u) => u.packageId)
-    : [];
-
   const myReview = viewer
     ? await prisma.review.findUnique({
         where: { modelId_userId: { modelId: model.id, userId: viewer.id } },
@@ -236,7 +245,7 @@ export default async function ModelProfilePage({
       })
     : null;
 
-  // Nombres de quienes dejaron resena
+  // Nombres de quienes dejaron reseña
   const reviewers = await prisma.user.findMany({
     where: { id: { in: model.reviews.map((r) => r.userId) } },
     select: { id: true, name: true, image: true },
@@ -267,8 +276,30 @@ export default async function ModelProfilePage({
 
   // /models/<slug>?editar=1 abre directamente el editor (enlaces del menu).
   const editRequested = isOwnProfile && editar === '1';
+
+  // Su lado de fan (compras, suscripciones, a quien sigue): solo lo ve el.
+  const fanTab = isOwnProfile && (tabParam === 'compras' || tabParam === 'suscripciones') ? tabParam : null;
+  const [ownPurchases, ownSubscriptions, ownFollowing] = isOwnProfile
+    ? await Promise.all([
+        getPurchases(model.userId),
+        getMySubscriptions(model.userId),
+        prisma.follow.count({ where: { userId: model.userId, model: { kycStatus: 'APPROVED' } } }),
+      ])
+    : [null, null, 0];
+  // Fotos y videos publicados (como OnlyFans): se cuentan los archivos de sus
+  // publicaciones visibles, incluidas las de pago. No entran las exclusivas de
+  // directo ni las retiradas por moderacion.
+  const visibleAsset = {
+    post: { modelId: model.id, isPublished: true, removedAt: null, liveExclusiveAt: null },
+  };
+  const visiblePost = visibleAsset.post;
+  const [postCount, photoCount, videoCount] = await Promise.all([
+    // Contado en vivo: el contador guardado (postsCount) se desfasaba.
+    prisma.post.count({ where: visiblePost }),
+    prisma.postAsset.count({ where: { ...visibleAsset, mimeType: { startsWith: 'image/' } } }),
+    prisma.postAsset.count({ where: { ...visibleAsset, mimeType: { startsWith: 'video/' } } }),
+  ]);
   const isVerified = model.kycStatus === 'APPROVED';
-  const hasPacks = model.contentPackages.length > 0;
   const isStreaming = Boolean(liveStream);
 
   const editableProfile = {
@@ -286,67 +317,56 @@ export default async function ModelProfilePage({
   // acciones (es lo que mas factura); en escritorio, en la columna lateral.
   const callCard = (
     <Card className="overflow-hidden">
-      <CardContent className="space-y-4 pt-6">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Tarifas
-          </p>
-          <div className="mt-3 space-y-2">
-            {model.isVipEnabled && (
-              <div className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2.5">
-                <span className="flex items-center gap-2 text-sm">
-                  <Crown className="h-4 w-4 text-primary" />
-                  Sala VIP
-                </span>
-                <span className="flex items-center gap-1 font-semibold text-token">
-                  <Coins className="h-4 w-4" />
-                  {formatRateNumber(model.vipRateCentitokens)}/min
-                </span>
-              </div>
-            )}
-            <div className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2.5">
-              <span className="flex items-center gap-2 text-sm">
-                <Video className="h-4 w-4 text-primary" />
-                Privado 1 a 1
-              </span>
-              <span className="flex items-center gap-1.5 font-semibold text-token">
-                {activeSubscription && (
-                  <span className="text-xs font-normal text-muted-foreground line-through">
-                    {formatRateNumber(model.privateRateCentitokens)}
-                  </span>
-                )}
-                <Coins className="h-4 w-4" />
-                {formatRateNumber(effectivePrivateRate)}/min
-              </span>
-            </div>
+      <CardContent className="space-y-3 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="flex items-center gap-1.5 text-sm font-semibold">
+              <Video className="h-4 w-4 text-primary" />
+              Privado 1 a 1
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Mínimo {model.minPrivateMinutes} min
+              {model.isVipEnabled && <> · Sala VIP {formatRateNumber(model.vipRateCentitokens)}/min</>}
+            </p>
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">
-            Minimo {model.minPrivateMinutes} min en privados reservados.
+          <p className="flex shrink-0 items-center gap-1.5 font-semibold text-token">
+            {effectivePrivateRate < model.privateRateCentitokens && (
+              <span className="text-xs font-normal text-muted-foreground line-through">
+                {formatRateNumber(model.privateRateCentitokens)}
+              </span>
+            )}
+            <Coins className="h-4 w-4" />
+            {formatRateNumber(effectivePrivateRate)}/min
           </p>
         </div>
 
+        {callOffer && (
+          <p className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-fantazy-red/20 to-champagne-gold/10 px-2.5 py-1.5 text-xs font-semibold text-champagne-gold">
+            <Gift className="h-3.5 w-3.5" />
+            {callOffer.label} −{callOffer.percentOff}%{until(callOffer.endsAt)}
+          </p>
+        )}
+
         {isOwnProfile ? (
           <Link href="/dashboard/model/rates" className="block">
-            <Button variant="outline" className="w-full">
+            <Button variant="outline" size="sm" className="w-full">
               <Settings className="h-4 w-4" />
               Cambiar tarifas
             </Button>
           </Link>
         ) : (
-          <div className="space-y-2">
-            <StartPrivateCallButton
-              slug={model.slug}
-              stageName={model.stageName}
-              isOnline={model.isOnline}
-              rateCentitokens={effectivePrivateRate}
-              minMinutes={model.minPrivateMinutes}
-              isAuthenticated={Boolean(viewer)}
-            />
-            <p className="flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground">
-              <MessageCircle className="h-3.5 w-3.5" />
-              El cobro se detiene en cuanto cuelgas
-            </p>
-          </div>
+          <StartPrivateCallButton
+            slug={model.slug}
+            stageName={model.stageName}
+            isOnline={callable}
+            canBook={model.acceptsBookings && isVerified}
+            rateCentitokens={effectivePrivateRate}
+            minMinutes={model.minPrivateMinutes}
+            isAuthenticated={Boolean(viewer)}
+            size="default"
+            label="Llamar ahora"
+            compact
+          />
         )}
       </CardContent>
     </Card>
@@ -374,7 +394,7 @@ export default async function ModelProfilePage({
         'relative block rounded-full p-[3px]',
         isStreaming || isLiveNow
           ? 'bg-gradient-to-tr from-primary via-fantazy-red to-champagne-gold'
-          : model.isOnline
+          : callable
             ? 'bg-state-connected'
             : 'bg-border',
       )}
@@ -411,14 +431,14 @@ export default async function ModelProfilePage({
             <Badge variant="live" className="gap-1.5">
               En llamada
             </Badge>
-          ) : model.isOnline ? (
+          ) : callable ? (
             <Badge variant="connected" className="gap-1.5">
               <span className="h-2 w-2 rounded-full bg-onix-black/60" />
-              {onlineLabel(model.gender, true)}
+              Disponible para llamar
             </Badge>
           ) : (
             <Badge variant="muted">
-              {model.lastOnlineAt ? `Visto ${relativeTime(model.lastOnlineAt)}` : 'Offline'}
+              {model.lastOnlineAt ? `Visto ${relativeTime(model.lastOnlineAt)}` : 'No disponible'}
             </Badge>
           )}
         </div>
@@ -495,14 +515,43 @@ export default async function ModelProfilePage({
 
             {/* Estadisticas */}
             <div className="mt-5 flex items-center justify-center divide-x divide-border/60 sm:justify-start">
-              <SocialStat value={formatTokens(model.postsCount)} label="Publicaciones" />
-              <SocialStat value={formatTokens(model.followersCount)} label="Seguidores" />
+              <SocialStat value={formatTokens(postCount)} label="Publicaciones" />
+              {/* Tus seguidores: solo tú abres la lista (Mis fans). */}
+              <SocialStat
+                value={formatTokens(model.followersCount)}
+                label="Seguidores"
+                href={isOwnProfile ? '/dashboard/model/fans' : undefined}
+              />
+              {/* A quien sigue (como fan): solo lo ve el. */}
+              {isOwnProfile && model.user.username && (
+                <SocialStat
+                  value={formatTokens(ownFollowing)}
+                  label="Siguiendo"
+                  href={`/u/${model.user.username}/siguiendo`}
+                />
+              )}
               <SocialStat
                 value={model.ratingCount > 0 ? model.ratingAvg.toFixed(1) : '-'}
-                label={model.ratingCount > 0 ? `${model.ratingCount} resenas` : 'Sin resenas'}
+                label={model.ratingCount > 0 ? `${model.ratingCount} reseñas` : 'Sin reseñas'}
                 icon={<Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />}
               />
             </div>
+
+            {/* Fotos y videos publicados */}
+            {(photoCount > 0 || videoCount > 0) && (
+              <div className="mt-3 flex items-center justify-center gap-4 text-sm text-muted-foreground sm:justify-start">
+                <span className="flex items-center gap-1.5" title="Fotos publicadas">
+                  <ImageIcon className="h-4 w-4" />
+                  <span className="font-semibold text-foreground">{formatTokens(photoCount)}</span>
+                  {photoCount === 1 ? 'foto' : 'fotos'}
+                </span>
+                <span className="flex items-center gap-1.5" title="Vídeos publicados">
+                  <Video className="h-4 w-4" />
+                  <span className="font-semibold text-foreground">{formatTokens(videoCount)}</span>
+                  {videoCount === 1 ? 'vídeo' : 'vídeos'}
+                </span>
+              </div>
+            )}
 
             {/* Titular + bio */}
             <div className="mx-auto mt-4 max-w-xl text-center text-sm sm:mx-0 sm:text-left">
@@ -510,7 +559,7 @@ export default async function ModelProfilePage({
               {model.bio && <ExpandableText text={model.bio} className="mt-1 text-muted-foreground" />}
               {isOwnProfile && !model.bio && !model.headline && (
                 <p className="text-muted-foreground">
-                  Anade una bio para que tus fans sepan quien eres.
+                  Añade una bio para que tus fans sepan quien eres.
                 </p>
               )}
             </div>
@@ -627,57 +676,65 @@ export default async function ModelProfilePage({
               </p>
             )}
 
-            {/* Suscripcion, al estilo OnlyFans: la oferta principal del perfil */}
+            {/* Rebajas o cupon del creador en su contenido */}
+            {offers.content && (
+              <p className="mt-5 flex items-center gap-2 rounded-2xl bg-gradient-to-r from-fantazy-red/25 via-champagne-gold/10 to-transparent px-4 py-3 text-sm ring-1 ring-champagne-gold/30">
+                <Gift className="h-4 w-4 shrink-0 text-champagne-gold" />
+                <span>
+                  <strong>
+                    {offers.content.label} −{offers.content.percentOff}%
+                  </strong>{' '}
+                  en {offers.content.kind === 'COUPON' ? 'lo próximo que desbloquees' : 'todo su contenido de pago'}
+                  <span className="text-muted-foreground">{until(offers.content.endsAt)}</span>
+                </span>
+              </p>
+            )}
+
+            {/* Suscripcion, al estilo OnlyFans: precio y boton en una sola fila */}
             {model.subscriptionEnabled && model.subscriptionPriceTokens > 0 && (
               <div className="mt-5 rounded-2xl bg-gradient-to-r from-primary via-fantazy-red to-champagne-gold p-[1.5px]">
-                <div className="rounded-[calc(1rem-1.5px)] bg-card p-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                        Suscripcion
-                      </p>
-                      <p className="mt-1 flex items-baseline gap-1.5">
-                        <Coins className="h-4 w-4 self-center text-token" />
-                        <span className="font-heading text-3xl text-token">
-                          {formatTokens(model.subscriptionPriceTokens)}
+                <div className="flex items-center gap-3 rounded-[calc(1rem-1.5px)] bg-card p-3 pl-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="flex items-center gap-1.5 text-sm font-semibold">
+                      Suscripción
+                      <span className="flex items-center gap-1 text-token">
+                        <Coins className="h-3.5 w-3.5" />
+                        {firstMonthPrice != null && (
+                          <span className="text-xs font-normal text-muted-foreground line-through">
+                            {formatTokens(model.subscriptionPriceTokens)}
+                          </span>
+                        )}
+                        {formatTokens(firstMonthPrice ?? model.subscriptionPriceTokens)}/mes
+                      </span>
+                    </p>
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                      {offers.firstMonth ? (
+                        <span className="font-semibold text-champagne-gold">
+                          Primer mes −{offers.firstMonth.percentOff}%
                         </span>
-                        <span className="text-sm text-muted-foreground">tokens / mes</span>
-                      </p>
-                    </div>
-                    {isSubscribed && (
-                      <Badge variant="success" className="gap-1">
-                        <BadgeCheck className="h-3 w-3" />
-                        Suscrito
-                      </Badge>
-                    )}
+                      ) : (
+                        'Exclusivos'
+                      )}
+                      {model.subscriptionDiscountPercent > 0 &&
+                        ` · -${model.subscriptionDiscountPercent}% en privados`}
+                    </p>
                   </div>
-                  <ul className="mt-3 space-y-1.5 text-sm text-muted-foreground">
-                    <li className="flex items-center gap-2">
-                      <Lock className="h-3.5 w-3.5 text-primary" />
-                      Publicaciones y packs exclusivos para suscriptores
-                    </li>
-                    {model.subscriptionDiscountPercent > 0 && (
-                      <li className="flex items-center gap-2">
-                        <Video className="h-3.5 w-3.5 text-primary" />
-                        {model.subscriptionDiscountPercent}% de descuento en llamadas privadas
-                      </li>
-                    )}
-                  </ul>
                   {isOwnProfile ? (
-                    <Link href="/dashboard/model/rates" className="mt-4 block">
-                      <Button variant="outline" size="sm" className="w-full">
+                    <Link href="/dashboard/model/rates" className="shrink-0">
+                      <Button variant="outline" size="sm">
                         <Settings className="h-4 w-4" />
-                        Configurar suscripcion
+                        Editar
                       </Button>
                     </Link>
                   ) : (
                     <SubscribeButton
                       modelId={model.id}
                       slug={model.slug}
-                      priceTokens={model.subscriptionPriceTokens}
+                      priceTokens={firstMonthPrice ?? model.subscriptionPriceTokens}
                       initialSubscribed={isSubscribed}
                       isAuthenticated={Boolean(viewer)}
-                      className="mt-4 w-full"
+                      label="Suscribirme"
+                      className="h-9 shrink-0 px-3 text-sm"
                     />
                   )}
                 </div>
@@ -685,28 +742,50 @@ export default async function ModelProfilePage({
             )}
 
             {/* En movil, tarifas y llamada antes del contenido */}
-            <div className="mt-5 lg:hidden">{callCard}</div>
+            <div className="mt-3 lg:hidden">{callCard}</div>
 
             {/* Contenido en pestanas, como Instagram/TikTok */}
-            <Tabs defaultValue="posts" className="mt-8">
-              {/* Todo se publica en el feed; "Exclusivo" solo aparece para los
-                  packs antiguos que ya existian. */}
+            <Tabs defaultValue={fanTab ?? 'posts'} className="mt-8">
               <TabsList
                 className={cn(
                   'sticky top-16 md:top-0 z-20 grid h-auto w-full rounded-none border-b border-border/60 bg-background/90 p-0 backdrop-blur',
-                  hasPacks ? 'grid-cols-3' : 'grid-cols-2',
+                  isOwnProfile ? 'grid-cols-4' : 'grid-cols-2',
                 )}
               >
                 <ProfileTab value="posts" icon={<Grid3x3 className="h-4 w-4" />} label="Publicaciones" />
-                {hasPacks && (
-                  <ProfileTab
-                    value="exclusive"
-                    icon={<Gem className="h-4 w-4" />}
-                    label={`Exclusivo (${model.contentPackages.length})`}
-                  />
+                {/* Su lado de fan: solo en su propio perfil. */}
+                {isOwnProfile && (
+                  <>
+                    <ProfileTab value="compras" icon={<ShoppingBag className="h-4 w-4" />} label="Mis compras" />
+                    <ProfileTab value="suscripciones" icon={<Crown className="h-4 w-4" />} label="Mis suscripciones" />
+                  </>
                 )}
                 <ProfileTab value="about" icon={<Info className="h-4 w-4" />} label="Info" />
               </TabsList>
+
+              {isOwnProfile && ownPurchases && ownSubscriptions && (
+                <>
+                  <TabsContent value="compras" className="mt-4 space-y-4">
+                    <p className="flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground">
+                      <Lock className="h-3.5 w-3.5" />
+                      Solo tú ves lo que has comprado.
+                    </p>
+                    <PurchasesFeed items={ownPurchases} />
+                  </TabsContent>
+                  <TabsContent value="suscripciones" className="mt-4 space-y-4">
+                    <p className="flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground">
+                      <Lock className="h-3.5 w-3.5" />
+                      Solo tú ves a quién estás suscrito.
+                    </p>
+                    <SubscriptionsTab
+                      viewerId={model.userId}
+                      baseHref={`/models/${model.slug}?tab=suscripciones`}
+                      subscriptions={ownSubscriptions}
+                      creatorSlug={de ?? null}
+                    />
+                  </TabsContent>
+                </>
+              )}
 
               <TabsContent value="posts" className="mt-4">
                 <ProfilePostGrid
@@ -717,27 +796,6 @@ export default async function ModelProfilePage({
                   initialOpenId={openPostId}
                 />
               </TabsContent>
-
-              {hasPacks && (
-                <TabsContent value="exclusive" className="mt-4">
-                  <ContentGallery
-                    packages={model.contentPackages.map((p) => ({
-                      id: p.id,
-                      title: p.title,
-                      description: p.description,
-                      type: p.type,
-                      priceTokens: p.priceTokens,
-                      previewUrl: p.previewUrl,
-                      assetCount: p.assetCount,
-                      purchaseCount: p.purchaseCount,
-                      isUnlocked: unlockedIds.includes(p.id) || isOwnProfile,
-                      subscriberOnly: p.subscriberOnly,
-                    }))}
-                    isAuthenticated={Boolean(viewer)}
-                    isSubscribed={isSubscribed || isOwnProfile}
-                  />
-                </TabsContent>
-              )}
 
               <TabsContent value="about" className="mt-4 space-y-5">
                 <Card>
@@ -815,11 +873,11 @@ export default async function ModelProfilePage({
                   </CardContent>
                 </Card>
 
-                {bookingWidget && <div className="lg:hidden">{bookingWidget}</div>}
+                {bookingWidget && <div id="reservar" className="scroll-mt-24 lg:hidden">{bookingWidget}</div>}
 
                 <div className="space-y-5">
                   <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                    Resenas ({model.ratingCount})
+                    Reseñas ({model.ratingCount})
                   </h2>
                   {!isOwnProfile &&
                     (viewer ? (
@@ -837,14 +895,14 @@ export default async function ModelProfilePage({
                         >
                           Inicia sesion
                         </a>{' '}
-                        para dejar una resena.
+                        para dejar una reseña.
                       </p>
                     ))}
 
                   <Card>
                     <CardContent className="space-y-5 pt-6">
                       {model.reviews.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">Todavia no hay resenas.</p>
+                        <p className="text-sm text-muted-foreground">Todavia no hay reseñas.</p>
                       ) : (
                         model.reviews.map((review) => {
                           const author = reviewerMap.get(review.userId);
@@ -938,11 +996,24 @@ function SocialStat({
   value,
   label,
   icon,
+  href,
 }: {
   value: string;
   label: string;
   icon?: React.ReactNode;
+  href?: string;
 }) {
+  if (href) {
+    return (
+      <Link href={href} className="px-5 text-center hover:opacity-80 sm:first:pl-0">
+        <p className="flex items-center justify-center gap-1 text-lg font-bold leading-none">
+          {icon}
+          {value}
+        </p>
+        <p className="mt-1 text-[11px] text-muted-foreground underline-offset-2 hover:underline">{label}</p>
+      </Link>
+    );
+  }
   return (
     <div className="px-5 text-center sm:first:pl-0">
       <p className="flex items-center justify-center gap-1 text-lg font-bold leading-none">

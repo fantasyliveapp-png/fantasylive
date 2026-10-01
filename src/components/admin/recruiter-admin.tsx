@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronDown, Loader2, Pause, Play, Plus, Wallet } from 'lucide-react';
+import { ChartColumn, ChevronDown, Loader2, Pause, Play, Plus, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -155,14 +156,17 @@ export function RecruiterRow({
   r,
   baseUrl,
   minPayoutCents,
+  detail = false,
 }: {
   r: RecruiterOverview;
   baseUrl: string;
   /** Minimo para poder pagarle (el mismo que el de las creadoras). */
   minPayoutCents: number;
+  /** En su ficha: abierto, sin la lista de creadoras (ya esta en la pagina). */
+  detail?: boolean;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(detail);
   const [percent, setPercent] = useState(String(r.commissionPercent));
   const [months, setMonths] = useState(r.months == null ? 'forever' : String(r.months));
   const [cap, setCap] = useState(r.maxCreators == null ? '' : String(r.maxCreators));
@@ -197,7 +201,7 @@ export function RecruiterRow({
           <span className="block truncate text-xs text-muted-foreground">
             {r.commissionPercent}% · {r.months == null ? 'para siempre' : `${r.months} meses`} ·{' '}
             {r.maxCreators == null ? 'sin tope' : `cupo ${r.maxCreators}`} · {r.totals.verified}/
-            {r.totals.registered} verificados
+            {r.totals.registered} verificados · {formatMoney(r.totals.earnedThisMonthCents)} este mes
           </span>
         </span>
         <span className="text-right">
@@ -211,10 +215,21 @@ export function RecruiterRow({
 
       {open && (
         <div className="space-y-4 border-t border-border/60 p-4">
-          <p className="break-all font-mono text-xs text-muted-foreground">
-            {baseUrl}/reclutar/{r.code}
-          </p>
-          <div className="grid grid-cols-3 gap-2 text-center text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="break-all font-mono text-xs text-muted-foreground">
+              {baseUrl}/reclutar/{r.code}
+            </p>
+            {!detail && (
+              <Link
+                href={`/admin/reclutadores/${r.id}`}
+                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+              >
+                <ChartColumn className="h-3.5 w-3.5" />
+                Ver estadisticas y pagos
+              </Link>
+            )}
+          </div>
+          {!detail && <div className="grid grid-cols-3 gap-2 text-center text-xs">
             <div className="rounded-xl bg-muted/40 p-2">
               <p className="text-muted-foreground">Ganado total</p>
               <p className="font-bold">{formatMoney(r.totals.earnedCents)}</p>
@@ -226,13 +241,15 @@ export function RecruiterRow({
             <div className="rounded-xl bg-muted/40 p-2">
               <p className="text-muted-foreground">Por pagar</p>
               <p className="font-bold text-state-connected">{formatMoney(r.totals.pendingCents)}</p>
-              <p className="text-[10px] text-muted-foreground">
-                Recibe {formatMoney(r.totals.payNowCents)} (−10%)
-              </p>
+              {r.totals.payNowCents < r.totals.pendingCents && (
+                <p className="text-[10px] text-muted-foreground">
+                  Recibe {formatMoney(r.totals.payNowCents)} tras la comisión de retiro
+                </p>
+              )}
             </div>
-          </div>
+          </div>}
 
-          {r.recruits.length > 0 && (
+          {!detail && r.recruits.length > 0 && (
             <ul className="divide-y divide-border/60 rounded-xl border border-border/60 text-sm">
               {r.recruits.map((c) => (
                 <li key={c.userId} className="flex items-center gap-2 px-3 py-2">

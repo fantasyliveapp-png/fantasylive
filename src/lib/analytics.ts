@@ -124,7 +124,6 @@ export async function getCreatorAnalytics(params: {
         tokens: true,
         createdAt: true,
         callSession: { select: { callerId: true } },
-        contentPackage: { select: { id: true } },
         gift: { select: { senderId: true } },
         conversation: { select: { userId: true } },
         subscription: { select: { userId: true } },
@@ -171,9 +170,9 @@ export async function getCreatorAnalytics(params: {
   //
   // El comprador se deduce del vinculo de la transaccion, que cambia segun el
   // tipo de ingreso: la llamada guarda a quien llamo, el regalo a quien lo
-  // envio, la conversacion y la suscripcion al usuario. Los ingresos por pack
-  // de contenido no guardan al comprador en la transaccion de la creadora, asi
-  // que se resuelven despues contra ContentUnlock.
+  // envio, la conversacion y la suscripcion al usuario. Las publicaciones no
+  // guardan al comprador en la transaccion de la creadora, asi que se
+  // resuelven despues contra PostUnlock.
   const buyerTokens = new Map<string, { tokens: number; purchases: number; last: Date }>();
 
   const addBuyer = (userId: string | null | undefined, tokens: number, at: Date) => {
@@ -202,23 +201,14 @@ export async function getCreatorAnalytics(params: {
     );
   }
 
-  // Compradores de packs y de publicaciones: se cruzan por sus tablas de
-  // desbloqueo, que si guardan quien pago.
-  const [contentUnlocks, postUnlocks] = await Promise.all([
-    prisma.contentUnlock.findMany({
-      where: {
-        createdAt: { gte: since },
-        package: { modelId: params.modelId },
-      },
-      select: { userId: true, tokensSpent: true, createdAt: true },
-    }),
-    prisma.postUnlock.findMany({
-      where: { createdAt: { gte: since }, post: { modelId: params.modelId } },
-      select: { userId: true, tokensSpent: true, createdAt: true },
-    }),
-  ]);
+  // Compradores de publicaciones: se cruzan por su tabla de desbloqueo, que
+  // si guarda quien pago.
+  const postUnlocks = await prisma.postUnlock.findMany({
+    where: { createdAt: { gte: since }, post: { modelId: params.modelId } },
+    select: { userId: true, tokensSpent: true, createdAt: true },
+  });
 
-  for (const unlock of [...contentUnlocks, ...postUnlocks]) {
+  for (const unlock of postUnlocks) {
     addBuyer(unlock.userId, unlock.tokensSpent, unlock.createdAt);
   }
 
@@ -328,7 +318,7 @@ export async function getCreatorAnalytics(params: {
     rangeDays,
     totals: {
       tokensEarned,
-      purchases: earnings.length + contentUnlocks.length + postUnlocks.length,
+      purchases: earnings.length + postUnlocks.length,
       buyers,
       visits: totalVisits,
       uniqueVisitors,

@@ -5,11 +5,20 @@ import { ArrowLeft, Crown, ExternalLink, Flag, MessageCircle } from 'lucide-reac
 
 import { AdminPageHeader } from '@/components/admin/admin-shell';
 import { FeatureButtons } from '@/components/admin/admin-tools';
+import { CreatorDealEditor } from '@/components/admin/creator-deal';
 import { Empty, Panel, PersonLink, Pill } from '@/components/admin/admin-ui';
 import { UserModerationButtons } from '@/components/admin/supervision-actions';
 import { adminMediaUrl, getAdminChats, personOf } from '@/lib/admin-supervision';
 import { auditLabel } from '@/lib/admin-overview';
 import { requireAdmin } from '@/lib/auth/guards';
+import { config } from '@/lib/config';
+import {
+  basePlatformPercent,
+  DEAL_SELECT,
+  effectiveTerms,
+  isDealActive,
+  STANDARD_AMBASSADOR_PERCENT,
+} from '@/lib/deals';
 import {
   KYC_STATUS_LABELS,
   REPORT_REASON_LABELS,
@@ -52,6 +61,7 @@ export default async function AdminUserPage({ params }: { params: Promise<{ id: 
       status: true,
       isVip: true,
       country: true,
+      referredById: true,
       birthDate: true,
       createdAt: true,
       lastSeenAt: true,
@@ -59,7 +69,7 @@ export default async function AdminUserPage({ params }: { params: Promise<{ id: 
       suspendedUntil: true,
       wallet: true,
       referredBy: { select: personSelect },
-      recruitedBy: { select: { code: true, user: { select: personSelect } } },
+      recruitedBy: { select: { code: true, commissionPercent: true, user: { select: personSelect } } },
       recruiterAccount: { select: { id: true, code: true } },
       modelProfile: {
         select: {
@@ -74,6 +84,11 @@ export default async function AdminUserPage({ params }: { params: Promise<{ id: 
           isOnline: true,
           postsCount: true,
           totalTokensEarned: true,
+          createdAt: true,
+          dealPlatformPercent: true,
+          dealAmbassadorPercent: true,
+          dealUntil: true,
+          dealNotes: true,
         },
       },
     },
@@ -81,6 +96,17 @@ export default async function AdminUserPage({ params }: { params: Promise<{ id: 
   if (!user) notFound();
 
   const mp = user.modelProfile;
+  // Si la invito otra creadora, que % cobra esa embajadora de sus ventas.
+  const inviter =
+    mp && user.referredById
+      ? await prisma.modelProfile.findUnique({
+          where: { userId: user.referredById },
+          select: { kycStatus: true, ...DEAL_SELECT },
+        })
+      : null;
+  const ambassadorOfHerPercent =
+    inviter?.kycStatus === 'APPROVED' ? effectiveTerms(inviter).ambassadorPercent : null;
+  const dealActive = mp ? isDealActive(mp) : false;
   const [reportsAgainst, reportsMade, transactions, posts, chats, audit, followers] = await Promise.all([
     prisma.report.findMany({
       where: { reportedId: user.id },
@@ -282,6 +308,31 @@ export default async function AdminUserPage({ params }: { params: Promise<{ id: 
 
         {/* Columna derecha: lo que ha hecho */}
         <div className="min-w-0 space-y-6">
+          {mp && (
+            <Panel
+              title="Trato"
+              aside={dealActive ? <Pill tone="good">Condiciones propias</Pill> : 'Condiciones estandar'}
+            >
+              <CreatorDealEditor
+                modelId={mp.id}
+                standard={{
+                  platformPercent: basePlatformPercent(mp),
+                  ambassadorPercent: STANDARD_AMBASSADOR_PERCENT,
+                }}
+                deal={{
+                  platformPercent: mp.dealPlatformPercent,
+                  ambassadorPercent: mp.dealAmbassadorPercent,
+                  until: mp.dealUntil ? mp.dealUntil.toISOString().slice(0, 10) : null,
+                  notes: mp.dealNotes,
+                  active: dealActive,
+                  expired: Boolean(mp.dealUntil && mp.dealUntil <= new Date()),
+                }}
+                recruiterPercent={user.recruitedBy?.commissionPercent ?? null}
+                ambassadorOfHerPercent={ambassadorOfHerPercent}
+              />
+            </Panel>
+          )}
+
           <Panel
             title="Denuncias contra esta cuenta"
             aside={

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Download } from 'lucide-react';
+import { config } from '@/lib/config';
 
 import { AdminPageHeader } from '@/components/admin/admin-shell';
 import { Panel } from '@/components/admin/admin-ui';
@@ -130,8 +131,10 @@ export default async function AdminFinancePage() {
               ventas, al valor de retiro. Es dinero que les debes hasta que lo retiran.
             </li>
             <li>
-              <span className="text-foreground">Tu comision:</span> tu parte de cada venta mas la
-              comision del 10% al retirar, ya descontado lo que cobran embajadoras y reclutadores.
+              <span className="text-foreground">Tu comision:</span> tu parte de cada venta
+              {config.economy.payoutFeePercent > 0 &&
+                ` mas la comision del ${config.economy.payoutFeePercent}% al retirar`}
+              , ya descontado lo que cobran embajadoras y reclutadores.
             </li>
             <li>
               <span className="text-foreground">Tokens sin gastar:</span> los fans ya pagaron por

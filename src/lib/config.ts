@@ -40,7 +40,7 @@ function clampPercent(value: number): number {
  */
 const tokenValueCents = num(process.env.TOKEN_VALUE_CENTS, 10);
 const platformCommissionPercent = clampPercent(
-  num(process.env.PLATFORM_COMMISSION_PERCENT, 40),
+  num(process.env.PLATFORM_COMMISSION_PERCENT, 50),
 );
 
 export const config = {
@@ -73,10 +73,16 @@ export const config = {
     // 250 tokens = $25 (a $0,10 por token).
     minPayoutTokens: num(process.env.MIN_PAYOUT_TOKENS, 250),
     /**
-     * Comision de retiro (%). Se descuenta de los tokens que la creadora
-     * solicita, no del saldo restante: pide 1000, se le abonan 900.
+     * Comision de retiro (%). 0: la cubre la plataforma, el creador recibe
+     * integro lo que retira. Si se activa, se descuenta de lo solicitado.
      */
-    payoutFeePercent: clampPercent(num(process.env.PAYOUT_FEE_PERCENT, 10)),
+    payoutFeePercent: clampPercent(num(process.env.PAYOUT_FEE_PERCENT, 0)),
+    /**
+     * Lo que se queda la pasarela de pago de cada compra (%). Solo se usa para
+     * que ninguna oferta de tokens deje un paquete por debajo de su coste
+     * (ver lib/token-offers.ts). Pasarelas para adultos: 10-15%.
+     */
+    paymentFeePercent: clampPercent(num(process.env.PAYMENT_FEE_PERCENT, 12)),
     /** Cada cuantos segundos el cliente envia un tick de cobro */
     callBillingIntervalSeconds: num(process.env.CALL_BILLING_INTERVAL_SECONDS, 15),
   },
@@ -181,6 +187,31 @@ export const config = {
     get configured() {
       return Boolean(process.env.ANTHROPIC_API_KEY);
     },
+  },
+  /**
+   * DISTRIBUIDORES OFICIALES (revendedores de tokens). Apagado hasta tener
+   * el visto bueno legal (FinCEN, procesador de pagos, impuestos).
+   */
+  distributors: {
+    enabled: bool(process.env.DISTRIBUTORS_ENABLED, false),
+    /**
+     * Maximo que un fan puede recibir de distribuidores al dia, en tokens.
+     * 5000 = 500 $ a 0,10: muy por debajo del limite de 2000 $/dia de la
+     * exencion de FinCEN para saldo de circuito cerrado.
+     */
+    fanDailyTokens: num(process.env.DISTRIBUTOR_FAN_DAILY_TOKENS, 5000),
+    /**
+     * Descuento MAXIMO de los lotes (%). El descuento es progresivo segun el
+     * tamaño del lote (DISCOUNT_TIERS en lib/distributor-shared) y nunca pasa
+     * de este valor. Maximo 20.
+     */
+    discountPercent: Math.min(20, Math.max(0, num(process.env.DISTRIBUTOR_DISCOUNT_PERCENT, 20))),
+    /** Datos para la transferencia bancaria que ve el distribuidor al pedir un lote. */
+    wireInstructions: process.env.DISTRIBUTOR_WIRE_INSTRUCTIONS ?? '',
+    /** Cartera USDT para pagar lotes ("" = no se ofrece USDT). */
+    usdtAddress: process.env.DISTRIBUTOR_USDT_ADDRESS ?? '',
+    /** Red de esa cartera (TRC20, ERC20...). Pagar por otra red pierde el dinero. */
+    usdtNetwork: process.env.DISTRIBUTOR_USDT_NETWORK ?? 'TRC20',
   },
   moderation: {
     adminAlertEmail: process.env.ADMIN_ALERT_EMAIL || 'admin@fantasylive.test',

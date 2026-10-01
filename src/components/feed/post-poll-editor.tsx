@@ -110,7 +110,7 @@ export function PollEditor({
               className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border text-xs font-medium text-muted-foreground transition-colors hover:border-primary/60 hover:text-primary"
             >
               <Plus className="h-3.5 w-3.5" />
-              Anadir opcion
+              Añadir opcion
             </button>
           )}
         </div>

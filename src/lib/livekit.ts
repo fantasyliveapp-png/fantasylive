@@ -80,6 +80,8 @@ export async function removeParticipant(
 export async function sendRoomData(
   roomName: string,
   payload: Record<string, unknown>,
+  /** Solo a estas identidades (p. ej. avisar a quien se ha silenciado). */
+  destinationIdentities?: string[],
 ): Promise<void> {
   const svc = roomService();
   if (!svc) return;
@@ -88,10 +90,45 @@ export async function sendRoomData(
       roomName,
       new TextEncoder().encode(JSON.stringify(payload)),
       DataPacket_Kind.RELIABLE,
-      {},
+      destinationIdentities ? { destinationIdentities } : {},
     );
   } catch {
     // Si la sala ya no existe el aviso se pierde; el regalo ya esta cobrado.
+  }
+}
+
+/** Quien esta en la sala ahora mismo (identidad = id de usuario). */
+export async function listRoomParticipants(
+  roomName: string,
+): Promise<{ identity: string; name: string; metadata: string }[]> {
+  const svc = roomService();
+  if (!svc) return [];
+  try {
+    const participants = await svc.listParticipants(roomName);
+    return participants.map((p) => ({ identity: p.identity, name: p.name, metadata: p.metadata }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Deja (o quita) escribir a un espectador. Lo aplica el servidor de LiveKit:
+ * sus paquetes de chat se rechazan aunque manipule su navegador.
+ */
+export async function setViewerCanChat(
+  roomName: string,
+  identity: string,
+  canChat: boolean,
+): Promise<void> {
+  const svc = roomService();
+  if (!svc) return;
+  try {
+    // Los permisos se sustituyen enteros: hay que repetir los de espectador.
+    await svc.updateParticipant(roomName, identity, {
+      permission: { canSubscribe: true, canPublish: false, canPublishData: canChat },
+    });
+  } catch {
+    // Si ya no esta en la sala, la sancion guardada se aplica al volver.
   }
 }
 

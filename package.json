@@ -23,10 +23,13 @@
     "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
+    "db:backfill-previews": "tsx --conditions=react-server scripts/backfill-post-previews.mts",
+    "db:backfill-hashes": "tsx --conditions=react-server scripts/backfill-content-hashes.mts",
     "setup:local": "npm install && docker compose up -d && node scripts/wait-for-db.mjs && prisma migrate dev --name init && npm run db:seed",
     "postinstall": "prisma generate",
     "db:bootstrap": "tsx scripts/bootstrap-production.mts",
-    "db:seed-ai": "tsx scripts/seed-ai-models.mts"
+    "db:seed-ai": "tsx scripts/seed-ai-models.mts",
+    "db:seed-distributors": "tsx scripts/seed-distributors.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",

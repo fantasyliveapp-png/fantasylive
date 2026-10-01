@@ -1,6 +1,6 @@
 import Link from 'next/link';
-import { Bot, Crown, Eye, Radio } from 'lucide-react';
-import type { LiveStreamSource, ModelTier } from '@prisma/client';
+import { Bot, Crown, Eye, Radio, Ticket } from 'lucide-react';
+import type { LiveAccessMode, LiveStreamSource, ModelTier } from '@prisma/client';
 
 import { Badge } from '@/components/ui/badge';
 
@@ -9,6 +9,8 @@ export interface LiveCardData {
   title: string | null;
   viewerCount: number;
   source: LiveStreamSource;
+  /** Solo suscriptores o de pago: se avisa antes de entrar. */
+  accessMode?: LiveAccessMode;
   model: {
     slug: string;
     stageName: string;
@@ -53,6 +55,18 @@ export function LiveCard({ stream }: { stream: LiveCardData }) {
             <Badge variant="vip" className="gap-1">
               <Crown className="h-3 w-3" />
               {stream.model.tier}
+            </Badge>
+          )}
+          {stream.accessMode === 'SUBSCRIBERS' && (
+            <Badge variant="vip" className="gap-1">
+              <Crown className="h-3 w-3" />
+              Suscriptores
+            </Badge>
+          )}
+          {stream.accessMode === 'PAID' && (
+            <Badge variant="vip" className="gap-1">
+              <Ticket className="h-3 w-3" />
+              De pago
             </Badge>
           )}
           {stream.model.isAi && (

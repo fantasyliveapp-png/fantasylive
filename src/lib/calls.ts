@@ -2,15 +2,12 @@ import 'server-only';
 
 import type { CallEndReason } from '@prisma/client';
 
+import { addOfferTokens } from '@/lib/creator-offers';
 import { prisma } from '@/lib/prisma';
 import { config } from '@/lib/config';
-import { closeRoom, countRoomParticipants } from '@/lib/livekit';
-import {
-  MIN_BILLED_CALL_MINUTES,
-  MIN_BILLED_CALL_SECONDS,
-  tokensForSeconds,
-} from '@/lib/rates';
-import { payReferrers, referralSplit } from '@/lib/referrals';
+import { closeRoom, countRoomParticipants, listRoomParticipants } from '@/lib/livekit';
+import { tokensForSeconds } from '@/lib/rates';
+import { payReferrers, referralSplit, saleMetadata } from '@/lib/referrals';
 import { applyLedgerEntry, InsufficientTokensError } from '@/lib/tokens';
 
 export interface BillingTickResult {
@@ -26,9 +23,8 @@ export interface BillingTickResult {
   /** Segundos gratis que quedan (null si la llamada es de pago o sin limite) */
   freeSecondsRemaining: number | null;
   /**
-   * Segundos ya facturados por el minimo de 5 minutos que todavia no se han
-   * consumido. 0 en cuanto la llamada supera ese minimo. La interfaz lo usa
-   * para explicar por que el primer cobro es mas alto que el tiempo en pantalla.
+   * Segundos que faltan para cumplir el minimo de la llamada (0 si ya se
+   * supero). Si el fan cuelga antes, se le cobran igual.
    */
   minimumPaddingSeconds: number;
   /** El otro participante aun no esta en la sala: no se cobra */
@@ -53,14 +49,15 @@ export interface BillingTickResult {
  *    diferencia con lo ya cobrado.
  *
  *  - La tarifa viaja en CENTITOKENS por minuto (1 token = 100), porque el
- *    minimo que puede pedir una creadora (1,75 tokens/min) tiene decimales.
+ *    minimo que puede pedir una creadora (17,5 tokens/min) tiene decimales.
  *    Ver src/lib/rates.ts.
  *
- *  - DURACION MINIMA FACTURABLE: 5 minutos. En cuanto hay dos personas en la
- *    sala se factura como si hubieran pasado 5 minutos, aunque quien llama
- *    cuelgue antes. Cobrarlo desde el primer tick (y no al colgar) es lo unico
- *    que impide esquivarlo cerrando la pestana de golpe, y encaja con el saldo
- *    que ya se exige para poder iniciar la llamada.
+ *  - MINIMO DE LA LLAMADA (minBilledSeconds, lo fija el creador): durante la
+ *    llamada solo se cobra el tiempo usado. Al colgar (ver endCall), si fue EL
+ *    FAN quien colgo antes del minimo, se le cobra hasta el minimo; si colgo
+ *    el creador (o se fue de la sala), solo lo usado. Cerrar la pestana no lo
+ *    esquiva: si dejan de llegar los ticks del fan, el barrido lo trata como
+ *    que colgo el.
  *
  *  - Las llamadas sin tarifa son la prueba gratuita y se cortan al llegar a
  *    config.economy.freeCallSeconds.
@@ -83,6 +80,8 @@ export async function processBillingTick(
       billedSeconds: true,
       tokensSpent: true,
       roomName: true,
+      minBilledSeconds: true,
+      bookingId: true,
     },
   });
 
@@ -95,7 +94,9 @@ export async function processBillingTick(
     (await prisma.wallet.findUnique({ where: { userId }, select: { balance: true } }))
       ?.balance ?? 0;
 
-  const isFreeTrial = session.rateCentitokens <= 0 || !session.calleeId;
+  // Las videollamadas reservadas ya estan pagadas (tarifa 0) pero NO son la
+  // prueba gratuita: no se cortan a los pocos minutos.
+  const isFreeTrial = !session.bookingId && (session.rateCentitokens <= 0 || !session.calleeId);
   const freeLimit = config.economy.freeCallSeconds;
 
   if (session.status !== 'ACTIVE' || !session.startedAt) {
@@ -181,13 +182,9 @@ export async function processBillingTick(
   const payerId = session.callerId;
   const earnerId = session.calleeId!;
 
-  // Minimo de 5 minutos: se factura sobre el maximo entre lo consumido y ese
-  // suelo, de modo que el primer cobro ya lo cubre entero.
-  const chargeableSeconds = Math.max(newBilledSeconds, MIN_BILLED_CALL_SECONDS);
-  const minimumPaddingSeconds = Math.max(
-    0,
-    MIN_BILLED_CALL_SECONDS - newBilledSeconds,
-  );
+  // Durante la llamada solo se cobra lo usado; el minimo se decide al colgar.
+  const chargeableSeconds = newBilledSeconds;
+  const minimumPaddingSeconds = Math.max(0, session.minBilledSeconds - newBilledSeconds);
 
   // Aun no toca cobrar (protege contra ticks duplicados o agresivos)
   if (deltaSeconds < 5) {
@@ -227,66 +224,11 @@ export async function processBillingTick(
   }
 
   try {
-    const result = await prisma.$transaction(async (tx) => {
-      // Reparto con las reglas de referidos (fan propio / embajadora).
-      const { platformFeeTokens, modelTokens, referrers } = await referralSplit(tx, {
-        payerId,
-        earnerId,
-        tokens: tokensDue,
-      });
-
-      const debit = await applyLedgerEntry(tx, {
-        userId: payerId,
-        type: 'CALL_CHARGE',
-        tokens: tokensDue,
-        description:
-          minimumPaddingSeconds > 0
-            ? `Llamada ${session.type} - minimo de ${MIN_BILLED_CALL_MINUTES} min`
-            : `Llamada ${session.type} - ${deltaSeconds}s`,
-        callSessionId: session.id,
-        platformFeeTokens,
-      });
-
-      if (modelTokens > 0) {
-        await applyLedgerEntry(tx, {
-          userId: earnerId,
-          type: 'CALL_EARNING',
-          tokens: modelTokens,
-          description: `Ganancia llamada ${session.type} - ${deltaSeconds}s`,
-          callSessionId: session.id,
-        });
-      }
-
-      await payReferrers(tx, referrers, {
-        description: `llamada ${session.type}`,
-        fromCreatorUserId: earnerId,
-        applyLedgerEntry,
-        callSessionId: session.id,
-      });
-
-      await tx.callBillingTick.create({
-        data: {
-          sessionId: session.id,
-          seconds: deltaSeconds,
-          tokensCharged: tokensDue,
-          tokensCredited: modelTokens,
-          feeTokens: platformFeeTokens,
-        },
-      });
-
-      const updated = await tx.callSession.update({
-        where: { id: session.id },
-        data: {
-          lastBilledAt: now,
-          billedSeconds: newBilledSeconds,
-          tokensSpent: { increment: tokensDue },
-          tokensEarned: { increment: modelTokens },
-          platformFeeTokens: { increment: platformFeeTokens },
-        },
-        select: { billedSeconds: true },
-      });
-
-      return { balance: debit.balanceAfter, billedSeconds: updated.billedSeconds };
+    const result = await recordCharge(session, tokensDue, {
+      seconds: deltaSeconds,
+      description: `Llamada ${session.type} - ${deltaSeconds}s`,
+      billedSeconds: newBilledSeconds,
+      now,
     });
 
     // Corta si ya no le da para el siguiente intervalo
@@ -332,6 +274,128 @@ export async function processBillingTick(
   }
 }
 
+type ChargeableSession = {
+  id: string;
+  type: string;
+  callerId: string;
+  calleeId: string | null;
+};
+
+/** Cobra al fan y paga al creador (con comision y referidos) en una transaccion. */
+async function recordCharge(
+  session: ChargeableSession,
+  tokensDue: number,
+  opts: { seconds: number; description: string; billedSeconds: number; now: Date },
+) {
+  const payerId = session.callerId;
+  const earnerId = session.calleeId!;
+  return prisma.$transaction(async (tx) => {
+    // Reparto con las reglas de referidos (fan propio / embajadora).
+    const split = await referralSplit(tx, { payerId, earnerId, tokens: tokensDue });
+    const { platformFeeTokens, modelTokens, referrers } = split;
+
+    const debit = await applyLedgerEntry(tx, {
+      userId: payerId,
+      type: 'CALL_CHARGE',
+      tokens: tokensDue,
+      description: opts.description,
+      callSessionId: session.id,
+      platformFeeTokens,
+    });
+
+    if (modelTokens > 0) {
+      await applyLedgerEntry(tx, {
+        userId: earnerId,
+        type: 'CALL_EARNING',
+        tokens: modelTokens,
+        description: `Ganancia ${opts.description.charAt(0).toLowerCase()}${opts.description.slice(1)}`,
+        callSessionId: session.id,
+        metadata: saleMetadata(split, { payerId, tokens: tokensDue }),
+      });
+    }
+
+    await payReferrers(tx, referrers, {
+      description: `llamada ${session.type}`,
+      fromCreatorUserId: earnerId,
+      applyLedgerEntry,
+      callSessionId: session.id,
+    });
+
+    await tx.callBillingTick.create({
+      data: {
+        sessionId: session.id,
+        seconds: opts.seconds,
+        tokensCharged: tokensDue,
+        tokensCredited: modelTokens,
+        feeTokens: platformFeeTokens,
+      },
+    });
+
+    const updated = await tx.callSession.update({
+      where: { id: session.id },
+      data: {
+        lastBilledAt: opts.now,
+        billedSeconds: opts.billedSeconds,
+        tokensSpent: { increment: tokensDue },
+        tokensEarned: { increment: modelTokens },
+        platformFeeTokens: { increment: platformFeeTokens },
+      },
+      select: { billedSeconds: true },
+    });
+
+    return { balance: debit.balanceAfter, billedSeconds: updated.billedSeconds };
+  });
+}
+
+/**
+ * El fan colgo antes del minimo: se le cobra hasta completarlo (o lo que le
+ * quede de saldo, si gasto en regalos durante la llamada).
+ */
+async function chargeUpToMinimum(sessionId: string) {
+  const s = await prisma.callSession.findUnique({
+    where: { id: sessionId },
+    select: {
+      id: true,
+      type: true,
+      callerId: true,
+      calleeId: true,
+      rateCentitokens: true,
+      minBilledSeconds: true,
+      billedSeconds: true,
+      tokensSpent: true,
+    },
+  });
+  if (!s || !s.calleeId || s.rateCentitokens <= 0) return;
+  if (s.billedSeconds <= 0 || s.billedSeconds >= s.minBilledSeconds) return;
+
+  const due = tokensForSeconds(s.rateCentitokens, s.minBilledSeconds) - s.tokensSpent;
+  if (due <= 0) return;
+  const wallet = await prisma.wallet.findUnique({ where: { userId: s.callerId }, select: { balance: true } });
+  const tokens = Math.min(due, wallet?.balance ?? 0);
+  if (tokens <= 0) return;
+
+  const mins = Math.round(s.minBilledSeconds / 60);
+  try {
+    await recordCharge(s, tokens, {
+      seconds: 0,
+      description: `Llamada ${s.type} - minimo de ${mins} min (colgo el fan)`,
+      billedSeconds: s.billedSeconds,
+      now: new Date(),
+    });
+  } catch {
+    // Sin saldo suficiente a ultima hora: se queda en lo ya cobrado.
+  }
+}
+
+/** El creador sigue en la sala (en modo demo, sin LiveKit, se asume que si). */
+async function calleeInRoom(roomName: string, calleeId: string | null) {
+  if (!calleeId) return false;
+  const count = await countRoomParticipants(roomName);
+  if (count === null) return true;
+  const people = await listRoomParticipants(roomName);
+  return people.some((p) => p.identity === calleeId);
+}
+
 /**
  * Cierra las llamadas que se quedaron colgadas.
  *
@@ -371,7 +435,9 @@ export async function sweepStaleCalls(): Promise<{
 
     // Sin ticks durante 3 intervalos: nadie esta al otro lado.
     if (silentSeconds > config.economy.callBillingIntervalSeconds * 3 + 30) {
-      await endCall(session.id, session.callerId, 'DISCONNECTED');
+      // Los ticks los manda el navegador del fan: si dejan de llegar, fue el
+      // quien se fue (y paga el minimo, como si hubiera colgado).
+      await endCall(session.id, session.callerId, 'DISCONNECTED', { payerAbandoned: true });
       abandoned++;
       continue;
     }
@@ -403,6 +469,7 @@ export async function endCall(
   sessionId: string,
   actorId: string,
   reason: CallEndReason = 'USER_HANGUP',
+  opts: { payerAbandoned?: boolean } = {},
 ) {
   const session = await prisma.callSession.findUnique({
     where: { id: sessionId },
@@ -415,6 +482,7 @@ export async function endCall(
       startedAt: true,
       billedSeconds: true,
       bookingId: true,
+      minBilledSeconds: true,
     },
   });
   if (!session || session.status === 'ENDED') return;
@@ -438,6 +506,20 @@ export async function endCall(
     }
   }
 
+  // Minimo: solo si colgo EL FAN (o se fue cerrando la pestana) y el
+  // creador seguia ahi. Si colgo el creador, solo se paga lo usado.
+  const payerLeft =
+    opts.payerAbandoned ||
+    (actorId === session.callerId && (reason === 'USER_HANGUP' || reason === 'NEXT_SKIP'));
+  if (
+    session.status === 'ACTIVE' &&
+    session.minBilledSeconds > 0 &&
+    payerLeft &&
+    (await calleeInRoom(session.roomName, session.calleeId))
+  ) {
+    await chargeUpToMinimum(sessionId);
+  }
+
   const ended = await prisma.callSession.update({
     where: { id: sessionId },
     data: { status: 'ENDED', endedAt: new Date(), endReason: reason },
@@ -445,9 +527,14 @@ export async function endCall(
       calleeId: true,
       billedSeconds: true,
       tokensEarned: true,
+      tokensSpent: true,
       bookingId: true,
+      creatorOfferId: true,
     },
   });
+
+  // Lo que pago el fan cuenta en las ventas de la oferta del creador.
+  if (ended.creatorOfferId) await addOfferTokens(prisma, ended.creatorOfferId, ended.tokensSpent);
 
   // Metricas de la modelo
   if (ended.calleeId) {

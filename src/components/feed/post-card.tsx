@@ -331,6 +331,11 @@ export function PostCard({
                         <p className="text-sm font-medium text-white">
                           {t('feed.lockedHint', { tokens: post.priceTokens })}
                         </p>
+                        {post.offerLabel && (
+                          <span className="rounded-full bg-gradient-to-r from-fantazy-red to-champagne-gold px-2.5 py-0.5 text-[11px] font-bold text-white">
+                            {post.offerLabel} · antes {formatTokens(post.originalPriceTokens ?? 0)}
+                          </span>
+                        )}
                         <Button
                           variant="brand"
                           size="sm"
@@ -639,6 +644,9 @@ function PaidPill({ post }: { post: FeedPost }) {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-token/15 px-1.5 py-px text-[10px] font-semibold text-token">
         <Lock className="h-2.5 w-2.5" />
+        {post.originalPriceTokens != null && (
+          <span className="font-normal line-through opacity-70">{formatTokens(post.originalPriceTokens)}</span>
+        )}
         {formatTokens(post.priceTokens)} tokens
       </span>
     );

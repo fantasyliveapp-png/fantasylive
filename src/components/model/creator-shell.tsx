@@ -9,11 +9,9 @@ import {
 } from '@/components/model/creator-nav';
 import { KycGate } from '@/components/model/kyc-gate';
 import { KycGateSwitch } from '@/components/model/kyc-gate-switch';
-import { OnlineToggle } from '@/components/model/online-toggle';
 import { ProfileEditorButton } from '@/components/model/profile-editor';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { getCreatorPending } from '@/lib/creator-dashboard';
 import { prisma } from '@/lib/prisma';
 import { initials } from '@/lib/utils';
 
@@ -25,15 +23,14 @@ import { initials } from '@/lib/utils';
  * arriba, en vez de la lista completa de enlaces encima de cada pagina.
  */
 export async function CreatorShell({
-  userId,
   profile,
   children,
 }: {
-  userId: string;
+  /** Ya no se usa: los pendientes se ven en Mensajes. */
+  userId?: string;
   profile: ModelProfile;
   children: React.ReactNode;
 }) {
-  const pending = await getCreatorPending(profile.id, userId);
   const kycPending = profile.kycStatus !== 'APPROVED';
   // Sin verificar no hay herramientas: solo la pantalla de verificacion (y
   // preparar el perfil). El motivo del ultimo rechazo, si lo hubo.
@@ -45,28 +42,28 @@ export async function CreatorShell({
       })
     : null;
 
-  // Cuatro secciones, por lo que la creadora quiere hacer. Las paginas de
+  // Pocas secciones, por lo que el creador quiere hacer. Las paginas de
   // antes siguen existiendo, pero cuelgan de estas y no llenan el menu.
-  const inboxCount = pending.pendingRequests + pending.pendingBookings;
   const groups: CreatorNavGroup[] = [
     {
       items: [
         {
           href: '/dashboard/model',
-          label: 'Hoy',
-          icon: 'today',
+          label: 'Inicio',
+          icon: 'home',
           exact: true,
-          match: ['/dashboard/model/alcance'],
-        },
-        {
-          href: '/dashboard/model/bandeja',
-          label: 'Bandeja',
-          icon: 'inbox',
-          badge: inboxCount,
           match: [
+            '/dashboard/model/alcance',
+            '/dashboard/model/fans',
             '/dashboard/model/requests',
             '/dashboard/model/bookings',
           ],
+        },
+        {
+          href: '/dashboard/model/contenido',
+          label: 'Contenido',
+          icon: 'packs',
+          match: ['/dashboard/model/boveda', '/dashboard/model/content'],
         },
         {
           href: '/dashboard/model/dinero',
@@ -89,7 +86,6 @@ export async function CreatorShell({
             '/dashboard/model/greeting',
             '/dashboard/model/kyc',
             '/dashboard/model/privacy',
-            '/dashboard/model/content',
           ],
         },
       ],
@@ -146,17 +142,6 @@ export async function CreatorShell({
               </ProfileEditorButton>
             </div>
 
-            {!kycPending && (
-              <div className="relative mt-4 border-t border-border/60 pt-4">
-                <OnlineToggle
-                  isOnline={profile.isOnline}
-                  isAvailableForVip={profile.isAvailableForVip}
-                  isVipEnabled={profile.isVipEnabled}
-                  canStream
-                  gender={profile.gender}
-                />
-              </div>
-            )}
           </div>
 
           {!kycPending && (

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 
 import { Logo } from '@/components/brand/logo';
+import { AvailabilitySwitch } from '@/components/calls/call-availability';
 import { FeedTabs } from '@/components/feed/feed-tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -19,16 +20,18 @@ import { NotificationBell } from '@/components/layout/notification-bell';
 import { UserMenu } from '@/components/layout/user-menu';
 import { getCurrentUser } from '@/lib/auth/guards';
 import { getT } from '@/lib/i18n/server';
-import { getOwnUsername, getProfileShortcut } from '@/lib/profile-shortcut';
+import { getOwnUsername, getProfileShortcut, isDistributorAccount, isRecruiterAccount } from '@/lib/profile-shortcut';
 import { getWalletSummary } from '@/lib/tokens';
 import { formatTokens } from '@/lib/utils';
 
 export async function Navbar() {
   const [user, t] = await Promise.all([getCurrentUser(), getT()]);
-  const [wallet, profile, username] = await Promise.all([
+  const [wallet, profile, username, recruiter, distributor] = await Promise.all([
     user ? getWalletSummary(user.id) : null,
     getProfileShortcut(user?.modelProfileId),
     getOwnUsername(user?.id),
+    isRecruiterAccount(user?.id),
+    isDistributorAccount(user?.id),
   ]);
 
   // El feed y los directos van primero: son el modo de descubrimiento
@@ -49,7 +52,14 @@ export async function Navbar() {
         <div className="flex min-w-0 items-center gap-8">
           {/* El nombre siempre visible; en movil se ajusta al ancho de la
               pantalla para que quepan los botones de la derecha. */}
-          <Logo wordmarkClassName="text-[clamp(0.8rem,4vw,1.125rem)]" />
+          <Logo
+            wordmarkClassName={
+              // Creadores: deja sitio al interruptor "Recibo llamadas".
+              user?.role === 'MODEL' && profile?.verified
+                ? 'text-[clamp(0.7rem,3.2vw,1.125rem)]'
+                : 'text-[clamp(0.8rem,4vw,1.125rem)]'
+            }
+          />
 
           <nav className="hidden items-center gap-1 md:flex">
             {navLinks.map((link) => (
@@ -114,12 +124,17 @@ export async function Navbar() {
                 </Link>
               )}
 
+              {/* Creadores: "Recibo llamadas", siempre a un toque. */}
+              {user.role === 'MODEL' && profile?.verified && <AvailabilitySwitch variant="header" />}
+
               <NotificationBell />
 
               {/* En el movil tu foto ya esta en la barra de abajo (Perfil):
                   el menu de la cuenta va en tu perfil (boton de menu). */}
               <div className="hidden md:block">
                 <UserMenu
+                  isRecruiter={recruiter}
+                  isDistributor={distributor}
                   name={profile?.stageName ?? user.name ?? user.email}
                   email={user.email}
                   image={profile?.avatarUrl ?? user.image ?? null}

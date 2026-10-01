@@ -46,7 +46,7 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
       });
 
       if (result?.error) {
-        setError('Email o contrasena incorrectos.');
+        setError('Email o contraseña incorrectos.');
         return;
       }
 
@@ -87,12 +87,12 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="password">Contrasena</Label>
+              <Label htmlFor="password">Contraseña</Label>
               <Link
                 href="/forgot-password"
                 className="text-xs text-muted-foreground hover:text-foreground"
               >
-                Olvidaste tu contrasena?
+                Olvidaste tu contraseña?
               </Link>
             </div>
             <Input
@@ -127,7 +127,7 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
         {isDev && (
           <div className="mt-6 rounded-lg border border-dashed border-border p-3">
             <p className="mb-2 text-xs font-medium text-muted-foreground">
-              Cuentas de prueba (seed) - contrasena: Password123!
+              Cuentas de prueba (seed) - contraseña: Password123!
             </p>
             <div className="flex flex-wrap gap-2">
               {DEMO_ACCOUNTS.map((acc) => (

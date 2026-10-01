@@ -72,3 +72,24 @@ export async function toggleFollowAction(
     return { ok: false, error: 'No se pudo actualizar. Intenta de nuevo.' };
   }
 }
+
+/** Campanita de una creadora que sigues: avisos de directo y de publicaciones. */
+export async function setFollowNotifyAction(
+  modelId: string,
+  prefs: { live: boolean; posts: boolean },
+): Promise<FollowActionResult> {
+  try {
+    const user = await getAuthedUserOrThrow();
+    const res = await prisma.follow.updateMany({
+      where: { userId: user.id, modelId },
+      data: { notifyLive: Boolean(prefs.live), notifyPosts: Boolean(prefs.posts) },
+    });
+    if (res.count === 0) return { ok: false, error: 'Ya no la sigues.' };
+    return { ok: true, following: true };
+  } catch (error) {
+    if (error instanceof Error && error.message === 'UNAUTHORIZED') {
+      return { ok: false, error: 'Debes iniciar sesion.' };
+    }
+    return { ok: false, error: 'No se pudo guardar. Intenta de nuevo.' };
+  }
+}

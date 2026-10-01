@@ -190,7 +190,7 @@ export async function registerAction(
 
 const loginSchema = z.object({
   email: z.string().email('Email invalido'),
-  password: z.string().min(1, 'Introduce tu contrasena'),
+  password: z.string().min(1, 'Introduce tu contraseña'),
   callbackUrl: z.string().optional(),
 });
 
@@ -213,7 +213,7 @@ export async function loginAction(
   } catch (error) {
     if (error instanceof AuthError) {
       if (error.type === 'CredentialsSignin') {
-        return { error: 'Email o contrasena incorrectos.' };
+        return { error: 'Email o contraseña incorrectos.' };
       }
       return {
         error: error.cause?.err?.message ?? 'No se pudo iniciar sesion.',

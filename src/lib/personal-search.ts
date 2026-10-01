@@ -21,7 +21,7 @@ import { hasTastes, TASTE_TAGS, type Tastes } from '@/lib/tastes';
 /**
  * BUSCADOR PERSONAL
  *
- * Antes de escribir, el buscador ensena un mosaico de publicaciones elegidas
+ * Antes de escribir, el buscador enseña un mosaico de publicaciones elegidas
  * por el recomendador para esa persona (lo que declaro en Tus gustos + lo que
  * aprendio de lo que mira, le gusta, desbloquea y sigue), cada una con su %
  * de afinidad y el motivo. Sus gustos principales sirven de filtros. Al
@@ -37,7 +37,7 @@ export interface TasteDnaSlice {
 interface MosaicBase {
   /** % de afinidad con quien busca (40-99). null si aun no hay gustos. */
   match: number | null;
-  /** Por que se la ensena, en pocas palabras. */
+  /** Por que se la enseña, en pocas palabras. */
   reason: string;
   /** Etiquetas de la creadora (para filtrar el mosaico por gusto). */
   tags: string[];

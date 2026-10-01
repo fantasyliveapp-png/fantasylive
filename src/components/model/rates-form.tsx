@@ -31,11 +31,11 @@ import {
 import { formatMoney } from '@/lib/utils';
 
 /**
- * Las tarifas se editan en TOKENS con decimales (1,75 - 25) y se guardan en
- * centitokens. El paso de 0,05 evita que el navegador rechace 1,75 por no ser
+ * Las tarifas se editan en TOKENS con decimales (17,5 - 250) y se guardan en
+ * centitokens. El paso de 0,5 evita que el navegador rechace 17,5 por no ser
  * multiplo del step, que es lo que pasaria con step=1.
  */
-const RATE_STEP_TOKENS = 0.05;
+const RATE_STEP_TOKENS = 0.5;
 const MIN_RATE_TOKENS = centitokensToTokens(MIN_RATE_CENTITOKENS);
 const MAX_RATE_TOKENS = centitokensToTokens(MAX_RATE_CENTITOKENS);
 
@@ -134,10 +134,7 @@ export function RatesForm({
       <CardHeader>
         <CardTitle>Tarifas por minuto</CardTitle>
         <CardDescription>
-          Te quedas con el {modelSharePercent}% de los tokens consumidos. Los
-          importes en dolares son estimados sobre{' '}
-          {formatMoney(payoutCentsPerToken)} por token, antes de la comision de
-          retiro. Puedes cobrar entre{' '}
+          Junto a cada precio ves lo que ganas en dólares. Puedes cobrar entre{' '}
           {formatRateNumber(MIN_RATE_CENTITOKENS)} y{' '}
           {formatRateNumber(MAX_RATE_CENTITOKENS)} tokens por minuto.
         </CardDescription>
@@ -162,13 +159,13 @@ export function RatesForm({
               />
             </div>
             <p className="text-xs text-muted-foreground">
-              {formatRateNumber(vipRate)} tokens/min &middot; ganas ~
-              {formatMoney(earnPerMinuteCents(vipRate))} por minuto en directo.
+              {formatRateNumber(vipRate)} tokens/min &middot; ganas{' '}
+              <strong className="text-state-connected">{formatMoney(earnPerMinuteCents(vipRate))}</strong> por minuto.
             </p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="privateRate">Privado reservado (tokens/min)</Label>
+            <Label htmlFor="privateRate">Videollamada privada 1 a 1 (tokens/min)</Label>
             <div className="relative">
               <Coins className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-token" />
               <Input
@@ -184,9 +181,9 @@ export function RatesForm({
               />
             </div>
             <p className="text-xs text-muted-foreground">
-              {formatRateNumber(privateRate)} tokens/min &middot; ganas ~
-              {formatMoney(earnPerMinuteCents(privateRate))} por minuto
-              reservado.
+              {formatRateNumber(privateRate)} tokens/min &middot; ganas{' '}
+              <strong className="text-state-connected">{formatMoney(earnPerMinuteCents(privateRate))}</strong> por
+              minuto.
             </p>
           </div>
         </div>
@@ -214,7 +211,8 @@ export function RatesForm({
             <div>
               <Label htmlFor="vipEnabled">Participar en la sala VIP</Label>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Te emparejamos al azar con usuarios que pagan por minuto.
+                Cuando tienes activado &laquo;Recibo llamadas&raquo;, tambien te
+                emparejamos al azar con fans que pagan por minuto.
               </p>
             </div>
             <Switch
@@ -281,8 +279,9 @@ export function RatesForm({
                   />
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Ganas ~{formatMoney(earnCents(subPrice))} por suscriptor cada
-                  mes.
+                  Ganas{' '}
+                  <strong className="text-state-connected">{formatMoney(earnCents(subPrice))}</strong> por suscriptor
+                  cada mes.
                 </p>
               </div>
 
@@ -343,8 +342,9 @@ export function RatesForm({
                 />
               </div>
               <p className="text-xs text-muted-foreground">
-                Ganas ~{formatMoney(earnCents(msgPrice))} por cada conversacion
-                nueva.
+                Ganas{' '}
+                <strong className="text-state-connected">{formatMoney(earnCents(msgPrice))}</strong> por cada
+                conversación nueva.
               </p>
             </div>
           )}

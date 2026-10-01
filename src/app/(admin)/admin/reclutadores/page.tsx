@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
+import { Receipt } from 'lucide-react';
 
 import { AdminPageHeader } from '@/components/admin/admin-shell';
 
@@ -7,7 +9,10 @@ import { requireAdmin } from '@/lib/auth/guards';
 import { config } from '@/lib/config';
 import { prisma } from '@/lib/prisma';
 import { getRecruiterOverview } from '@/lib/recruiters';
+import { SummaryStat } from '@/components/recruiter/recruiter-stats';
+import { Button } from '@/components/ui/button';
 import { tokensToPayoutCents } from '@/lib/tokens';
+import { formatMoney } from '@/lib/utils';
 
 export const metadata: Metadata = { title: 'Reclutadores' };
 export const dynamic = 'force-dynamic';
@@ -30,12 +35,51 @@ export default async function RecruitersAdminPage() {
   // Pagos semanales a partir del minimo de retiro ($25).
   const minPayoutCents = tokensToPayoutCents(config.economy.minPayoutTokens);
 
+  const sum = (f: (r: (typeof overviews)[number]) => number) =>
+    overviews.reduce((acc, r) => acc + f(r), 0);
+  const toPay = overviews.filter((r) => r.totals.pendingCents >= minPayoutCents);
+
   return (
     <div className="space-y-6">
       <AdminPageHeader
         title="Reclutadores"
         description={<>Personas que traen creadores a cambio de un % de lo que venden. Se paga de nuestra comision y solo cuando el creador ya ha vendido.</>}
+        actions={
+          <Button asChild variant="outline" size="sm">
+            <Link href="/admin/reclutadores/ventas">
+              <Receipt className="h-4 w-4" /> Ver todas las ventas
+            </Link>
+          </Button>
+        }
       />
+
+      {overviews.length > 0 && (
+        <section className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+          <SummaryStat
+            label="Activos"
+            value={`${overviews.filter((r) => r.active).length}/${overviews.length}`}
+          />
+          <SummaryStat
+            label="Creadores traídos"
+            value={String(sum((r) => r.totals.registered))}
+            hint={`${sum((r) => r.totals.verified)} verificadas`}
+          />
+          <SummaryStat
+            label="Comision este mes"
+            value={formatMoney(sum((r) => r.totals.earnedThisMonthCents))}
+            hint={`Mes pasado: ${formatMoney(sum((r) => r.totals.earnedLastMonthCents))}`}
+          />
+          <SummaryStat label="Comision total" value={formatMoney(sum((r) => r.totals.earnedCents))} />
+          <SummaryStat label="Ya pagado" value={formatMoney(sum((r) => r.totals.paidCents))} />
+          <SummaryStat
+            label="Por pagar"
+            value={formatMoney(sum((r) => r.totals.pendingCents))}
+            hint={`${toPay.length} ya llegan al minimo`}
+            highlight
+          />
+        </section>
+      )}
+
       <CreateRecruiterForm />
       {overviews.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-border/60 p-8 text-center text-sm text-muted-foreground">

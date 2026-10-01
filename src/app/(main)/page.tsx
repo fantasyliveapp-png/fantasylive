@@ -22,7 +22,9 @@ import { getI18n } from '@/lib/i18n/server';
 import { rankLiveStreamsForRequest } from '@/lib/live-rank';
 import { liveModelIds } from '@/lib/live';
 import { getQueueStats } from '@/lib/matchmaking';
+import { getCurrentUser } from '@/lib/auth/guards';
 import { prisma } from '@/lib/prisma';
+import { getPricedPackages } from '@/lib/token-offers';
 import { formatTokens } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -30,12 +32,13 @@ export const dynamic = 'force-dynamic';
 export default async function HomePage() {
   // Los perfiles que bloquean el pais del visitante no salen ni en destacados
   // ni en los directos de portada.
-  const [{ t }, { filter: geoFilter }] = await Promise.all([
+  const [{ t }, { filter: geoFilter }, viewer] = await Promise.all([
     getI18n(),
     getVisibilityContext(),
+    getCurrentUser(),
   ]);
 
-  const [stats, liveStreams, featured, packages] = await Promise.all([
+  const [stats, liveStreams, featured, priced] = await Promise.all([
     getQueueStats(),
     rankLiveStreamsForRequest({ geoFilter, take: 6 }),
     prisma.modelProfile.findMany({
@@ -64,12 +67,10 @@ export default async function HomePage() {
         tags: true,
       },
     }),
-    prisma.tokenPackage.findMany({
-      where: { isActive: true },
-      orderBy: { sortOrder: 'asc' },
-      take: 3,
-    }),
+    // Con las ofertas de quien mira (las mismas que en el monedero).
+    getPricedPackages(viewer?.id ?? null),
   ]);
+  const packages = priced.packages.slice(0, 3);
 
   const features = [
     {
@@ -303,7 +304,7 @@ export default async function HomePage() {
                   {pkg.name}
                 </p>
                 <p className="mt-3 text-3xl font-bold text-token">
-                  {formatTokens(pkg.tokens + pkg.bonusTokens)}
+                  {formatTokens(pkg.totalTokens)}
                 </p>
                 <p className="text-xs text-muted-foreground">tokens</p>
                 {pkg.bonusTokens > 0 && (
@@ -311,9 +312,25 @@ export default async function HomePage() {
                     +{pkg.bonusTokens} de regalo
                   </Badge>
                 )}
-                <p className="mt-4 text-2xl font-semibold">
-                  ${(pkg.priceCents / 100).toFixed(2)}
-                </p>
+                {pkg.offerBonusTokens > 0 && (
+                  <Badge className="mt-2 border-0 bg-champagne-gold/20 text-champagne-gold">
+                    +{pkg.offerBonusTokens} de {pkg.offer?.label.toLowerCase()}
+                  </Badge>
+                )}
+                {pkg.priceCents < pkg.basePriceCents ? (
+                  <p className="mt-4 text-2xl font-semibold">
+                    <span className="mr-2 text-sm font-normal text-muted-foreground line-through">
+                      ${(pkg.basePriceCents / 100).toFixed(2)}
+                    </span>
+                    <span className="text-state-connected">
+                      ${(pkg.priceCents / 100).toFixed(2)}
+                    </span>
+                  </p>
+                ) : (
+                  <p className="mt-4 text-2xl font-semibold">
+                    ${(pkg.priceCents / 100).toFixed(2)}
+                  </p>
+                )}
                 <Link href="/wallet">
                   <Button
                     variant={pkg.isPopular ? 'brand' : 'outline'}

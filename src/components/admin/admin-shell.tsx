@@ -7,7 +7,9 @@ import { usePathname } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 import {
   ArrowUpRight,
+  Store,
   BadgeCheck,
+  BadgePercent,
   Flag,
   ChartColumn,
   Filter,
@@ -22,6 +24,7 @@ import {
   LogOut,
   Menu,
   Receipt,
+  Ticket,
   Users,
   Wallet,
   type LucideIcon,
@@ -87,6 +90,7 @@ const NAV: { title?: string; links: NavLink[] }[] = [
         icon: Handshake,
         count: 'recruitersToPay',
       },
+      { href: '/admin/tratos', label: 'Tratos con creadores', icon: BadgePercent },
       { href: '/admin/avisos', label: 'Avisos', icon: Megaphone },
     ],
   },
@@ -94,6 +98,8 @@ const NAV: { title?: string; links: NavLink[] }[] = [
     title: 'Dinero',
     links: [
       { href: '/admin/finanzas', label: 'Finanzas', icon: ChartColumn },
+      { href: '/admin/promociones', label: 'Promociones de tokens', icon: Ticket },
+      { href: '/admin/distribuidores', label: 'Distribuidores', icon: Store },
       { href: '/admin/transactions', label: 'Transacciones', icon: Receipt },
     ],
   },

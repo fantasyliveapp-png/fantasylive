@@ -1,7 +1,14 @@
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // El seed usa avatares/placeholders remotos. Anade aqui tu bucket S3/R2 publico si lo usas.
+  // La raiz es esta carpeta. Sin esto, un package-lock.json suelto en una
+  // carpeta superior hace que Next tome esa como raiz y vigile/rastree mucho
+  // mas de lo necesario (compilaciones lentisimas en desarrollo).
+  outputFileTracingRoot: dirname(fileURLToPath(import.meta.url)),
+  // El seed usa avatares/placeholders remotos. Añade aqui tu bucket S3/R2 publico si lo usas.
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'i.pravatar.cc' },

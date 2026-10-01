@@ -1,8 +1,11 @@
 import { Suspense } from 'react';
+import Link from 'next/link';
 import type { Metadata } from 'next';
 import { ArrowDownRight, ArrowUpRight, Coins, TrendingUp } from 'lucide-react';
 
 import { TokenPackages } from '@/components/wallet/token-packages';
+import { OfferBanners } from '@/components/wallet/offer-banners';
+import { getPricedPackages, startWinbackIfDue } from '@/lib/token-offers';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -14,6 +17,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { requireUser } from '@/lib/auth/guards';
+import { config } from '@/lib/config';
 import { TRANSACTION_TYPE_LABELS } from '@/lib/constants';
 import { prisma } from '@/lib/prisma';
 import { getWalletSummary } from '@/lib/tokens';
@@ -33,12 +37,11 @@ export default async function WalletPage({
   // Solo lo que se ve arriba del todo. El historial va por su cuenta dentro de
   // un Suspense: es la consulta mas pesada y no tiene sentido que retrase el
   // saldo y los paquetes, que es a lo que viene la gente a esta pagina.
-  const [wallet, packages] = await Promise.all([
+  // Si lleva 30 dias sin comprar, aqui se le abre su oferta de 48 h.
+  await startWinbackIfDue(user.id);
+  const [wallet, { packages, banners }] = await Promise.all([
     getWalletSummary(user.id),
-    prisma.tokenPackage.findMany({
-      where: { isActive: true },
-      orderBy: { sortOrder: 'asc' },
-    }),
+    getPricedPackages(user.id),
   ]);
 
   return (
@@ -101,6 +104,18 @@ export default async function WalletPage({
         <p className="mt-1 text-sm text-muted-foreground">
           Pago seguro. Los tokens no caducan.
         </p>
+        <OfferBanners banners={banners} />
+        {config.distributors.enabled && (
+          <Link
+            href="/distribuidores"
+            className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-card px-4 py-3 text-sm hover:border-primary/50"
+          >
+            <span>
+              <strong>¿Sin tarjeta?</strong> Compra tokens a un distribuidor oficial de tu país.
+            </span>
+            <span className="shrink-0 text-xs font-semibold text-primary">Ver lista</span>
+          </Link>
+        )}
         <div className="mt-6">
           <TokenPackages packages={packages} balance={wallet.balance} />
         </div>

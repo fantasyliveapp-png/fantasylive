@@ -145,6 +145,25 @@ export async function createVideoPreview(
   }
 }
 
+/** Duracion de un video en segundos (null si el navegador no la sabe leer). */
+export async function readVideoDuration(file: Blob): Promise<number | null> {
+  const url = URL.createObjectURL(file);
+  try {
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.src = url;
+    await new Promise<void>((resolve, reject) => {
+      video.onloadedmetadata = () => resolve();
+      video.onerror = () => reject(new Error('video'));
+    });
+    return Number.isFinite(video.duration) ? Math.round(video.duration) : null;
+  } catch {
+    return null;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 /**
  * Dibuja el recorte (y el filtro) de una imagen ya decodificada en un canvas
  * de `width` x `height`. Es la unica funcion que genera pixeles de una

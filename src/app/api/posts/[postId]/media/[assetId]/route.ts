@@ -43,6 +43,7 @@ export async function GET(
           id: true,
           visibility: true,
           isPublished: true,
+          liveExclusiveAt: true,
           createdAt: true,
           modelId: true,
           model: { select: { userId: true, blockedCountries: true } },
@@ -59,7 +60,8 @@ export async function GET(
   const isAdmin = viewer.role === 'ADMIN';
 
   if (!isOwner && !isAdmin) {
-    if (!post.isPublished || post.createdAt > new Date()) {
+    // Una exclusiva de directo nunca se publica, pero quien la compro la ve.
+    if (!post.liveExclusiveAt && (!post.isPublished || post.createdAt > new Date())) {
       return new NextResponse('Not found', { status: 404 });
     }
     if (await isBlockedForViewer(post.model.blockedCountries)) {

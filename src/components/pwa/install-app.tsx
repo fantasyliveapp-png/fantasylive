@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
  *
  * - Registra el service worker (lo que hace la web instalable).
  * - Tras unas visitas, invita a instalarla: en Android/ordenador con el boton
- *   del sistema; en iPhone explicando "Compartir > Anadir a pantalla de
+ *   del sistema; en iPhone explicando "Compartir > Añadir a pantalla de
  *   inicio" (Apple no deja un boton automatico). Dentro de Instagram y otras
  *   apps no se puede instalar: se pide abrirla en el navegador.
  * - Si la cierra, no vuelve a salir en 14 dias. "Instalar app" del menu la

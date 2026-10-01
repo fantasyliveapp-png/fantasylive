@@ -17,11 +17,14 @@ export function StudioLauncher({
   economy,
   subscriptionEnabled,
   profileHref,
+  liveExclusive = false,
 }: {
   model: StudioModel;
   economy: EconomyParams;
   subscriptionEnabled: boolean;
   profileHref: string;
+  /** Nuevo pack de directo: al terminar vuelve a Contenido → Para directos. */
+  liveExclusive?: boolean;
 }) {
   const router = useRouter();
 
@@ -42,8 +45,9 @@ export function StudioLauncher({
       subscriptionEnabled={subscriptionEnabled}
       model={model}
       onClose={leave}
+      initialLiveExclusive={liveExclusive}
       onDone={() => {
-        router.replace(profileHref);
+        router.replace(liveExclusive ? '/dashboard/model/contenido?tab=directos' : profileHref);
         router.refresh();
       }}
     />

@@ -26,6 +26,8 @@ import { closeRoom, countRoomParticipants, sendRoomData } from '@/lib/livekit';
 import { assertCreatorVerified } from '@/lib/creator-kyc';
 import { prisma } from '@/lib/prisma';
 import { maybeSendAutoGreeting } from '@/lib/greeting';
+import { broadcastLiveState, loadCurrentPoll, loadLiveRoomState, viewerLiveAccess } from '@/lib/live-controls';
+import type { LivePaywall, LivePollState, LiveRoomState } from '@/lib/live-state';
 import { recordProfileVisit } from '@/lib/visits';
 
 export interface LiveActionResult<T = unknown> {
@@ -33,6 +35,8 @@ export interface LiveActionResult<T = unknown> {
   error?: string;
   message?: string;
   data?: T;
+  /** Directo de suscriptores o de pago al que aun no se tiene acceso. */
+  paywall?: LivePaywall;
 }
 
 async function requireLiveModel() {
@@ -66,6 +70,7 @@ const startSchema = z.object({
   title: z.string().trim().max(120).optional(),
   source: z.enum(['BROWSER', 'OBS_RTMP']),
   goal: goalSchema.optional(),
+  acceptsPrivate: z.boolean().default(false),
 });
 
 export interface StreamGoal {
@@ -90,6 +95,8 @@ export async function startStreamAction(input: {
   title?: string;
   source: 'BROWSER' | 'OBS_RTMP';
   goal?: { label: string; tokens: number };
+  /** Respuesta a "¿Quieres recibir privados 1 a 1 en este directo?" */
+  acceptsPrivate?: boolean;
 }): Promise<
   LiveActionResult<{
     streamId: string;
@@ -100,6 +107,7 @@ export async function startStreamAction(input: {
     streamKey: string | null;
     source: 'BROWSER' | 'OBS_RTMP';
     goal: StreamGoal | null;
+    state: LiveRoomState | null;
   }>
 > {
   try {
@@ -152,6 +160,7 @@ export async function startStreamAction(input: {
         streamKey,
         goalLabel: goal?.label ?? null,
         goalTokens: goal?.tokens ?? null,
+        acceptsPrivate: parsed.data.acceptsPrivate,
       },
       select: { id: true },
     });
@@ -192,7 +201,9 @@ export async function startStreamAction(input: {
       }),
       prisma.modelProfile.update({
         where: { id: profile.id },
-        data: { liveEnabled: true, streamKey, isOnline: true, lastOnlineAt: new Date() },
+        // "Recibo llamadas" no se toca: en directo, los privados dependen de la
+        // respuesta a la pregunta del inicio (acceptsPrivate).
+        data: { liveEnabled: true, streamKey, lastOnlineAt: new Date() },
       }),
     ]);
 
@@ -225,6 +236,7 @@ export async function startStreamAction(input: {
         streamKey: obsKey,
         source: parsed.data.source,
         goal: goal ? { label: goal.label, target: goal.tokens, progress: 0 } : null,
+        state: await loadLiveRoomState(stream.id),
       },
     };
   } catch (error) {
@@ -253,8 +265,9 @@ export async function markStreamLiveAction(
     // updateMany devuelve 0 si ya estaba LIVE: no se vuelve a notificar.
     if (updated.count === 0) return { ok: true };
 
+    // Solo a quien tiene la campanita de directos encendida.
     const followers = await prisma.follow.findMany({
-      where: { modelId: profile.id },
+      where: { modelId: profile.id, notifyLive: true },
       select: { userId: true },
       take: 500,
       orderBy: { createdAt: 'desc' },
@@ -304,6 +317,31 @@ export async function endStreamAction(
     revalidatePath('/live');
     revalidatePath('/dashboard/model/live');
     return { ok: true, message: 'Directo finalizado.' };
+  } catch (error) {
+    return { ok: false, error: toMessage(error) };
+  }
+}
+
+/** Activa o desactiva los privados 1 a 1 durante el directo en curso. */
+export async function setStreamPrivateAction(
+  streamId: string,
+  acceptsPrivate: boolean,
+): Promise<LiveActionResult> {
+  try {
+    const { profile } = await requireLiveModel();
+    const stream = await prisma.liveStream.findFirst({
+      where: { id: streamId, modelId: profile.id, status: { in: ['PREPARING', 'LIVE'] } },
+      select: { id: true, roomName: true },
+    });
+    if (!stream) return { ok: false, error: 'Directo no encontrado.' };
+    await prisma.liveStream.update({ where: { id: stream.id }, data: { acceptsPrivate } });
+    await broadcastLiveState(stream.roomName, { acceptsPrivate });
+    return {
+      ok: true,
+      message: acceptsPrivate
+        ? 'Los espectadores ya pueden pedirte un privado 1 a 1.'
+        : 'Ya no recibes privados en este directo.',
+    };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
   }
@@ -489,6 +527,10 @@ export async function joinStreamAction(
     url: string;
     roomName: string;
     viewerCount: number;
+    state: LiveRoomState | null;
+    poll: LivePollState | null;
+    myVote: number | null;
+    muted: boolean;
   }>
 > {
   try {
@@ -503,8 +545,11 @@ export async function joinStreamAction(
         viewerCount: true,
         viewerPeak: true,
         modelId: true,
+        accessMode: true,
+        ticketTokens: true,
+        ticketFreeForSubscribers: true,
         model: {
-          select: { userId: true, stageName: true, blockedCountries: true },
+          select: { userId: true, slug: true, stageName: true, blockedCountries: true },
         },
       },
     });
@@ -522,11 +567,35 @@ export async function joinStreamAction(
       return { ok: false, error: 'El directo esta lleno. Intentalo en un momento.' };
     }
 
+    // Sanciones de la creadora en este directo.
+    const sanctions = await prisma.liveSanction.findMany({
+      where: { streamId: stream.id, userId: viewer.id },
+      select: { kind: true },
+    });
+    if (sanctions.some((s) => s.kind === 'KICK')) {
+      return { ok: false, error: 'Te han sacado de este directo.' };
+    }
+    const muted = sanctions.some((s) => s.kind === 'MUTE');
+
+    // Directo de suscriptores o de pago.
+    const access = await viewerLiveAccess(stream, viewer);
+    if (!access.allowed) {
+      return {
+        ok: false,
+        error:
+          access.paywall.mode === 'SUBSCRIBERS'
+            ? 'Este directo es solo para suscriptores.'
+            : 'Este directo es de pago.',
+        paywall: access.paywall,
+      };
+    }
+
     const token = await createViewerToken({
       roomName: stream.roomName,
       identity: viewer.id,
       name: viewer.name ?? 'Invitado',
       avatarUrl: await avatarOf(viewer.id),
+      canChat: !muted,
     });
 
     // Presencia real: LiveKit es la unica fuente fiable del numero de
@@ -562,6 +631,11 @@ export async function joinStreamAction(
       });
     }
 
+    const [state, current] = await Promise.all([
+      loadLiveRoomState(stream.id),
+      loadCurrentPoll(stream.id, viewer.id),
+    ]);
+
     return {
       ok: true,
       data: {
@@ -569,6 +643,10 @@ export async function joinStreamAction(
         url: process.env.NEXT_PUBLIC_LIVEKIT_URL || '',
         roomName: stream.roomName,
         viewerCount,
+        state,
+        poll: current.poll,
+        myVote: current.myVote,
+        muted,
       },
     };
   } catch (error) {

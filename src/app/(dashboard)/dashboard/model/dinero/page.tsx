@@ -52,7 +52,7 @@ export default async function MoneyPage() {
     getCreatorEarnings(user.id),
   ]);
 
-  // Siempre lo que le llega de verdad (ya descontado el % de retiro).
+  // Siempre lo que le llega de verdad: lo que retira, integro.
   const usd = (tokens: number) => formatMoney(tokensToNetPayoutCents(tokens));
   // Solo lo GANADO se puede retirar; lo comprado es para gastar aqui.
   const withdrawable = withdrawableTokens(wallet);

@@ -1,5 +1,7 @@
 'use server';
 
+import { discountTokens } from '@/lib/creator-offer-rules';
+import { getContentOffer, recordOfferUse } from '@/lib/creator-offers';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
@@ -223,6 +225,8 @@ export async function attachPostAssetAction(input: {
   width?: number;
   height?: number;
   durationSec?: number;
+  /** Huella del archivo (SHA-256), para que no se repita entre chat y directos. */
+  contentHash?: string | null;
 }): Promise<PostActionResult> {
   try {
     const { profile } = await requireModelProfile();
@@ -257,6 +261,7 @@ export async function attachPostAssetAction(input: {
         height: input.height ?? null,
         durationSec: input.durationSec ?? null,
         sortOrder: post._count.assets,
+        contentHash: input.contentHash && /^[0-9a-f]{64}$/.test(input.contentHash) ? input.contentHash : null,
       },
     });
 
@@ -290,7 +295,11 @@ function parsePublishAt(value: string | null | undefined): Date | null | string 
  */
 export async function publishPostAction(
   postId: string,
-  options: { publishAt?: string | null } = {},
+  options: {
+    publishAt?: string | null;
+    /** Exclusiva de directo: se guarda para "Especiales" y no sale en el feed. */
+    liveExclusive?: boolean;
+  } = {},
 ): Promise<PostActionResult> {
   try {
     const { profile } = await requireModelProfile();
@@ -306,6 +315,8 @@ export async function publishPostAction(
         body: true,
         isPublished: true,
         removedAt: true,
+        visibility: true,
+        priceTokens: true,
         poll: { select: { id: true, endsAt: true } },
         _count: { select: { assets: true } },
       },
@@ -316,7 +327,46 @@ export async function publishPostAction(
     }
     if (post.isPublished) return { ok: true, message: 'Ya estaba publicada.' };
     if (post._count.assets === 0 && !post.body && !post.poll) {
-      return { ok: false, error: 'Anade texto o al menos un archivo.' };
+      return { ok: false, error: 'Añade texto o al menos un archivo.' };
+    }
+
+    // EXCLUSIVA DE DIRECTO: se queda fuera del feed y del perfil (sin
+    // publicar, sin avisos) y queda disponible para venderla en directo.
+    if (options.liveExclusive) {
+      if (post.visibility !== 'LOCKED' || post.priceTokens <= 0) {
+        return { ok: false, error: 'El contenido exclusivo de directo tiene que ser de pago.' };
+      }
+      if (post._count.assets === 0) {
+        return { ok: false, error: 'Añade al menos una foto o un video.' };
+      }
+      // Exclusivo de verdad: nada que ya este en el chat, en publicaciones o
+      // en otro pack de directo (el fan pagaria dos veces por lo mismo).
+      const own = await prisma.postAsset.findMany({
+        where: { postId: post.id, contentHash: { not: null } },
+        select: { id: true, contentHash: true },
+      });
+      const hashes = own.map((a) => a.contentHash!);
+      if (hashes.length) {
+        const [inVault, inPosts] = await Promise.all([
+          prisma.vaultItem.count({ where: { modelId: profile.id, contentHash: { in: hashes } } }),
+          prisma.postAsset.count({
+            where: { contentHash: { in: hashes }, postId: { not: post.id }, post: { modelId: profile.id, removedAt: null } },
+          }),
+        ]);
+        if (inVault + inPosts > 0) {
+          return {
+            ok: false,
+            error:
+              'Algun archivo ya lo tienes en tu Boveda del chat, en una publicacion o en otro pack. Lo de los directos tiene que ser nuevo y exclusivo.',
+          };
+        }
+      }
+      await prisma.post.update({ where: { id: post.id }, data: { liveExclusiveAt: new Date() } });
+      revalidatePath('/dashboard/model/posts');
+      return {
+        ok: true,
+        message: 'Guardado como exclusivo de directo. Anadelo a tu menu "Especiales" mientras emites.',
+      };
     }
 
     const goesOutAt = publishAt ?? new Date();
@@ -347,8 +397,9 @@ export async function publishPostAction(
 
     // Aviso a seguidores. Con un tope, para que una creadora con 50.000
     // seguidores no genere 50.000 filas dentro de la peticion del navegador.
+    // Solo a quien tiene la campanita de publicaciones encendida.
     const followers = await prisma.follow.findMany({
-      where: { modelId: profile.id },
+      where: { modelId: profile.id, notifyPosts: true },
       select: { userId: true },
       take: NOTIFY_FOLLOWERS_LIMIT,
       orderBy: { createdAt: 'desc' },
@@ -612,19 +663,24 @@ export async function unlockPostAction(
       return { ok: true, message: 'Ya la tenias desbloqueada.', data: { balance: 0 } };
     }
 
+    // Rebajas flash o cupon del creador: sale de su precio.
+    const offer = await getContentOffer(post.modelId, user.id);
+    const price = offer ? discountTokens(post.priceTokens, offer.percentOff) : post.priceTokens;
+
     const balance = await prisma.$transaction(async (tx) => {
       await tx.postUnlock.create({
         data: {
           userId: user.id,
           postId: post.id,
-          tokensSpent: post.priceTokens,
+          tokensSpent: price,
         },
       });
+      if (offer) await recordOfferUse(tx, offer, price);
 
       const { debit, modelTokens } = await transferWithCommission(tx, {
         fromUserId: user.id,
         toUserId: post.model.userId,
-        tokens: post.priceTokens,
+        tokens: price,
         debitType: 'POST_UNLOCK',
         creditType: 'POST_EARNING',
         description: `Desbloqueo de publicacion de ${post.model.stageName}`,

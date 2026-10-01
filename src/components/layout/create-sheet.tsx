@@ -124,7 +124,7 @@ export function CreateSheet({
             <span className="min-w-0 flex-1">
               <span className="block font-semibold">Ir en directo</span>
               <span className="block text-xs text-muted-foreground">
-                Desde el movil o con OBS. Tus seguidores reciben un aviso.
+                Desde el movil o el ordenador. Tus seguidores reciben un aviso.
               </span>
             </span>
             <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />

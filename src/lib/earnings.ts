@@ -27,3 +27,8 @@ export function estimateEarnings(tokensSpent: number, economy: EconomyParams) {
   );
   return { feeTokens, modelTokens, grossCents, netCents };
 }
+
+/** Lo que le llega al creador por una venta de N tokens, en centavos. */
+export function creatorNetCents(tokens: number, economy: EconomyParams) {
+  return estimateEarnings(tokens, economy).netCents;
+}

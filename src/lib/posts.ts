@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { discountTokens } from '@/lib/creator-offer-rules';
+import { getContentOffersFor, type AppliedOffer } from '@/lib/creator-offers';
 import type { PostVisibility, Prisma } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
@@ -46,7 +48,12 @@ export interface FeedPost {
   scheduledFor: string | null;
   body: string | null;
   visibility: PostVisibility;
+  /** Lo que paga quien mira (ya con la oferta del creador, si hay). */
   priceTokens: number;
+  /** Precio sin oferta, solo si hay oferta: para tacharlo. */
+  originalPriceTokens: number | null;
+  /** Nombre de la oferta ("Rebajas", "Cupón"). */
+  offerLabel: string | null;
   likeCount: number;
   commentCount: number;
   unlockCount: number;
@@ -196,6 +203,8 @@ export async function buildFeedPosts(
   const subscribedModels = new Set(subscriptions.map((s) => s.modelId));
   const myVotes = new Map(pollVotes.map((v) => [v.pollId, v.optionId]));
   const now = new Date();
+  // Rebajas flash / cupones de cada creador para quien mira.
+  const contentOffers = await getContentOffersFor(modelIds, viewerId ?? null);
 
   const viewerAccount = viewerId
     ? await prisma.user.findUnique({ where: { id: viewerId }, select: { username: true } })
@@ -239,7 +248,7 @@ export async function buildFeedPosts(
         scheduledFor: post.createdAt > now ? post.createdAt.toISOString() : null,
         body: post.body,
         visibility: post.visibility,
-        priceTokens: post.priceTokens,
+        ...priceFor(post, isOwner, contentOffers.get(post.modelId)),
         likeCount: post.likeCount,
         commentCount: post.commentCount,
         unlockCount: post.unlockCount,
@@ -309,6 +318,45 @@ export async function getFollowingFeed(params: {
   return buildFeedPosts(posts, params.viewerId);
 }
 
+/**
+ * Lo que paga con sus suscripciones: publicaciones SOLO PARA SUSCRIPTORES de
+ * las creadoras a las que esta suscrito ahora (o de una sola, con modelId).
+ */
+export async function getSubscriptionsFeed(params: {
+  viewerId: string;
+  geoFilter: Prisma.ModelProfileWhereInput;
+  modelId?: string | null;
+  take?: number;
+  cursor?: string | null;
+}): Promise<FeedPost[]> {
+  const subs = await prisma.subscription.findMany({
+    where: {
+      userId: params.viewerId,
+      status: 'ACTIVE',
+      currentPeriodEnd: { gt: new Date() },
+      ...(params.modelId ? { modelId: params.modelId } : {}),
+    },
+    select: { modelId: true },
+  });
+  if (subs.length === 0) return [];
+
+  const posts = await prisma.post.findMany({
+    where: {
+      ...livePostWhere(),
+      visibility: 'SUBSCRIBERS',
+      removedAt: null,
+      modelId: { in: subs.map((s) => s.modelId) },
+      model: { ...params.geoFilter },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: params.take ?? 20,
+    ...(params.cursor ? { cursor: { id: params.cursor }, skip: 1 } : {}),
+    select: feedPostSelect,
+  });
+
+  return buildFeedPosts(posts, params.viewerId);
+}
+
 /** Publicaciones de un perfil concreto, para su ficha. */
 export async function getModelPosts(params: {
   modelId: string;
@@ -328,4 +376,20 @@ export async function getModelPosts(params: {
   });
 
   return buildFeedPosts(posts, params.viewerId);
+}
+
+/** Precio de una publicacion para quien la mira (con la oferta del creador). */
+function priceFor(
+  post: { visibility: PostVisibility; priceTokens: number },
+  isOwner: boolean,
+  offer: AppliedOffer | undefined,
+) {
+  if (!offer || isOwner || post.visibility !== 'LOCKED' || post.priceTokens <= 0) {
+    return { priceTokens: post.priceTokens, originalPriceTokens: null, offerLabel: null };
+  }
+  return {
+    priceTokens: discountTokens(post.priceTokens, offer.percentOff),
+    originalPriceTokens: post.priceTokens,
+    offerLabel: `${offer.label} −${offer.percentOff}%`,
+  };
 }

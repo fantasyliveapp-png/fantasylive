@@ -10,6 +10,8 @@ export interface ProfileShortcut {
   avatarUrl: string | null;
   /** Identidad verificada (KYC aprobado): sin ella no puede crear nada. */
   verified: boolean;
+  /** "Recibo llamadas" activado. */
+  callsAvailable: boolean;
 }
 
 /**
@@ -23,11 +25,11 @@ export const getProfileShortcut = cache(
     if (!modelProfileId) return null;
     const row = await prisma.modelProfile.findUnique({
       where: { id: modelProfileId },
-      select: { slug: true, stageName: true, avatarUrl: true, kycStatus: true },
+      select: { slug: true, stageName: true, avatarUrl: true, kycStatus: true, isOnline: true },
     });
     if (!row) return null;
-    const { kycStatus, ...rest } = row;
-    return { ...rest, verified: kycStatus === 'APPROVED' };
+    const { kycStatus, isOnline, ...rest } = row;
+    return { ...rest, verified: kycStatus === 'APPROVED', callsAvailable: isOnline };
   },
 );
 
@@ -44,6 +46,13 @@ export const getOwnUsername = cache(
 );
 
 /** Si la cuenta es de un reclutador (para el acceso a su panel). */
+/** Es distribuidor oficial de tokens (para el acceso a su panel en el menu). */
+export const isDistributorAccount = cache(async (userId: string | null | undefined): Promise<boolean> => {
+  if (!userId) return false;
+  const d = await prisma.distributor.findUnique({ where: { userId }, select: { id: true } });
+  return Boolean(d);
+});
+
 export const isRecruiterAccount = cache(async (userId: string | null | undefined): Promise<boolean> => {
   if (!userId) return false;
   const r = await prisma.recruiter.findUnique({ where: { userId }, select: { id: true } });

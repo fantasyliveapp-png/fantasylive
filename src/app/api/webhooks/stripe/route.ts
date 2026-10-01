@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
  * POST /api/webhooks/stripe
  *
  * Acredita los tokens cuando Stripe confirma el pago.
- * En Vercel hay que anadir esta URL en el dashboard de Stripe y copiar el
+ * En Vercel hay que añadir esta URL en el dashboard de Stripe y copiar el
  * signing secret a STRIPE_WEBHOOK_SECRET.
  */
 export async function POST(request: NextRequest) {

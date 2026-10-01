@@ -1,9 +1,11 @@
 import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
 
+import { OutgoingCall } from '@/components/calls/outgoing-call';
 import { VideoCallRoom } from '@/components/calls/video-call-room';
 import { requireUser } from '@/lib/auth/guards';
 import { prisma } from '@/lib/prisma';
+import { formatRate } from '@/lib/rates';
 
 export const metadata: Metadata = { title: 'Llamada en vivo' };
 export const dynamic = 'force-dynamic';
@@ -25,6 +27,8 @@ export default async function CallPage({
       callerId: true,
       calleeId: true,
       rateCentitokens: true,
+      bookingId: true,
+      minBilledSeconds: true,
     },
   });
 
@@ -34,8 +38,21 @@ export default async function CallPage({
     session.callerId === user.id || session.calleeId === user.id;
   if (!isParticipant) notFound();
 
+  // Chat de la pareja fan-creador (si lo hay), para "Escribirle".
+  const pair = await prisma.conversation.findFirst({
+    where: {
+      OR: [
+        { userId: session.callerId, model: { userId: session.calleeId ?? '' } },
+        { userId: session.calleeId ?? '', model: { userId: session.callerId } },
+      ],
+    },
+    select: { id: true },
+  });
+  const chatHref = pair ? `/mensajes/${pair.id}` : null;
+
   if (session.status === 'ENDED' || session.status === 'CANCELLED') {
-    redirect('/dashboard?call=ended');
+    // Llamada perdida o ya terminada: el creador va al chat con ese fan.
+    redirect(session.calleeId === user.id && chatHref ? chatHref : '/dashboard?call=ended');
   }
 
   const partnerId =
@@ -50,7 +67,7 @@ export default async function CallPage({
             name: true,
             image: true,
             country: true,
-            modelProfile: { select: { stageName: true, slug: true, avatarUrl: true } },
+            modelProfile: { select: { stageName: true, slug: true, avatarUrl: true, acceptsBookings: true } },
           },
         })
       : null,
@@ -63,8 +80,25 @@ export default async function CallPage({
   // Solo paga quien inicio la llamada; la modelo (callee) cobra
   const isPayer = session.callerId === user.id;
 
+  // Llamada directa que aun suena: el fan ve "Llamando..." hasta que la cojan.
+  if (isPayer && session.type === 'PRIVATE' && !session.bookingId && session.status === 'PENDING') {
+    return (
+      <OutgoingCall
+        sessionId={session.id}
+        name={partner?.modelProfile?.stageName ?? partner?.name ?? 'Llamando'}
+        image={partner?.modelProfile?.avatarUrl ?? partner?.image ?? null}
+        rate={formatRate(session.rateCentitokens)}
+        chatHref={chatHref}
+        profileHref={partner?.modelProfile ? `/models/${partner.modelProfile.slug}` : null}
+        canBook={Boolean(partner?.modelProfile?.acceptsBookings)}
+      />
+    );
+  }
+
   return (
     <VideoCallRoom
+      chatHref={chatHref}
+      minBilledSeconds={session.minBilledSeconds}
       sessionId={session.id}
       callType={session.type}
       rateCentitokens={session.rateCentitokens}

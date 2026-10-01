@@ -1,9 +1,19 @@
 import type { Metadata } from 'next';
+import { DistributorBadge } from '@/components/distributors/distributor-badge';
+import { config } from '@/lib/config';
+import { countryFlag } from '@/lib/countries';
+import { operatingBlock } from '@/lib/distributors';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, BadgeCheck } from 'lucide-react';
 
+import { type DealView } from '@/components/messages/deal-cards';
 import { MessageThread } from '@/components/messages/message-thread';
+import { StartPrivateCallButton } from '@/components/calls/start-private-call-button';
+import { CouponButton } from '@/components/messages/coupon-button';
+import { applyRateOffer, getCallOffer, getContentOffer } from '@/lib/creator-offers';
+import { canCallNow } from '@/lib/call-presence';
+import { applySubscriberDiscount, getActiveSubscription } from '@/lib/subscriptions';
 import { ChatRequestBar, PeerChatThread } from '@/components/social/chat-thread';
 import { SafetyMenu } from '@/components/social/safety-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -50,11 +60,14 @@ function ChatHeader({
   image,
   profileHref,
   safety,
+  call,
 }: {
   name: string;
   image: string | null;
   profileHref: string | null;
   safety: React.ReactNode;
+  /** Fan con un creador: boton de videollamada. */
+  call?: React.ReactNode;
 }) {
   const who = (
     <>
@@ -77,7 +90,10 @@ function ChatHeader({
       ) : (
         <span className="flex min-w-0 items-center gap-3">{who}</span>
       )}
-      <div className="ml-auto">{safety}</div>
+      <div className="ml-auto flex items-center gap-1">
+        {call}
+        {safety}
+      </div>
     </header>
   );
 }
@@ -152,15 +168,19 @@ async function PeerView({
   const pending = chat.acceptedAt === null;
   const iAmRecipient = pending && chat.createdById !== viewerId;
   const iSentRequest = pending && chat.createdById === viewerId;
-  const [blocked, blockedByMe] = await Promise.all([
+  const [blocked, blockedByMe, theirDistributor] = await Promise.all([
     isBlockedBetween(viewerId, other.id),
     iBlocked(viewerId, other.id),
+    // Distribuidores oficiales: el fan les pide tokens por aqui.
+    config.distributors.enabled ? prisma.distributor.findUnique({ where: { userId: other.id } }) : null,
     // Abrirlo (o que se recargue mientras lo tienes abierto) es leerlo.
     prisma.peerChat.update({
       where: { id: chat.id },
       data: chat.userAId === viewerId ? { readAtA: new Date() } : { readAtB: new Date() },
     }),
   ]);
+
+  const officialSeller = theirDistributor && !operatingBlock(theirDistributor) ? theirDistributor : null;
 
   return (
     <div className="container max-w-2xl space-y-4 py-4">
@@ -180,6 +200,19 @@ async function PeerView({
 
       {iAmRecipient && !blocked && (
         <ChatRequestBar kind="peer" id={chat.id} fromName={card.name} fromUserId={other.id} />
+      )}
+
+      {officialSeller && (
+        <p className="flex items-start gap-2 rounded-2xl border border-state-connected/40 bg-state-connected/10 p-3 text-sm">
+          <DistributorBadge className="shrink-0" />
+          <span>
+            {officialSeller.countries.map((c) => countryFlag(c)).join(' ')} {officialSeller.legalName}.{' '}
+            <a href="/distribuidores" className="font-semibold underline">
+              Compra protegida
+            </a>
+            : tus tokens quedan reservados hasta que pagues. Nunca le des tu contraseña.
+          </span>
+        </p>
       )}
 
       <PeerChatThread
@@ -214,9 +247,29 @@ async function getConversation(id: string, viewerId: string) {
       // Nunca el email: es un dato personal del fan.
       user: { select: { id: true, name: true, username: true, image: true } },
       model: {
-        select: { id: true, userId: true, slug: true, stageName: true, avatarUrl: true },
+        select: {
+          id: true,
+          userId: true,
+          slug: true,
+          stageName: true,
+          avatarUrl: true,
+          messagingEnabled: true,
+          messagePriceTokens: true,
+          isOnline: true,
+          lastOnlineAt: true,
+          privateRateCentitokens: true,
+          minPrivateMinutes: true,
+          acceptsBookings: true,
+          kycStatus: true,
+        },
       },
-      messages: { orderBy: { createdAt: 'asc' }, include: { attachment: true } },
+      messages: {
+        orderBy: { createdAt: 'asc' },
+        include: {
+          attachment: { include: { files: { orderBy: { sortOrder: 'asc' } } } },
+          deliveredRequest: { select: { id: true } },
+        },
+      },
     },
   });
   if (!conversation) return null;
@@ -229,7 +282,9 @@ async function ConversationView({
   ...conversation
 }: NonNullable<Awaited<ReturnType<typeof getConversation>>> & { viewerId: string }) {
   const iAmCreator = conversation.model.userId === viewerId;
-  const messages = await buildMessageRows(conversation.messages, viewerId);
+  // Rebajas o cupon del creador en su contenido (lo ve el fan con el precio tachado).
+  const contentOffer = iAmCreator ? null : await getContentOffer(conversation.model.id, viewerId);
+  const messages = await buildMessageRows(conversation.messages, viewerId, contentOffer);
 
   // Quien esta al otro lado.
   const card = iAmCreator
@@ -247,12 +302,101 @@ async function ConversationView({
       };
 
   const waitingAccept = conversation.startedByModel && conversation.acceptedAt === null;
-  const [blocked, blockedByMe, wallet] = await Promise.all([
+  const [blocked, blockedByMe, wallet, deals] = await Promise.all([
     isBlockedBetween(viewerId, card.id),
     iBlocked(viewerId, card.id),
     iAmCreator
       ? null
       : prisma.wallet.findUnique({ where: { userId: viewerId }, select: { balance: true } }),
+    // Pedidos y citas de esta pareja: tarjetas dentro del hilo.
+    Promise.all([
+      prisma.contentRequest.findMany({
+        where: { modelId: conversation.model.id, userId: conversation.userId },
+        orderBy: { createdAt: 'asc' },
+        take: 50,
+        select: { id: true, createdAt: true, status: true, description: true, quotedTokens: true, modelNote: true },
+      }),
+      prisma.booking.findMany({
+        where: { modelId: conversation.model.id, userId: conversation.userId },
+        orderBy: { createdAt: 'asc' },
+        take: 50,
+        select: {
+          id: true,
+          createdAt: true,
+          status: true,
+          startsAt: true,
+          durationMinutes: true,
+          totalTokens: true,
+          userNote: true,
+        },
+      }),
+      // Videollamadas directas de esta pareja (una linea cada una).
+      prisma.callSession.findMany({
+        where: {
+          type: 'PRIVATE',
+          bookingId: null,
+          callerId: conversation.userId,
+          calleeId: conversation.model.userId,
+          status: { in: ['ACTIVE', 'ENDED', 'CANCELLED'] },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 30,
+        select: {
+          id: true,
+          createdAt: true,
+          status: true,
+          endReason: true,
+          billedSeconds: true,
+          tokensSpent: true,
+          tokensEarned: true,
+        },
+      }),
+      // Cupones que el creador le envio a este fan.
+      prisma.creatorOffer.findMany({
+        where: { modelId: conversation.model.id, kind: 'COUPON', fanId: conversation.userId },
+        orderBy: { createdAt: 'asc' },
+        take: 20,
+        select: { id: true, createdAt: true, target: true, percentOff: true, endsAt: true, usedAt: true, active: true },
+      }),
+    ]).then(([requests, bookings, calls, coupons]): DealView[] => [
+      ...coupons.map((c) => ({
+        kind: 'coupon' as const,
+        id: c.id,
+        createdAt: c.createdAt.toISOString(),
+        target: c.target ?? ('CONTENT' as const),
+        percentOff: c.percentOff,
+        endsAt: c.endsAt?.toISOString() ?? null,
+        status: c.usedAt
+          ? ('used' as const)
+          : c.active && c.endsAt && c.endsAt > new Date()
+            ? ('live' as const)
+            : ('expired' as const),
+      })),
+      ...calls.map((c) => ({
+        kind: 'call' as const,
+        id: c.id,
+        createdAt: c.createdAt.toISOString(),
+        outcome:
+          c.status === 'ACTIVE'
+            ? ('live' as const)
+            : c.status === 'ENDED'
+              ? ('done' as const)
+              : c.endReason === 'TIMEOUT'
+                ? ('missed' as const)
+                : c.endReason === 'PARTNER_HANGUP'
+                  ? ('declined' as const)
+                  : ('cancelled' as const),
+        seconds: c.billedSeconds,
+        tokens: iAmCreator ? c.tokensEarned : c.tokensSpent,
+      })),
+      ...requests.map((r) => ({ kind: 'request' as const, ...r, createdAt: r.createdAt.toISOString() })),
+      ...bookings.map((b) => ({
+        kind: 'booking' as const,
+        ...b,
+        createdAt: b.createdAt.toISOString(),
+        startsAt: b.startsAt.toISOString(),
+      })),
+    ]),
     // Abrirlo (o que se recargue mientras lo tienes abierto) es leerlo.
     prisma.conversation.update({
       where: { id: conversation.id },
@@ -269,9 +413,50 @@ async function ConversationView({
     canSend = false;
     reason = `Solicitud enviada. Podras seguir escribiendo cuando ${card.name} la acepte.`;
   }
+  // Chat que existe solo por un pedido o una cita: el fan lo abre para escribir.
+  const lockedForFan = !iAmCreator && !conversation.chatUnlocked && !blocked;
+  if (canSend && lockedForFan) {
+    canSend = false;
+    reason = conversation.model.messagingEnabled ? undefined : 'Este perfil no recibe mensajes; aqui ves tus pedidos y reservas.';
+  }
   if (canSend && !iAmCreator && conversation.unlockPriceTokens > 0 && (wallet?.balance ?? 0) <= 0) {
     canSend = false;
     reason = 'Necesitas tokens en tu monedero para seguir escribiendo.';
+  }
+
+  // Videollamada desde el chat (solo el fan llama). Activo si el creador
+  // tiene "Recibo llamadas" y no esta en directo ni en otra llamada.
+  let callButton: React.ReactNode = null;
+  if (!iAmCreator && !blocked && conversation.model.kycStatus === 'APPROVED') {
+    const m = conversation.model;
+    const [subscription, callable, callOffer] = await Promise.all([
+      getActiveSubscription(viewerId, m.id),
+      canCallNow(m),
+      getCallOffer({ id: m.id, userId: m.userId }, viewerId),
+    ]);
+    // Igual que al cobrar: gana el descuento mayor (suscriptor u oferta).
+    const subscriberRate = subscription
+      ? applySubscriberDiscount(m.privateRateCentitokens, subscription.discountPercent)
+      : m.privateRateCentitokens;
+    const rate = callOffer
+      ? Math.min(subscriberRate, applyRateOffer(m.privateRateCentitokens, callOffer.percentOff))
+      : subscriberRate;
+    callButton = (
+      <StartPrivateCallButton
+        variant="icon"
+        slug={m.slug}
+        stageName={m.stageName}
+        isOnline={callable}
+        rateCentitokens={rate}
+        minMinutes={m.minPrivateMinutes}
+        isAuthenticated
+      />
+    );
+  }
+
+  // El creador puede enviarle un cupon a este fan.
+  if (iAmCreator && !blocked) {
+    callButton = <CouponButton fanId={conversation.userId} fanName={card.name} />;
   }
 
   return (
@@ -280,6 +465,7 @@ async function ConversationView({
         name={card.name}
         image={card.image}
         profileHref={card.profileHref}
+        call={callButton}
         safety={
           <SafetyMenu
             targetUserId={card.id}
@@ -307,6 +493,8 @@ async function ConversationView({
         canSend={canSend}
         disabledReason={reason}
         isModel={iAmCreator}
+        deals={deals}
+        unlockChat={lockedForFan ? { priceTokens: conversation.model.messagePriceTokens } : null}
       />
     </div>
   );

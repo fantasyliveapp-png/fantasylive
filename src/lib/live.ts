@@ -108,6 +108,8 @@ export async function createViewerToken(params: {
   name?: string;
   /** Foto para el chat. Va firmada en el token: nadie puede ponerse otra. */
   avatarUrl?: string | null;
+  /** false si la creadora le ha silenciado en este directo. */
+  canChat?: boolean;
 }): Promise<string | null> {
   const { apiKey, apiSecret, configured } = config.media.livekit;
   if (!configured) return null;
@@ -124,7 +126,7 @@ export async function createViewerToken(params: {
     // Clave de seguridad: sin esto un espectador podria publicar su camara.
     canPublish: false,
     canSubscribe: true,
-    canPublishData: true,
+    canPublishData: params.canChat ?? true,
   });
   return at.toJwt();
 }

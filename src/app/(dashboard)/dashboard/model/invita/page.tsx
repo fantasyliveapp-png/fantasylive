@@ -13,12 +13,12 @@ import {
 import { ReferralLink } from '@/components/model/referral-link';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { requireModel } from '@/lib/auth/guards';
+import { effectiveTerms, FOUNDER_PLATFORM_PERCENT } from '@/lib/deals';
 import { founderLabel, gw } from '@/lib/gender-words';
 import { config } from '@/lib/config';
 import { prisma } from '@/lib/prisma';
 import {
   AMBASSADOR_MONTHS,
-  AMBASSADOR_PERCENT,
   FAN_LINK_MONTHS,
   FAN_LINK_PLATFORM_PERCENT,
   FOUNDER_SPOTS,
@@ -38,6 +38,9 @@ export const dynamic = 'force-dynamic';
  */
 export default async function InvitePage() {
   const { user, profile } = await requireModel();
+  // Si tiene trato, sus % negociados; si no, los estandar.
+  const terms = effectiveTerms(profile);
+  const ambassadorPercent = terms.ambassadorPercent;
   const base = config.app.url.replace(/\/$/, '');
   const fanLink = `${base}/r/${profile.slug}`;
   const creatorLink = `${base}/r/${profile.slug}/creador`;
@@ -66,8 +69,8 @@ export default async function InvitePage() {
   const earnedCents = tokensToNetPayoutCents(earned._sum.tokens ?? 0);
   const isFounder = profile.founderNumber != null;
   const spotsLeft = Math.max(0, FOUNDER_SPOTS - foundersTaken);
-  const normalShare = 100 - config.economy.platformCommissionPercent;
-  const fanShare = 100 - FAN_LINK_PLATFORM_PERCENT;
+  const normalShare = 100 - terms.platformPercent;
+  const fanShare = 100 - Math.min(FAN_LINK_PLATFORM_PERCENT, terms.platformPercent);
 
   return (
     <div className="space-y-5">
@@ -101,8 +104,10 @@ export default async function InvitePage() {
                 </p>
                 <p className="text-sm text-muted-foreground">
                   Eres {gw(profile.gender, { f: 'de las', m: 'de los', pl: 'de los' })} {FOUNDER_SPOTS}{' '}
-                  {gw(profile.gender, { f: 'primeras', m: 'primeros', pl: 'primeros' })}: tu {AMBASSADOR_PERCENT}% por cada creador
-                  que invites es <strong className="text-foreground">para siempre</strong>.
+                  {gw(profile.gender, { f: 'primeras', m: 'primeros', pl: 'primeros' })}: ganas el{' '}
+                  <strong className="text-foreground">{100 - FOUNDER_PLATFORM_PERCENT}% de tus ventas</strong> y tu{' '}
+                  {ambassadorPercent}% por cada creador que invites es{' '}
+                  <strong className="text-foreground">para siempre</strong>.
                 </p>
               </>
             ) : (
@@ -110,8 +115,8 @@ export default async function InvitePage() {
                 <p className="font-heading text-xl uppercase tracking-wide">Programa Fundadores</p>
                 <p className="text-sm text-muted-foreground">
                   {spotsLeft > 0
-                    ? `Los ${FOUNDER_SPOTS} primeros creadores verificados cobran su ${AMBASSADOR_PERCENT}% para siempre. Quedan ${spotsLeft} plazas.`
-                    : `Las ${FOUNDER_SPOTS} plazas de Fundador ya estan cogidas. Tu ${AMBASSADOR_PERCENT}% dura ${AMBASSADOR_MONTHS} meses por cada creador que invites.`}
+                    ? `Los ${FOUNDER_SPOTS} primeros creadores verificados ganan el ${100 - FOUNDER_PLATFORM_PERCENT}% de sus ventas y cobran su ${ambassadorPercent}% por invitar para siempre. Quedan ${spotsLeft} plazas.`
+                    : `Las ${FOUNDER_SPOTS} plazas de Fundador ya estan cogidas. Tu ${ambassadorPercent}% dura ${AMBASSADOR_MONTHS} meses por cada creador que invites.`}
                 </p>
               </>
             )}
@@ -154,7 +159,7 @@ export default async function InvitePage() {
             <h2 className="font-semibold">Invita a otros creadores</h2>
             <p className="text-sm text-muted-foreground">
               Cuando un creador que invites venda, ganas el{' '}
-              <strong className="text-foreground">{AMBASSADOR_PERCENT}% de cada venta suya</strong>{' '}
+              <strong className="text-foreground">{ambassadorPercent}% de cada venta suya</strong>{' '}
               {isFounder ? 'para siempre' : `durante ${AMBASSADOR_MONTHS} meses`}. Sale de nuestra
               comision: a esa persona no le quitamos nada.
             </p>

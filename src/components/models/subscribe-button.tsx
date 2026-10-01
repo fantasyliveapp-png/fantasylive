@@ -28,6 +28,7 @@ export function SubscribeButton({
   initialSubscribed,
   isAuthenticated,
   className,
+  label,
 }: {
   modelId: string;
   slug: string;
@@ -35,6 +36,8 @@ export function SubscribeButton({
   initialSubscribed: boolean;
   isAuthenticated: boolean;
   className?: string;
+  /** Texto del boton (por defecto "Suscribirme · X/mes"). */
+  label?: string;
 }) {
   const router = useRouter();
   const joinPrompt = useJoinPrompt();
@@ -94,7 +97,7 @@ export function SubscribeButton({
         ) : (
           <Crown className="h-4 w-4" />
         )}
-        {subscribed ? 'Suscriptor' : `Suscribirme · ${priceTokens}/mes`}
+        {subscribed ? 'Suscriptor' : (label ?? `Suscribirme · ${priceTokens}/mes`)}
       </Button>
 
       <Dialog open={confirming} onOpenChange={setConfirming}>

@@ -10,8 +10,18 @@ import {
   VideoPresets,
   createLocalTracks,
   type LocalTrack,
+  type LocalAudioTrack,
+  type LocalVideoTrack,
   type RemoteParticipant,
 } from 'livekit-client';
+
+import {
+  EMPTY_LIVE_STATE,
+  hasBlockedWord,
+  type LivePaywall,
+  type LivePollState,
+  type LiveRoomState,
+} from '@/lib/live-state';
 
 /**
  * SALA DE UN DIRECTO
@@ -40,8 +50,17 @@ export type LiveStatus =
 
 export interface LiveChatMessage {
   id: string;
-  /** chat: lo escribe alguien de la sala. gift: lo anuncia el servidor. */
-  kind: 'chat' | 'gift';
+  /**
+   * chat: lo escribe alguien de la sala. gift / ticket: lo anuncia el
+   * servidor (regalo cobrado, entrada comprada). system: aviso para ti.
+   */
+  kind: 'chat' | 'gift' | 'ticket' | 'system' | 'pack';
+  /** Quien lo escribio (id de usuario): la creadora puede moderarle. */
+  identity?: string;
+  /** Regalo pedido desde el menu de propinas ("Baile"). */
+  request?: string;
+  /** Mensaje al que responde (quien lo escribio y un trozo del texto). */
+  replyTo?: LiveReplyTo;
   from: string;
   body: string;
   at: number;
@@ -68,6 +87,16 @@ interface UseLiveRoomOptions {
   onVideoStarted?: () => void;
   /** Meta de tokens al entrar; luego llega por la sala. */
   initialGoal?: LiveGoal | null;
+  /** Estado del directo al entrar (titulo, fijado, pausa...). */
+  initialState?: LiveRoomState | null;
+  initialPoll?: LivePollState | null;
+  initialMyVote?: number | null;
+  /** La creadora le habia silenciado antes de entrar. */
+  initialMuted?: boolean;
+  /** La creadora ha cambiado el acceso y ya no puede verlo. */
+  onAccessLost?: (paywall: LivePaywall) => void;
+  /** La creadora le ha sacado del directo. */
+  onKicked?: () => void;
 }
 
 const MAX_CHAT_MESSAGES = 200;
@@ -75,6 +104,11 @@ const MAX_HEARTS = 24;
 const HEART_LIFETIME_MS = 2_400;
 /** Como mucho un "me gusta" por la red cada tanto, por mucho que se pulse. */
 const LIKE_SEND_INTERVAL_MS = 300;
+
+export interface LiveReplyTo {
+  from: string;
+  body: string;
+}
 
 export interface LiveGoal {
   label: string;
@@ -110,6 +144,12 @@ export function useLiveRoom({
   hostIdentity,
   onVideoStarted,
   initialGoal = null,
+  initialState = null,
+  initialPoll = null,
+  initialMyVote = null,
+  initialMuted = false,
+  onAccessLost,
+  onKicked,
 }: UseLiveRoomOptions) {
   const [status, setStatus] = useState<LiveStatus>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -121,7 +161,20 @@ export function useLiveRoom({
   const [hearts, setHearts] = useState<LiveHeart[]>([]);
   const [likeCount, setLikeCount] = useState(0);
   const [goal, setGoal] = useState<LiveGoal | null>(initialGoal);
+  const [liveState, setLiveState] = useState<LiveRoomState>(initialState ?? EMPTY_LIVE_STATE);
+  const [poll, setPoll] = useState<LivePollState | null>(initialPoll);
+  const [myVote, setMyVote] = useState<number | null>(initialMyVote);
+  const [muted, setMuted] = useState(initialMuted);
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
+  const [noiseSuppression, setNoiseSuppressionState] = useState(true);
   const lastLikeSentRef = useRef(0);
+  // El filtro se lee desde el manejador de la sala sin reconectarla.
+  const blockedWordsRef = useRef<string[]>(liveState.blockedWords);
+  blockedWordsRef.current = liveState.blockedWords;
+  const onAccessLostRef = useRef(onAccessLost);
+  onAccessLostRef.current = onAccessLost;
+  const onKickedRef = useRef(onKicked);
+  onKickedRef.current = onKicked;
 
   const roomRef = useRef<Room | null>(null);
   const localTracksRef = useRef<LocalTrack[]>([]);
@@ -264,6 +317,80 @@ export function useLiveRoom({
               return;
             }
 
+            // Estado, encuestas y sanciones: solo valen si vienen del servidor.
+            if (parsed.type === 'state') {
+              if (participant) return;
+              const patch = (parsed as { patch?: Partial<LiveRoomState> }).patch ?? {};
+              setLiveState((prev) => ({ ...prev, ...patch }));
+              return;
+            }
+            if (parsed.type === 'poll') {
+              if (participant) return;
+              const next = (parsed as { poll?: LivePollState | null }).poll ?? null;
+              setPoll((prev) => {
+                if (!next || prev?.id !== next.id) setMyVote(null);
+                return next;
+              });
+              return;
+            }
+            if (parsed.type === 'sanction') {
+              if (participant) return;
+              const kind = (parsed as { kind?: string }).kind;
+              if (kind === 'MUTE' || kind === 'UNMUTE') {
+                setMuted(kind === 'MUTE');
+                pushMessage({
+                  id: `${Date.now()}-sys`,
+                  kind: 'system',
+                  from: '',
+                  body:
+                    kind === 'MUTE'
+                      ? 'Te han silenciado en este directo.'
+                      : 'Ya puedes volver a escribir.',
+                  at: Date.now(),
+                  isMine: false,
+                  isHost: false,
+                });
+              }
+              if (kind === 'KICK') onKickedRef.current?.();
+              return;
+            }
+            if (parsed.type === 'access_lost') {
+              if (participant) return;
+              const paywall = (parsed as { paywall?: LivePaywall }).paywall;
+              if (paywall) onAccessLostRef.current?.(paywall);
+              return;
+            }
+            if (parsed.type === 'pack') {
+              if (participant) return;
+              pushMessage({
+                id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                kind: 'pack',
+                from: parsed.from || 'Alguien',
+                body: typeof (parsed as { label?: unknown }).label === 'string' ? (parsed as { label: string }).label : '',
+                at: Date.now(),
+                isMine: false,
+                isHost: false,
+                tokens: typeof parsed.tokens === 'number' ? parsed.tokens : undefined,
+                avatar: typeof parsed.avatar === 'string' ? parsed.avatar : null,
+              });
+              return;
+            }
+            if (parsed.type === 'ticket') {
+              if (participant) return;
+              pushMessage({
+                id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                kind: 'ticket',
+                from: parsed.from || 'Alguien',
+                body: '',
+                at: Date.now(),
+                isMine: false,
+                isHost: false,
+                tokens: typeof parsed.tokens === 'number' ? parsed.tokens : undefined,
+                avatar: typeof parsed.avatar === 'string' ? parsed.avatar : null,
+              });
+              return;
+            }
+
             if (parsed.type === 'like') {
               addHeart();
               return;
@@ -292,14 +419,28 @@ export function useLiveRoom({
                 tokens,
                 emoji,
                 avatar: typeof parsed.avatar === 'string' ? parsed.avatar : null,
+                request:
+                  typeof (parsed as { request?: unknown }).request === 'string'
+                    ? (parsed as { request: string }).request
+                    : undefined,
               });
               return;
             }
 
             if (parsed.type !== 'chat' || !parsed.body) return;
+            // Filtro de palabras de la creadora: se aplica en cada pantalla
+            // que recibe, asi que nadie ve el mensaje aunque el emisor lo
+            // mande saltandose el filtro de su navegador.
+            if (hasBlockedWord(parsed.body, blockedWordsRef.current)) return;
+            const reply = (parsed as { replyTo?: { from?: unknown; body?: unknown } }).replyTo;
             pushMessage({
               id,
               kind: 'chat',
+              replyTo:
+                reply && typeof reply.from === 'string' && typeof reply.body === 'string'
+                  ? { from: reply.from.slice(0, 60), body: reply.body.slice(0, 80) }
+                  : undefined,
+              identity: participant?.identity,
               from: participant?.name || parsed.from || 'Invitado',
               body: parsed.body,
               at: Date.now(),
@@ -380,13 +521,27 @@ export function useLiveRoom({
    * Envia un mensaje al chat de la sala. Devuelve false si no se pudo enviar,
    * para que quien llama conserve el texto en vez de perderlo en silencio.
    */
+  /** Por que no se puede mandar este texto (o null si se puede). */
+  const chatBlockReason = useCallback(
+    (body: string): string | null => {
+      if (muted) return 'Estas silenciado en este directo.';
+      if (hasBlockedWord(body, liveState.blockedWords)) {
+        return 'Tu mensaje contiene una palabra que no está permitida en este directo.';
+      }
+      return null;
+    },
+    [muted, liveState.blockedWords],
+  );
+
   const sendChat = useCallback(
-    async (body: string): Promise<boolean> => {
+    async (body: string, replyTo?: LiveReplyTo): Promise<boolean> => {
       const text = body.trim();
       if (!text || !roomRef.current) return false;
+      if (chatBlockReason(text)) return false;
+      const reply = replyTo ? { from: replyTo.from.slice(0, 60), body: replyTo.body.slice(0, 80) } : undefined;
 
       const payload = new TextEncoder().encode(
-        JSON.stringify({ type: 'chat', body: text, from: displayName }),
+        JSON.stringify({ type: 'chat', body: text, from: displayName, ...(reply ? { replyTo: reply } : {}) }),
       );
       try {
         // reliable: perder un mensaje justo cuando alguien pregunta algo se
@@ -403,6 +558,7 @@ export function useLiveRoom({
         kind: 'chat',
         from: displayName,
         body: text,
+        replyTo: reply,
         at: Date.now(),
         isMine: true,
         isHost:
@@ -412,7 +568,7 @@ export function useLiveRoom({
       });
       return true;
     },
-    [displayName, pushMessage],
+    [chatBlockReason, displayName, pushMessage],
   );
 
   /** Corazon: se ve al instante y se reparte a la sala sin saturarla. */
@@ -449,6 +605,52 @@ export function useLiveRoom({
     if (track) await (next ? track.unmute() : track.mute());
   }, [isCameraEnabled]);
 
+  /** Camara frontal <-> trasera sin cortar la emision. */
+  const flipCamera = useCallback(async () => {
+    const track = localTracksRef.current.find((t) => t.kind === Track.Kind.Video) as
+      | LocalVideoTrack
+      | undefined;
+    if (!track) return;
+    const next = facingMode === 'user' ? 'environment' : 'user';
+    await track.restartTrack({
+      facingMode: next,
+      resolution: window.matchMedia('(orientation: portrait)').matches
+        ? { width: 720, height: 1280, frameRate: 30 }
+        : VideoPresets.h720.resolution,
+    });
+    if (!isCameraEnabled) await track.mute();
+    setFacingMode(next);
+  }, [facingMode, isCameraEnabled]);
+
+  /** Filtro de ruido de fondo del microfono (el del navegador). */
+  const setNoiseSuppression = useCallback(
+    async (on: boolean) => {
+      const track = localTracksRef.current.find((t) => t.kind === Track.Kind.Audio) as
+        | LocalAudioTrack
+        | undefined;
+      if (!track) return;
+      await track.restartTrack({ noiseSuppression: on, echoCancellation: true, autoGainControl: true });
+      if (!isMicEnabled) await track.mute();
+      setNoiseSuppressionState(on);
+    },
+    [isMicEnabled],
+  );
+
+  /**
+   * Pausa: se deja de enviar imagen y sonido sin salir de la sala, asi nadie
+   * se va. Al volver se respeta si el micro o la camara estaban apagados.
+   */
+  const setMediaPaused = useCallback(
+    async (paused: boolean) => {
+      for (const track of localTracksRef.current) {
+        const enabled = track.kind === Track.Kind.Audio ? isMicEnabled : isCameraEnabled;
+        if (paused || !enabled) await track.mute();
+        else await track.unmute();
+      }
+    },
+    [isCameraEnabled, isMicEnabled],
+  );
+
   const disconnect = useCallback(() => {
     cleanup();
     setStatus('ended');
@@ -470,6 +672,20 @@ export function useLiveRoom({
     likeCount,
     goal,
     setGoal,
+    liveState,
+    setLiveState,
+    poll,
+    setPoll,
+    myVote,
+    setMyVote,
+    muted,
+    setMuted,
+    facingMode,
+    noiseSuppression,
+    chatBlockReason,
+    flipCamera,
+    setNoiseSuppression,
+    setMediaPaused,
     participantCount,
     isMicEnabled,
     isCameraEnabled,

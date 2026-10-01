@@ -18,7 +18,7 @@ const providers = [
     name: 'credentials',
     credentials: {
       email: { label: 'Email', type: 'email' },
-      password: { label: 'Contrasena', type: 'password' },
+      password: { label: 'Contraseña', type: 'password' },
     },
     async authorize(raw) {
       const parsed = credentialsSchema.safeParse(raw);

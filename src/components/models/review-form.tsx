@@ -34,10 +34,10 @@ export function ReviewForm({
     startTransition(async () => {
       const result = await upsertReviewAction({ modelId, slug, rating, comment });
       if (result.ok) {
-        toast.success(result.message ?? 'Resena guardada');
+        toast.success(result.message ?? 'Reseña guardada');
         router.refresh();
       } else {
-        toast.error(result.error ?? 'No se pudo guardar la resena');
+        toast.error(result.error ?? 'No se pudo guardar la reseña');
       }
     });
   }
@@ -45,7 +45,7 @@ export function ReviewForm({
   return (
     <div className="rounded-lg border border-border p-4">
       <p className="text-sm font-medium">
-        {initialRating ? 'Editar mi resena' : 'Dejar una resena'}
+        {initialRating ? 'Editar mi reseña' : 'Dejar una reseña'}
       </p>
 
       <div className="mt-2 flex gap-1">
@@ -87,7 +87,7 @@ export function ReviewForm({
         disabled={isPending}
       >
         {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-        {initialRating ? 'Actualizar resena' : 'Publicar resena'}
+        {initialRating ? 'Actualizar reseña' : 'Publicar reseña'}
       </Button>
     </div>
   );

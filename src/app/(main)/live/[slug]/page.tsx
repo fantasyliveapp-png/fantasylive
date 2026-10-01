@@ -11,7 +11,9 @@ import { getViewerCountry, getVisibilityContext, isCountryBlocked } from '@/lib/
 import { getI18n } from '@/lib/i18n/server';
 import { rankLiveStreams } from '@/lib/live-rank';
 import { prisma } from '@/lib/prisma';
+import { applySubscriberDiscount, getActiveSubscription } from '@/lib/subscriptions';
 import { getWalletSummary } from '@/lib/tokens';
+import { getActiveTokenPromo } from '@/lib/token-promos';
 import { initials } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -48,6 +50,15 @@ export default async function LiveStreamPage({
       isOnline: true,
       gender: true,
       blockedCountries: true,
+      coverUrl: true,
+      headline: true,
+      bio: true,
+      country: true,
+      followersCount: true,
+      messagingEnabled: true,
+      messagePriceTokens: true,
+      privateRateCentitokens: true,
+      minPrivateMinutes: true,
       streams: {
         where: { status: { in: ['PREPARING', 'LIVE'] } },
         orderBy: { createdAt: 'desc' },
@@ -130,7 +141,7 @@ export default async function LiveStreamPage({
     );
   }
 
-  const [wallet, follow, ranked] = await Promise.all([
+  const [wallet, follow, ranked, conversation, subscription, promo] = await Promise.all([
     getWalletSummary(viewer.id),
     prisma.follow.findUnique({
       where: { userId_modelId: { userId: viewer.id, modelId: model.id } },
@@ -142,7 +153,18 @@ export default async function LiveStreamPage({
       geoFilter: (await getVisibilityContext()).filter,
       take: 50,
     }),
+    prisma.conversation.findUnique({
+      where: { userId_modelId: { userId: viewer.id, modelId: model.id } },
+      select: { id: true },
+    }),
+    getActiveSubscription(viewer.id, model.id),
+    getActiveTokenPromo(),
   ]);
+  const isOwn = viewer.id === model.userId;
+  // Misma tarifa que en su perfil: con descuento si esta suscrito.
+  const privateRate = subscription
+    ? applySubscriberDiscount(model.privateRateCentitokens, subscription.discountPercent)
+    : model.privateRateCentitokens;
 
   return (
     <div className="container max-w-6xl py-6">
@@ -170,6 +192,19 @@ export default async function LiveStreamPage({
           isOnline: model.isOnline,
           gender: model.gender,
         }}
+        creator={{
+          coverUrl: model.coverUrl,
+          headline: model.headline,
+          bio: model.bio,
+          followersCount: model.followersCount,
+          country: model.country,
+          messaging:
+            model.messagingEnabled && !isOwn
+              ? { priceTokens: model.messagePriceTokens, hasConversation: Boolean(conversation) }
+              : null,
+          call: isOwn ? null : { rateCentitokens: privateRate, minMinutes: model.minPrivateMinutes },
+        }}
+        promo={promo}
         balance={wallet.balance}
         viewerName={viewer.name ?? 'Invitado'}
         initialViewerCount={stream.viewerCount}

@@ -2,7 +2,7 @@ import type { Dictionary } from '@/lib/i18n/dictionaries/es';
 
 /**
  * English UI copy. El tipo `Dictionary` viene del diccionario espanol, que es
- * la referencia: si alguien anade una clave alli y no la traduce aqui, el
+ * la referencia: si alguien añade una clave alli y no la traduce aqui, el
  * typecheck falla en vez de dejar un hueco que aparece como texto en blanco.
  */
 export const en: Dictionary = {

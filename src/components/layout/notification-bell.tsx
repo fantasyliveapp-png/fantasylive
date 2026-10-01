@@ -82,6 +82,8 @@ export function NotificationBell({ label }: { label?: string } = {}) {
       const data = await res.json();
       setNotifications(data.notifications ?? []);
       setUnreadCount(data.unreadCount ?? 0);
+    } catch {
+      // Sin conexion o servidor reiniciando: se reintenta en el siguiente ciclo.
     } finally {
       setLoaded(true);
     }

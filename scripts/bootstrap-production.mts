@@ -21,10 +21,10 @@ const prisma = new PrismaClient();
 
 const TOKEN_PACKAGES = [
   { sku: 'starter-100', name: 'Starter', tokens: 100, bonus: 0, cents: 999, popular: false, desc: 'Ideal para probar la plataforma' },
-  { sku: 'basic-300', name: 'Basic', tokens: 300, bonus: 25, cents: 2799, popular: false, desc: '25 tokens de regalo' },
-  { sku: 'popular-750', name: 'Popular', tokens: 750, bonus: 100, cents: 5999, popular: true, desc: 'El mas elegido: 100 tokens extra' },
-  { sku: 'premium-1600', name: 'Premium', tokens: 1600, bonus: 300, cents: 11999, popular: false, desc: '300 tokens extra + acceso anticipado' },
-  { sku: 'whale-4000', name: 'Elite', tokens: 4000, bonus: 1000, cents: 27999, popular: false, desc: '1000 tokens extra + soporte prioritario' },
+  { sku: 'basic-300', name: 'Basic', tokens: 300, bonus: 15, cents: 2999, popular: false, desc: '15 tokens de regalo' },
+  { sku: 'popular-750', name: 'Popular', tokens: 750, bonus: 50, cents: 6999, popular: true, desc: 'El mas elegido: 50 tokens extra' },
+  { sku: 'premium-1600', name: 'Premium', tokens: 1600, bonus: 150, cents: 14999, popular: false, desc: '150 tokens extra + acceso anticipado' },
+  { sku: 'whale-4000', name: 'Elite', tokens: 4000, bonus: 400, cents: 34999, popular: false, desc: '400 tokens extra + soporte prioritario' },
 ];
 
 function requireEnv(name: string): string {

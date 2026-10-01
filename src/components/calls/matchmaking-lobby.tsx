@@ -203,7 +203,7 @@ export function MatchmakingLobby({
           </h1>
           <p className={`mt-2 text-sm ${isVip ? 'text-white/80' : 'text-muted-foreground'}`}>
             {isVip
-              ? 'Conexion aleatoria exclusivamente con modelos VIP verificados y en linea. Pagas por minuto.'
+              ? 'Conexion aleatoria exclusivamente con creadores VIP verificados y disponibles. Pagas por minuto.'
               : 'Conecta con gente nueva al azar. Gratis, sin limite de tiempo.'}
           </p>
         </div>
@@ -219,7 +219,7 @@ export function MatchmakingLobby({
             <StatBox
               icon={Radar}
               value={isVip ? stats.vipModels : stats.onlineModels}
-              label={isVip ? 'Modelos VIP' : 'En linea'}
+              label={isVip ? 'Creadores VIP' : 'En linea'}
             />
             <StatBox
               icon={Coins}
@@ -320,7 +320,7 @@ export function MatchmakingLobby({
               onClick={startSearching}
             >
               {isVip ? <Crown className="h-5 w-5" /> : <Shuffle className="h-5 w-5" />}
-              {isVip ? 'Buscar modelo VIP' : 'Empezar a buscar'}
+              {isVip ? 'Buscar creador VIP' : 'Empezar a buscar'}
             </Button>
           )}
 

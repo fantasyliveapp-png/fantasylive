@@ -38,6 +38,16 @@ export function formatDate(date: Date | string): string {
   return new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(d);
 }
 
+/**
+ * Fecha guardada como "ese dia" en UTC (p. ej. el fin de un trato) o un
+ * "YYYY-MM-DD": se enseña en UTC para que no salga el dia anterior.
+ */
+export function formatUtcDate(date: Date | string): string {
+  const d =
+    typeof date === 'string' ? new Date(date.length === 10 ? `${date}T12:00:00Z` : date) : date;
+  return new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium', timeZone: 'UTC' }).format(d);
+}
+
 export function relativeTime(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date;
   const diff = Date.now() - d.getTime();

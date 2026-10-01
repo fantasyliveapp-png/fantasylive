@@ -8,6 +8,7 @@ import { prisma } from '@/lib/prisma';
 import { checkNoContactInfo } from '@/lib/content-filter';
 import { GEO_BLOCKED_MESSAGE, isBlockedForViewer } from '@/lib/geo';
 import { avatarOf } from '@/lib/live';
+import { parseTipMenu } from '@/lib/live-state';
 import { sendRoomData } from '@/lib/livekit';
 import { createNotification } from '@/lib/notifications';
 import { startTokenPurchase } from '@/lib/payments';
@@ -54,96 +55,6 @@ export async function purchaseTokensAction(
   }
 }
 
-/** Desbloquea un paquete de contenido pagando con tokens. */
-export async function unlockContentAction(
-  packageId: string,
-): Promise<WalletActionResult> {
-  try {
-    const user = await getAuthedUserOrThrow();
-
-    const pkg = await prisma.contentPackage.findUnique({
-      where: { id: packageId },
-      include: {
-        model: {
-          select: {
-            id: true,
-            userId: true,
-            stageName: true,
-            slug: true,
-            blockedCountries: true,
-          },
-        },
-      },
-    });
-
-    if (!pkg || !pkg.isPublished) {
-      return { ok: false, error: 'Este contenido no esta disponible.' };
-    }
-    if (pkg.model.userId === user.id) {
-      return { ok: false, error: 'Este contenido ya es tuyo.' };
-    }
-    if (await isBlockedForViewer(pkg.model.blockedCountries)) {
-      return { ok: false, error: GEO_BLOCKED_MESSAGE };
-    }
-
-    const already = await prisma.contentUnlock.findUnique({
-      where: { userId_packageId: { userId: user.id, packageId } },
-    });
-    if (already) {
-      return { ok: true, message: 'Ya tenias este contenido desbloqueado.' };
-    }
-
-    if (pkg.priceTokens === 0 || pkg.isPublic) {
-      await prisma.contentUnlock.create({
-        data: { userId: user.id, packageId, tokensSpent: 0 },
-      });
-      revalidatePath(`/models/${pkg.model.slug}`);
-      return { ok: true, message: 'Contenido desbloqueado.' };
-    }
-
-    const balance = await prisma.$transaction(async (tx) => {
-      const { debit } = await transferWithCommission(tx, {
-        fromUserId: user.id,
-        toUserId: pkg.model.userId,
-        tokens: pkg.priceTokens,
-        debitType: 'CONTENT_UNLOCK',
-        creditType: 'CONTENT_EARNING',
-        description: `Contenido: ${pkg.title}`,
-        contentPackageId: pkg.id,
-      });
-
-      await tx.contentUnlock.create({
-        data: {
-          userId: user.id,
-          packageId,
-          tokensSpent: pkg.priceTokens,
-        },
-      });
-
-      await tx.contentPackage.update({
-        where: { id: packageId },
-        data: {
-          purchaseCount: { increment: 1 },
-          tokensEarned: { increment: pkg.priceTokens },
-        },
-      });
-
-      return debit.balanceAfter;
-    });
-
-    revalidatePath(`/models/${pkg.model.slug}`);
-    revalidatePath('/wallet');
-
-    return {
-      ok: true,
-      balance,
-      message: `Contenido desbloqueado por ${pkg.priceTokens} tokens.`,
-    };
-  } catch (error) {
-    return { ok: false, error: toMessage(error) };
-  }
-}
-
 const giftSchema = z.object({
   receiverId: z.string().min(1),
   tokens: z.number().int().min(1).max(100000),
@@ -168,6 +79,43 @@ export async function sendGiftAction(input: {
   emoji?: string;
   message?: string;
 }): Promise<WalletActionResult> {
+  return giftCore(input);
+}
+
+/**
+ * Pedir una accion del menu de propinas en un directo ("200 tokens -> baile").
+ * El precio y el texto salen del menu guardado de la creadora, nunca de lo
+ * que mande el navegador.
+ */
+export async function buyTipMenuItemAction(
+  streamId: string,
+  itemId: string,
+): Promise<WalletActionResult> {
+  const stream = await prisma.liveStream.findUnique({
+    where: { id: streamId },
+    select: { status: true, model: { select: { userId: true, liveTipMenu: true } } },
+  });
+  if (!stream || stream.status === 'ENDED') return { ok: false, error: 'Este directo ha terminado.' };
+  const item = parseTipMenu(stream.model.liveTipMenu).find((i) => i.id === itemId);
+  if (!item) return { ok: false, error: 'Esa accion ya no esta en el menu.' };
+  return giftCore(
+    { receiverId: stream.model.userId, tokens: item.tokens, streamId, emoji: '⭐', message: item.label },
+    { request: item.label },
+  );
+}
+
+/** Cobra y anuncia un regalo. `request`: accion del menu de propinas. */
+async function giftCore(
+  input: {
+    receiverId: string;
+    tokens: number;
+    sessionId?: string;
+    streamId?: string;
+    emoji?: string;
+    message?: string;
+  },
+  extras: { request?: string } = {},
+): Promise<WalletActionResult> {
   try {
     const user = await getAuthedUserOrThrow();
     const parsed = giftSchema.safeParse(input);
@@ -298,6 +246,7 @@ export async function sendGiftAction(input: {
         avatar: senderAvatar,
         tokens,
         emoji: emoji ?? '🎁',
+        ...(extras.request ? { request: extras.request } : {}),
       });
       if (liveGoal) await sendRoomData(liveRoomName, { type: 'goal', goal: liveGoal });
     }

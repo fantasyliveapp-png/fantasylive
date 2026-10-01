@@ -339,7 +339,7 @@ export function RegisterForm({
             </p>
           </div>
 
-          {/* Contrasena */}
+          {/* Contraseña */}
           <div className="space-y-1.5">
             <Label htmlFor="password">Contraseña</Label>
             <div className="relative">

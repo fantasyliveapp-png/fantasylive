@@ -24,6 +24,9 @@ import { formatTokens } from '@/lib/utils';
  * cuadricula de 3 columnas y, al tocar una, se abre la pantalla
  * "Publicaciones" con todas en scroll (como el feed), empezando por la
  * elegida. La flecha atras (o el gesto atras del movil) vuelve a la cuadricula.
+ *
+ * La cuadricula es solo de fotos y videos: los textos y las encuestas se ven
+ * en el scroll, entre las demas publicaciones, en su orden.
  */
 export function ProfilePostGrid({
   posts,
@@ -77,6 +80,28 @@ export function ProfilePostGrid({
     );
   }
 
+  const media = posts.filter((p) => p.assets.length > 0);
+
+  // Solo textos o encuestas (sin ninguna foto ni video): no hay cuadricula
+  // que mostrar, asi que se ven directamente en lista.
+  if (media.length === 0) {
+    return (
+      <div className="space-y-5">
+        {isOwner && (
+          <Link href="/dashboard/model/posts?nuevo=1" className="block">
+            <Button variant="outline" className="w-full">
+              <Plus className="h-4 w-4" />
+              Nueva publicacion
+            </Button>
+          </Link>
+        )}
+        {posts.map((post) => (
+          <PostCard key={post.id} post={post} isAuthenticated={isAuthenticated} />
+        ))}
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="grid grid-cols-3 gap-0.5 overflow-hidden rounded-xl sm:gap-1">
@@ -91,7 +116,7 @@ export function ProfilePostGrid({
             <span className="text-[11px] font-medium">Nueva</span>
           </Link>
         )}
-        {posts.map((post) => (
+        {media.map((post) => (
           <PostTile key={post.id} post={post} onOpen={() => setOpenId(post.id)} />
         ))}
       </div>
@@ -214,12 +239,7 @@ function PostTile({ post, onOpen }: { post: FeedPost; onOpen: () => void }) {
       aria-label="Ver publicacion"
     >
       {!first ? (
-        // Solo texto: el propio texto es la miniatura.
-        <span className="flex h-full w-full items-center bg-gradient-to-br from-primary/30 via-card to-champagne-gold/20 p-3 text-left">
-          <span className="line-clamp-5 text-[11px] leading-snug sm:text-xs">
-            {post.body ?? post.poll?.question}
-          </span>
-        </span>
+        <span className="block h-full w-full bg-gradient-to-br from-primary/30 via-card to-champagne-gold/20" />
       ) : locked ? (
         first.previewUrl ? (
           /* eslint-disable-next-line @next/next/no-img-element */
@@ -268,7 +288,10 @@ function PostTile({ post, onOpen }: { post: FeedPost; onOpen: () => void }) {
             )}
           </span>
           {post.visibility === 'LOCKED' && (
-            <span className="rounded-full bg-token px-2 py-0.5 text-[10px] font-bold text-black">
+            <span className="flex items-center gap-1 rounded-full bg-token px-2 py-0.5 text-[10px] font-bold text-black">
+              {post.originalPriceTokens != null && (
+                <span className="font-medium line-through opacity-60">{formatTokens(post.originalPriceTokens)}</span>
+              )}
               {formatTokens(post.priceTokens)}
             </span>
           )}
@@ -302,3 +325,4 @@ function PostTile({ post, onOpen }: { post: FeedPost; onOpen: () => void }) {
     </button>
   );
 }
+

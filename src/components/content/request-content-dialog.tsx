@@ -52,7 +52,9 @@ export function RequestContentDialog({
         toast.success(result.message ?? 'Pedido enviado');
         setOpen(false);
         setDescription('');
-        router.refresh();
+        // El pedido vive en el chat con este creador: alli se sigue todo.
+        if (result.conversationId) router.push(`/mensajes/${result.conversationId}`);
+        else router.refresh();
       } else {
         toast.error(result.error ?? 'No se pudo enviar el pedido');
       }
@@ -71,9 +73,8 @@ export function RequestContentDialog({
           <DialogHeader>
             <DialogTitle>Pedir contenido a medida</DialogTitle>
             <DialogDescription>
-              Describi que te gustaria recibir. La modelo va a revisar tu
-              pedido y ponerle un precio en tokens; solo pagas si aceptas la
-              cotizacion.
+              Describe lo que te gustaria recibir. Le pondra un precio en tokens y
+              solo pagas si lo aceptas. Todo sigue en vuestro chat.
             </DialogDescription>
           </DialogHeader>
 

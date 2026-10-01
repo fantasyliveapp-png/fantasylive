@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { RatesForm } from '@/components/model/rates-form';
 import { requireModel } from '@/lib/auth/guards';
 import { config } from '@/lib/config';
+import { effectiveTerms } from '@/lib/deals';
 
 export const metadata: Metadata = { title: 'Precios y herramientas' };
 export const dynamic = 'force-dynamic';
@@ -15,7 +16,7 @@ export default async function RatesPage() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Precios y herramientas</h1>
         <p className="mt-2 text-muted-foreground">
-          Activa como quieres cobrar (suscripcion, mensajes, citas, sala VIP) y a
+          Activa como quieres cobrar (suscripcion, mensajes, videollamadas reservadas, sala VIP) y a
           que precio. Lo que dejes apagado no aparece en tu perfil ni en tu
           Bandeja.
         </p>
@@ -33,7 +34,7 @@ export default async function RatesPage() {
         messagingEnabled={profile.messagingEnabled}
         messagePriceTokens={profile.messagePriceTokens}
         kycApproved={profile.kycStatus === 'APPROVED'}
-        modelSharePercent={config.economy.modelRevenueSharePercent}
+        modelSharePercent={100 - effectiveTerms(profile).platformPercent}
         payoutCentsPerToken={config.economy.modelPayoutCentsPerToken}
       />
     </div>

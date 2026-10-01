@@ -35,7 +35,7 @@ const DOCS: Record<string, LegalDoc> = {
         body: [
           'Los tokens son creditos digitales prepagados sin valor monetario fuera de la plataforma. No son reembolsables salvo por error tecnico acreditado o resolucion de una disputa a favor del usuario.',
           'Los tokens no caducan mientras la cuenta permanezca activa. El consumo se realiza por minuto en llamadas de pago y por unidad en desbloqueos de contenido y propinas.',
-          'La plataforma retiene una comision sobre cada transaccion, comunicada a los creadores en su panel de ganancias.',
+          'La plataforma retiene una comision sobre cada transaccion. Los creadores ven en su panel, antes de vender, lo que ganan por cada venta.',
         ],
       },
       {

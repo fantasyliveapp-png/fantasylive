@@ -107,6 +107,7 @@ export function LiveStage({
       )}
     >
       <div
+        data-live-stage
         className={cn(
           'relative w-full overflow-hidden bg-black transition-[transform,opacity] ease-in',
           immersive ? 'h-[100dvh]' : 'h-[78dvh] rounded-3xl',

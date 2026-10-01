@@ -6,6 +6,7 @@ import { MatchmakingLobby } from '@/components/calls/matchmaking-lobby';
 import { ModelCard } from '@/components/models/model-card';
 import { Badge } from '@/components/ui/badge';
 import { requireUser } from '@/lib/auth/guards';
+import { reapStalePresence } from '@/lib/call-presence';
 import { getVisibilityContext } from '@/lib/geo';
 import { getQueueStats } from '@/lib/matchmaking';
 import { liveModelIds } from '@/lib/live';
@@ -22,6 +23,8 @@ export default async function VipPage() {
   // Bloqueo geografico: la sala VIP tampoco lista perfiles que bloquean
   // el pais desde el que se navega.
   const { filter: geoFilter } = await getVisibilityContext();
+  // Quien cerro la web sin apagar "Recibo llamadas" no sale como disponible.
+  await reapStalePresence();
 
   const [stats, wallet, cheapest, availableModels] = await Promise.all([
     getQueueStats(),
@@ -95,8 +98,8 @@ export default async function VipPage() {
               Disponibles ahora
             </Badge>
             <p className="text-sm text-muted-foreground">
-              Estas modelos VIP estan en linea. Puedes esperar al azar o entrar
-              directamente en su perfil.
+              Estos creadores VIP reciben llamadas ahora. Puedes esperar al azar o
+              llamar directamente desde su perfil.
             </p>
           </div>
 
@@ -111,11 +114,11 @@ export default async function VipPage() {
       {availableModels.length === 0 && (
         <div className="mt-12 rounded-xl border border-dashed border-border p-10 text-center">
           <Crown className="mx-auto h-8 w-8 text-muted-foreground" />
-          <p className="mt-3 font-medium">No hay modelos VIP en linea</p>
+          <p className="mt-3 font-medium">No hay creadores VIP disponibles ahora</p>
           <p className="mt-1 text-sm text-muted-foreground">
             Puedes quedarte en la cola o{' '}
             <Link href="/models" className="text-primary hover:underline">
-              reservar un privado
+              reservar una videollamada
             </Link>{' '}
             para mas tarde.
           </p>

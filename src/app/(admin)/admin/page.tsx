@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { FOUNDER_PLATFORM_PERCENT } from '@/lib/deals';
 import Link from 'next/link';
 import {
   ArrowDownRight,
@@ -248,8 +249,8 @@ export default async function AdminDashboardPage() {
                 />
               </div>
               <p className="text-xs text-muted-foreground">
-                Quedan {Math.max(0, o.founders.spots - o.founders.taken)} plazas con el 5% para
-                siempre.
+                Quedan {Math.max(0, o.founders.spots - o.founders.taken)} plazas: ganan el{' '}
+                {100 - FOUNDER_PLATFORM_PERCENT}% de sus ventas y el 5% por invitar para siempre.
               </p>
             </div>
           </Panel>

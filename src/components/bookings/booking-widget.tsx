@@ -33,7 +33,7 @@ interface BookingWidgetProps {
 
 const DAY_LABELS = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'];
 
-/** Genera los proximos 14 dias a partir de manana. */
+/** Genera los proximos 14 dias a partir de mañana. */
 function nextDays(count: number) {
   const days: Date[] = [];
   for (let i = 1; i <= count; i++) {
@@ -98,7 +98,7 @@ export function BookingWidget({
 
   function submit() {
     if (!isAuthenticated) {
-      joinPrompt('para reservar una cita');
+      joinPrompt('para reservar una videollamada');
       return;
     }
     if (!selectedDay || selectedTime === null) {
@@ -119,7 +119,8 @@ export function BookingWidget({
 
       if (result.ok) {
         toast.success(result.message ?? 'Reserva creada');
-        router.push('/bookings');
+        // La cita vive en el chat con este creador.
+        router.push(result.conversationId ? `/mensajes/${result.conversationId}` : '/bookings');
       } else {
         toast.error(result.error ?? 'No se pudo crear la reserva');
       }
@@ -131,7 +132,7 @@ export function BookingWidget({
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <CalendarDays className="h-4 w-4 text-primary" />
-          Reservar privado
+          Reservar videollamada
         </CardTitle>
       </CardHeader>
 
@@ -264,7 +265,7 @@ export function BookingWidget({
             </Badge>
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
-            Los tokens se retienen ahora y se liberan a la modelo al finalizar la
+            Los tokens se retienen ahora y se liberan al creador al finalizar la
             sesion. Cancelacion gratuita hasta 2 h antes.
           </p>
         </div>

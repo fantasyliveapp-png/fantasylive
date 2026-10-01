@@ -5,6 +5,7 @@ import Stripe from 'stripe';
 
 import { config } from '@/lib/config';
 import { prisma } from '@/lib/prisma';
+import { getOfferContext, pricePackages } from '@/lib/token-offers';
 import { applyLedgerEntry } from '@/lib/tokens';
 
 let stripeClient: Stripe | null = null;
@@ -102,7 +103,16 @@ export async function startTokenPurchase(params: {
   });
   if (!pkg || !pkg.isActive) throw new Error('PACKAGE_NOT_AVAILABLE');
 
-  const totalTokens = pkg.tokens + pkg.bonusTokens;
+  // Ofertas (bienvenida, promocion, saldo bajo...): el precio y los tokens se
+  // deciden aqui, no en el navegador, y nunca por debajo del coste.
+  const others = await prisma.tokenPackage.findMany({ where: { isActive: true } });
+  const ctx = await getOfferContext(params.userId);
+  const priced = pricePackages(others.some((o) => o.id === pkg.id) ? others : [...others, pkg], ctx).find(
+    (p) => p.id === pkg.id,
+  )!;
+  const totalTokens = priced.totalTokens;
+  const priceCents = priced.priceCents;
+  const offerNote = priced.offer ? ` · ${priced.offer.label}` : '';
   const provider = config.payments.provider;
 
   if (provider === 'mock') {
@@ -111,11 +121,11 @@ export async function startTokenPurchase(params: {
         userId: params.userId,
         type: 'TOKEN_PURCHASE',
         tokens: totalTokens,
-        amountCents: pkg.priceCents,
+        amountCents: priceCents,
         currency: pkg.currency,
         provider: 'MOCK',
         providerRef: `mock_${crypto.randomUUID()}`,
-        description: `Compra ${pkg.name} (modo prueba)`,
+        description: `Compra ${pkg.name}${offerNote} (modo prueba)`,
         tokenPackageId: pkg.id,
       }),
     );
@@ -134,7 +144,7 @@ export async function startTokenPurchase(params: {
           quantity: 1,
           price_data: {
             currency: pkg.currency.toLowerCase(),
-            unit_amount: pkg.priceCents,
+            unit_amount: priceCents,
             product_data: {
               name: `${pkg.name} - ${totalTokens} tokens`,
               description: pkg.description ?? undefined,
@@ -157,11 +167,11 @@ export async function startTokenPurchase(params: {
         type: 'TOKEN_PURCHASE',
         status: 'PENDING',
         tokens: totalTokens,
-        amountCents: pkg.priceCents,
+        amountCents: priceCents,
         currency: pkg.currency,
         provider: 'STRIPE',
         providerRef: session.id,
-        description: `Compra pendiente: ${pkg.name}`,
+        description: `Compra pendiente: ${pkg.name}${offerNote}`,
         tokenPackageId: pkg.id,
       },
     });
@@ -173,7 +183,7 @@ export async function startTokenPurchase(params: {
     const accessToken = await getPaypalAccessToken();
 
     // El importe de PayPal va en unidades decimales, no en centavos.
-    const value = (pkg.priceCents / 100).toFixed(2);
+    const value = (priceCents / 100).toFixed(2);
 
     const response = await fetch(`${paypalApiBase()}/v2/checkout/orders`, {
       method: 'POST',
@@ -229,11 +239,11 @@ export async function startTokenPurchase(params: {
         type: 'TOKEN_PURCHASE',
         status: 'PENDING',
         tokens: totalTokens,
-        amountCents: pkg.priceCents,
+        amountCents: priceCents,
         currency: pkg.currency,
         provider: 'PAYPAL',
         providerRef: order.id,
-        description: `Compra pendiente: ${pkg.name}`,
+        description: `Compra pendiente: ${pkg.name}${offerNote}`,
         tokenPackageId: pkg.id,
       },
     });
@@ -245,7 +255,7 @@ export async function startTokenPurchase(params: {
     const { accnum, subacc, flexFormId, salt } = config.payments.ccbill;
     if (!accnum || !flexFormId) throw new Error('CCBILL_NOT_CONFIGURED');
 
-    const price = (pkg.priceCents / 100).toFixed(2);
+    const price = (priceCents / 100).toFixed(2);
     const currencyCode = '840'; // USD
     const digest = crypto
       .createHash('md5')

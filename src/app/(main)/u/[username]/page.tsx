@@ -1,18 +1,24 @@
 import type { Metadata } from 'next';
+import { DistributorBadge } from '@/components/distributors/distributor-badge';
+import { operatingBlock } from '@/lib/distributors';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { Lock, Pencil, Sparkles } from 'lucide-react';
+import { Crown, Lock, Pencil, ShoppingBag, Sparkles, UserRound } from 'lucide-react';
 
+import { PurchasesFeed } from '@/components/content/purchases-feed';
 import { OwnAccountMenu } from '@/components/layout/own-account-menu';
+import { SubscriptionsTab } from '@/components/subscriptions/subscriptions-tab';
 import { SafetyMenu } from '@/components/social/safety-menu';
 import { SendMessageButton } from '@/components/social/send-message-button';
-import { FollowPersonButton, UserProfileEditor } from '@/components/social/user-profile-actions';
+import { UserProfileEditor } from '@/components/social/user-profile-actions';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { getCurrentUser } from '@/lib/auth/guards';
 import { peerPair } from '@/lib/chat';
 import { prisma } from '@/lib/prisma';
-import { formatDate, formatTokens, initials } from '@/lib/utils';
+import { getMySubscriptions } from '@/lib/my-subscriptions';
+import { getPurchases } from '@/lib/purchases';
+import { cn, formatDate, formatTokens, initials } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,16 +34,22 @@ export async function generateMetadata({
 /**
  * PERFIL DE PERSONA (/u/<usuario>)
  *
- * Todas las cuentas tienen perfil. Las creadoras redirigen a su perfil de
- * creadora; el resto ve este: foto, nombre, seguidores y a quien sigue.
+ * Todas las cuentas tienen perfil. Los creadores verificados van a su perfil de
+ * creador; el resto ve este: foto, nombre y a que creadores sigue (los fans
+ * no se siguen entre si ni tienen seguidores).
  * Privado por defecto: sin abrirlo solo se ve el nombre y la foto.
+ * En tu propio perfil, ademas, "Mis compras": lo que has desbloqueado (solo
+ * lo ves tu).
  */
 export default async function PersonProfilePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ username: string }>;
+  searchParams: Promise<{ tab?: string; de?: string }>;
 }) {
   const { username } = await params;
+  const { tab, de } = await searchParams;
   const viewer = await getCurrentUser();
 
   const person = await prisma.user.findUnique({
@@ -52,44 +64,38 @@ export default async function PersonProfilePage({
       isProfilePublic: true,
       createdAt: true,
       modelProfile: { select: { slug: true, kycStatus: true } },
+      distributor: { select: { status: true, country: true, idVerifiedAt: true, sanctionsCheckedAt: true, contractSignedAt: true } },
     },
   });
   if (!person || person.status === 'BANNED') notFound();
   // Solo las creadoras VERIFICADAS tienen perfil de creadora publico; hasta
   // entonces se ven como una persona mas.
+  // Los creadores verificados tienen su perfil de creador, y su lado de fan
+  // (compras y suscripciones) va en pestanas de ese mismo perfil.
   if (person.modelProfile?.kycStatus === 'APPROVED') {
-    redirect(`/models/${person.modelProfile.slug}`);
+    const fanTab = viewer?.id === person.id && (tab === 'compras' || tab === 'suscripciones') ? tab : null;
+    redirect(`/models/${person.modelProfile.slug}${fanTab ? `?tab=${fanTab}` : ''}`);
   }
-
   const isSelf = viewer?.id === person.id;
   const canSeeDetails = isSelf || person.isProfilePublic;
+  // Pestanas privadas de tu propio perfil.
+  const privateTab = isSelf && (tab === 'compras' || tab === 'suscripciones') ? tab : null;
+  const showPurchases = privateTab === 'compras';
 
-  const [followers, followingPeople, followingCreators, isFollowing, creatorsSample] =
-    await Promise.all([
-      prisma.userFollow.count({ where: { followingId: person.id } }),
-      prisma.userFollow.count({ where: { followerId: person.id } }),
-      prisma.follow.count({ where: { userId: person.id } }),
-      viewer && !isSelf
-        ? prisma.userFollow
-            .findUnique({
-              where: {
-                followerId_followingId: { followerId: viewer.id, followingId: person.id },
-              },
-              select: { id: true },
-            })
-            .then(Boolean)
-        : Promise.resolve(false),
-      canSeeDetails
-        ? prisma.follow.findMany({
-            where: { userId: person.id, model: { kycStatus: 'APPROVED' } },
-            orderBy: { createdAt: 'desc' },
-            take: 12,
-            select: {
-              model: { select: { slug: true, stageName: true, avatarUrl: true, isOnline: true } },
-            },
-          })
-        : Promise.resolve([]),
-    ]);
+  // Solo se sigue a creadores: los fans no se siguen entre si.
+  const [followingCreators, creatorsSample] = await Promise.all([
+    prisma.follow.count({ where: { userId: person.id, model: { kycStatus: 'APPROVED' } } }),
+    canSeeDetails
+      ? prisma.follow.findMany({
+          where: { userId: person.id, model: { kycStatus: 'APPROVED' } },
+          orderBy: { createdAt: 'desc' },
+          take: 12,
+          select: {
+            model: { select: { slug: true, stageName: true, avatarUrl: true, isOnline: true } },
+          },
+        })
+      : Promise.resolve([]),
+  ]);
 
   const displayName = person.name ?? person.username ?? 'Usuario';
 
@@ -136,11 +142,15 @@ export default async function PersonProfilePage({
         </Avatar>
         <h1 className="mt-3 text-2xl font-bold tracking-tight">{displayName}</h1>
         <p className="text-sm text-muted-foreground">@{person.username}</p>
+        {person.distributor && !operatingBlock(person.distributor) && (
+          <Link href="/distribuidores" className="mt-2">
+            <DistributorBadge />
+          </Link>
+        )}
 
         {canSeeDetails && (
-          <div className="mt-4 flex divide-x divide-border/60">
-            <Stat value={followers} label="Seguidores" />
-            <Stat value={followingPeople + followingCreators} label="Siguiendo" />
+          <div className="mt-4 flex">
+            <Stat value={followingCreators} label="Siguiendo" href={`/u/${person.username}/siguiendo`} />
           </div>
         )}
 
@@ -150,6 +160,7 @@ export default async function PersonProfilePage({
           </p>
         )}
 
+        {/* Un creador edita su perfil desde su pagina de creador. */}
         <div className="mt-5 flex w-full max-w-sm gap-2">
           {isSelf ? (
             <UserProfileEditor
@@ -168,11 +179,6 @@ export default async function PersonProfilePage({
             <>
               {!iBlocked && (
                 <>
-                  <FollowPersonButton
-                    userId={person.id}
-                    initialFollowing={isFollowing}
-                    isAuthenticated={Boolean(viewer)}
-                  />
                   <SendMessageButton
                     targetUserId={person.id}
                     targetName={displayName}
@@ -198,7 +204,50 @@ export default async function PersonProfilePage({
         </div>
       </section>
 
-      {!canSeeDetails ? (
+      {isSelf && (
+        <nav className="flex border-b border-border/60">
+          <ProfileTab
+            href={`/u/${person.username}`}
+            active={!privateTab}
+            icon={<UserRound className="h-4 w-4" />}
+          >
+            Perfil
+          </ProfileTab>
+          <ProfileTab
+            href={`/u/${person.username}?tab=compras`}
+            active={privateTab === 'compras'}
+            icon={<ShoppingBag className="h-4 w-4" />}
+          >
+            Compras
+          </ProfileTab>
+          <ProfileTab
+            href={`/u/${person.username}?tab=suscripciones`}
+            active={privateTab === 'suscripciones'}
+            icon={<Crown className="h-4 w-4" />}
+          >
+            Suscripciones
+          </ProfileTab>
+        </nav>
+      )}
+
+      {privateTab ? (
+        <>
+          <p className="flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground">
+            <Lock className="h-3.5 w-3.5" />
+            {showPurchases ? 'Solo tú ves tus compras.' : 'Solo tú ves tus suscripciones.'}
+          </p>
+          {showPurchases ? (
+            <PurchasesFeed items={await getPurchases(person.id)} />
+          ) : (
+            <SubscriptionsTab
+              viewerId={person.id}
+              baseHref={`/u/${person.username}?tab=suscripciones`}
+              subscriptions={await getMySubscriptions(person.id)}
+              creatorSlug={de ?? null}
+            />
+          )}
+        </>
+      ) : !canSeeDetails ? (
         <div className="flex flex-col items-center gap-2 rounded-2xl border border-border/60 bg-card px-6 py-10 text-center">
           <span className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-foreground/70">
             <Lock className="h-5 w-5" />
@@ -219,9 +268,14 @@ export default async function PersonProfilePage({
 
           {creatorsSample.length > 0 && (
             <section>
-              <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Sigue a
-              </h2>
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  Sigue a
+                </h2>
+                <Link href={`/u/${person.username}/siguiendo`} className="text-xs font-medium text-primary hover:underline">
+                  Ver todo
+                </Link>
+              </div>
               <div className="-mx-6 flex gap-4 overflow-x-auto px-6 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {creatorsSample.map(({ model }) => (
                   <Link
@@ -254,7 +308,7 @@ export default async function PersonProfilePage({
         </>
       )}
 
-      {isSelf && (
+      {isSelf && !privateTab && (
         <Link
           href="/hazte-creador"
           className="relative flex items-center gap-4 overflow-hidden rounded-2xl border border-primary/40 bg-primary/5 p-4 transition-colors hover:bg-primary/10"
@@ -277,11 +331,37 @@ export default async function PersonProfilePage({
   );
 }
 
-function Stat({ value, label }: { value: number; label: string }) {
+function Stat({ value, label, href }: { value: number; label: string; href: string }) {
   return (
-    <div className="px-6 text-center">
+    <Link href={href} className="px-6 text-center hover:opacity-80">
       <p className="text-lg font-bold leading-none">{formatTokens(value)}</p>
       <p className="mt-1 text-[11px] text-muted-foreground">{label}</p>
-    </div>
+    </Link>
+  );
+}
+
+function ProfileTab({
+  href,
+  active,
+  icon,
+  children,
+}: {
+  href: string;
+  active: boolean;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      scroll={false}
+      className={cn(
+        '-mb-px flex flex-1 items-center justify-center gap-1.5 border-b-2 py-2.5 text-sm font-semibold transition-colors',
+        active ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
+      )}
+    >
+      {icon}
+      {children}
+    </Link>
   );
 }

@@ -32,7 +32,6 @@ import {
   type PayoutDestination,
 } from '@/lib/payouts';
 import {
-  buildContentKey,
   buildKycKey,
   buildProfileImageKey,
   createUploadUrl,
@@ -174,7 +173,7 @@ export async function requestProfileImageUploadUrlAction(input: {
 }
 
 const ratesSchema = z.object({
-  // Tarifas en centitokens/min: el rango permitido es 1,75 - 25 tokens/min.
+  // Tarifas en centitokens/min: el rango permitido es 17,5 - 250 tokens/min.
   vipRateCentitokens: z
     .number()
     .int()
@@ -252,7 +251,8 @@ export async function updateRatesAction(input: {
 
     await prisma.modelProfile.update({
       where: { id: profile.id },
-      data: parsed.data,
+      // El privado al azar sigue a "Recibo llamadas".
+      data: { ...parsed.data, isAvailableForVip: profile.isOnline && parsed.data.isVipEnabled },
     });
 
     revalidatePath('/dashboard/model/rates');
@@ -263,9 +263,14 @@ export async function updateRatesAction(input: {
   }
 }
 
-/** Alterna el estado en linea / disponible para VIP. */
+/**
+ * "Recibo llamadas": el UNICO interruptor de disponibilidad. Encendido, los
+ * fans pueden llamarle ya (y entra en el privado al azar si lo tiene activado
+ * en Ajustes). Se apaga solo si cierra la web (ver src/lib/call-presence.ts).
+ */
 export async function setOnlineStatusAction(input: {
   isOnline: boolean;
+  /** Ya no se usa: el privado al azar sigue a este interruptor. */
   isAvailableForVip?: boolean;
 }): Promise<ModelActionResult> {
   try {
@@ -279,7 +284,7 @@ export async function setOnlineStatusAction(input: {
     ) {
       return {
         ok: false,
-        error: 'No puedes emitir hasta que tu KYC este aprobado.',
+        error: 'Verifica tu identidad para poder recibir llamadas.',
       };
     }
 
@@ -287,8 +292,7 @@ export async function setOnlineStatusAction(input: {
       where: { id: profile.id },
       data: {
         isOnline: input.isOnline,
-        isAvailableForVip:
-          input.isOnline && (input.isAvailableForVip ?? profile.isAvailableForVip),
+        isAvailableForVip: input.isOnline && profile.isVipEnabled,
         lastOnlineAt: new Date(),
       },
     });
@@ -298,264 +302,10 @@ export async function setOnlineStatusAction(input: {
     revalidatePath('/vip');
     return {
       ok: true,
-      message: input.isOnline ? 'Estas en linea.' : `${onlineLabel(profile.gender, false)}.`,
+      message: input.isOnline
+        ? 'Recibes llamadas. Mantén la web abierta para oírlas.'
+        : 'Ya no recibes llamadas.',
     };
-  } catch (error) {
-    return { ok: false, error: toMessage(error) };
-  }
-}
-
-// ---------------------------------------------------------------------------
-// CONTENIDO
-// ---------------------------------------------------------------------------
-
-const contentSchema = z.object({
-  title: z.string().min(3).max(80),
-  description: z.string().max(600).optional(),
-  type: z.enum(['PHOTO', 'VIDEO', 'BUNDLE']),
-  priceTokens: z.number().int().min(0).max(100000),
-  previewUrl: z.string().optional(),
-  isPublished: z.boolean().default(true),
-  subscriberOnly: z.boolean().default(false),
-});
-
-export async function createContentPackageAction(input: {
-  title: string;
-  description?: string;
-  type: 'PHOTO' | 'VIDEO' | 'BUNDLE';
-  priceTokens: number;
-  previewUrl?: string;
-  isPublished?: boolean;
-  subscriberOnly?: boolean;
-}): Promise<ModelActionResult<{ packageId: string }>> {
-  try {
-    const { profile } = await requireModelProfile();
-    await assertCreatorVerified({ modelId: profile.id });
-    const parsed = contentSchema.safeParse(input);
-    if (!parsed.success) return { ok: false, error: 'Datos de contenido invalidos.' };
-    if (parsed.data.subscriberOnly && !profile.subscriptionEnabled) {
-      return {
-        ok: false,
-        error: 'Activa la suscripcion mensual antes de marcar contenido exclusivo.',
-      };
-    }
-
-    const pkg = await prisma.contentPackage.create({
-      data: {
-        modelId: profile.id,
-        title: parsed.data.title,
-        description: parsed.data.description ?? null,
-        type: parsed.data.type,
-        priceTokens: parsed.data.priceTokens,
-        // Un pack solo para suscriptores nunca es publico, aunque no tenga
-        // precio suelto: si no, cualquiera lo veria gratis.
-        isPublic: parsed.data.priceTokens === 0 && !parsed.data.subscriberOnly,
-        isPublished: parsed.data.isPublished,
-        previewUrl: parsed.data.previewUrl ?? null,
-        subscriberOnly: parsed.data.subscriberOnly,
-      },
-      select: { id: true },
-    });
-
-    revalidatePath('/dashboard/model/content');
-    revalidatePath(`/models/${profile.slug}`);
-    return { ok: true, data: { packageId: pkg.id }, message: 'Paquete creado.' };
-  } catch (error) {
-    return { ok: false, error: toMessage(error) };
-  }
-}
-
-export async function updateContentPackageAction(input: {
-  packageId: string;
-  title?: string;
-  description?: string;
-  priceTokens?: number;
-  isPublished?: boolean;
-}): Promise<ModelActionResult> {
-  try {
-    const { profile } = await requireModelProfile();
-    await assertCreatorVerified({ modelId: profile.id });
-
-    const pkg = await prisma.contentPackage.findFirst({
-      where: { id: input.packageId, modelId: profile.id },
-    });
-    if (!pkg) return { ok: false, error: 'Paquete no encontrado.' };
-
-    await prisma.contentPackage.update({
-      where: { id: pkg.id },
-      data: {
-        title: input.title ?? pkg.title,
-        description: input.description ?? pkg.description,
-        priceTokens: input.priceTokens ?? pkg.priceTokens,
-        isPublic:
-          input.priceTokens !== undefined
-            ? input.priceTokens === 0 && !pkg.subscriberOnly
-            : pkg.isPublic,
-        isPublished: input.isPublished ?? pkg.isPublished,
-      },
-    });
-
-    revalidatePath('/dashboard/model/content');
-    revalidatePath(`/models/${profile.slug}`);
-    return { ok: true, message: 'Paquete actualizado.' };
-  } catch (error) {
-    return { ok: false, error: toMessage(error) };
-  }
-}
-
-export async function deleteContentPackageAction(
-  packageId: string,
-): Promise<ModelActionResult> {
-  try {
-    const { profile } = await requireModelProfile();
-    const pkg = await prisma.contentPackage.findFirst({
-      where: { id: packageId, modelId: profile.id },
-      select: { id: true, unlocks: { select: { id: true }, take: 1 } },
-    });
-    if (!pkg) return { ok: false, error: 'Paquete no encontrado.' };
-    if (pkg.unlocks.length > 0) {
-      return {
-        ok: false,
-        error: 'No puedes borrar un paquete que ya ha sido comprado. Ocultalo en su lugar.',
-      };
-    }
-
-    await prisma.contentPackage.delete({ where: { id: pkg.id } });
-
-    revalidatePath('/dashboard/model/content');
-    return { ok: true, message: 'Paquete eliminado.' };
-  } catch (error) {
-    return { ok: false, error: toMessage(error) };
-  }
-}
-
-/** Devuelve una URL firmada para subir un archivo directamente a S3/R2. */
-export async function requestContentUploadUrlAction(input: {
-  packageId: string;
-  filename: string;
-  contentType: string;
-}): Promise<ModelActionResult<{ uploadUrl: string; key: string }>> {
-  try {
-    const { profile } = await requireModelProfile();
-    await assertCreatorVerified({ modelId: profile.id });
-
-    const pkg = await prisma.contentPackage.findFirst({
-      where: { id: input.packageId, modelId: profile.id },
-      select: { id: true },
-    });
-    if (!pkg) return { ok: false, error: 'Paquete no encontrado.' };
-
-    const key = buildContentKey({
-      modelId: profile.id,
-      packageId: pkg.id,
-      filename: input.filename,
-    });
-
-    const uploadUrl = await createUploadUrl({
-      key,
-      contentType: input.contentType,
-    });
-
-    if (!uploadUrl) {
-      return {
-        ok: false,
-        error:
-          'El almacenamiento no esta configurado. Define S3_* en tu .env o usa MinIO local.',
-      };
-    }
-
-    return { ok: true, data: { uploadUrl, key } };
-  } catch (error) {
-    return { ok: false, error: toMessage(error) };
-  }
-}
-
-/** Registra en BD un asset ya subido a S3/R2. */
-export async function attachContentAssetAction(input: {
-  packageId: string;
-  storageKey: string;
-  mimeType: string;
-  sizeBytes?: number;
-  durationSec?: number;
-  isPreview?: boolean;
-}): Promise<ModelActionResult> {
-  try {
-    const { profile } = await requireModelProfile();
-    await assertCreatorVerified({ modelId: profile.id });
-
-    const pkg = await prisma.contentPackage.findFirst({
-      where: { id: input.packageId, modelId: profile.id },
-      select: { id: true, assetCount: true },
-    });
-    if (!pkg) return { ok: false, error: 'Paquete no encontrado.' };
-
-    await prisma.$transaction([
-      prisma.contentAsset.create({
-        data: {
-          packageId: pkg.id,
-          storageKey: input.storageKey,
-          mimeType: input.mimeType,
-          sizeBytes: input.sizeBytes ?? null,
-          durationSec: input.durationSec ?? null,
-          // Un original nunca es teaser por defecto: la API sirve los
-          // isPreview a cualquiera sin pagar. Antes el primer archivo de cada
-          // pack se marcaba solo y se regalaba.
-          isPreview: input.isPreview ?? false,
-          sortOrder: pkg.assetCount,
-        },
-      }),
-      prisma.contentPackage.update({
-        where: { id: pkg.id },
-        data: { assetCount: { increment: 1 } },
-      }),
-    ]);
-
-    revalidatePath('/dashboard/model/content');
-    return { ok: true, message: 'Archivo anadido.' };
-  } catch (error) {
-    return { ok: false, error: toMessage(error) };
-  }
-}
-
-/** Borra un archivo suelto de un paquete propio (no todo el paquete). */
-export async function removeContentAssetAction(
-  assetId: string,
-): Promise<ModelActionResult> {
-  try {
-    const { profile } = await requireModelProfile();
-
-    const asset = await prisma.contentAsset.findUnique({
-      where: { id: assetId },
-      select: {
-        id: true,
-        storageKey: true,
-        package: {
-          select: { id: true, modelId: true, unlocks: { select: { id: true }, take: 1 } },
-        },
-      },
-    });
-    if (!asset || asset.package.modelId !== profile.id) {
-      return { ok: false, error: 'Archivo no encontrado.' };
-    }
-    if (asset.package.unlocks.length > 0) {
-      return {
-        ok: false,
-        error: 'No puedes borrar archivos de un paquete que ya fue comprado.',
-      };
-    }
-
-    await prisma.$transaction([
-      prisma.contentAsset.delete({ where: { id: asset.id } }),
-      prisma.contentPackage.update({
-        where: { id: asset.package.id },
-        data: { assetCount: { decrement: 1 } },
-      }),
-    ]);
-
-    await deleteObject(asset.storageKey);
-
-    revalidatePath('/dashboard/model/content');
-    return { ok: true, message: 'Archivo eliminado.' };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
   }

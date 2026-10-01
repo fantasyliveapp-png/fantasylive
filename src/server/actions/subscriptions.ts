@@ -1,5 +1,7 @@
 'use server';
 
+import { discountTokens } from '@/lib/creator-offer-rules';
+import { getFirstMonthOffer, recordOfferUse } from '@/lib/creator-offers';
 import { revalidatePath } from 'next/cache';
 
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
@@ -50,7 +52,12 @@ export async function subscribeAction(
       return { ok: true, active: true, message: 'Ya estas suscrito.' };
     }
 
+    // Primer mes rebajado (solo quien nunca se ha suscrito a este creador).
+    const offer = await getFirstMonthOffer(modelId, user.id);
+    const price = offer ? discountTokens(model.subscriptionPriceTokens, offer.percentOff) : model.subscriptionPriceTokens;
+
     await prisma.$transaction(async (tx) => {
+      if (offer) await recordOfferUse(tx, offer, price);
       const existing = await tx.subscription.findUnique({
         where: { userId_modelId: { userId: user.id, modelId } },
         select: { id: true },
@@ -85,10 +92,10 @@ export async function subscribeAction(
       await transferWithCommission(tx, {
         fromUserId: user.id,
         toUserId: model.userId,
-        tokens: model.subscriptionPriceTokens,
+        tokens: price,
         debitType: 'SUBSCRIPTION_PURCHASE',
         creditType: 'SUBSCRIPTION_EARNING',
-        description: 'Suscripcion mensual',
+        description: offer ? `Suscripcion mensual (${offer.label} −${offer.percentOff}%)` : 'Suscripcion mensual',
         subscriptionId: subscription.id,
       });
 
@@ -100,7 +107,7 @@ export async function subscribeAction(
       await createNotification(tx, {
         userId: model.userId,
         type: 'NEW_SUBSCRIBER',
-        title: `${user.name ?? 'Alguien'} se suscribio por ${model.subscriptionPriceTokens} tokens/mes`,
+        title: `${user.name ?? 'Alguien'} se suscribio por ${price} tokens${offer ? ' (primer mes rebajado)' : '/mes'}`,
         link: '/dashboard/model',
       });
     });
@@ -110,7 +117,9 @@ export async function subscribeAction(
     return {
       ok: true,
       active: true,
-      message: `Suscripcion activada por ${model.subscriptionPriceTokens} tokens/mes.`,
+      message: offer
+        ? `Suscripcion activada: primer mes por ${price} tokens.`
+        : `Suscripcion activada por ${model.subscriptionPriceTokens} tokens/mes.`,
     };
   } catch (error) {
     return { ok: false, error: toMessage(error) };

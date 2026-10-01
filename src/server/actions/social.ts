@@ -6,8 +6,6 @@ import { z } from 'zod';
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { checkNoContactInfo } from '@/lib/content-filter';
 import { changeHandle, isHandleFree } from '@/lib/creator-profile';
-import { createNotification } from '@/lib/notifications';
-import { isBlockedBetween } from '@/lib/chat';
 import { prisma } from '@/lib/prisma';
 import { isReservedUsername, USERNAME_PATTERN } from '@/lib/usernames';
 import {
@@ -112,54 +110,15 @@ export async function updateUserProfileAction(input: {
   }
 }
 
-/** Seguir / dejar de seguir a una persona (no creadora). */
+/**
+ * Seguir a personas ya no existe: solo se sigue a creadores (ver
+ * toggleFollowAction). Se deja para que ninguna pantalla antigua pueda crear
+ * seguimientos entre fans.
+ */
 export async function toggleUserFollowAction(
-  targetUserId: string,
+  _targetUserId: string,
 ): Promise<SocialActionResult<{ following: boolean; followers: number }>> {
-  try {
-    const user = await getAuthedUserOrThrow();
-    if (targetUserId === user.id) return { ok: false, error: 'No puedes seguirte a ti.' };
-
-    const target = await prisma.user.findUnique({
-      where: { id: targetUserId },
-      select: { id: true, status: true, username: true },
-    });
-    if (!target || target.status !== 'ACTIVE') {
-      return { ok: false, error: 'Esta cuenta no esta disponible.' };
-    }
-
-    const existing = await prisma.userFollow.findUnique({
-      where: { followerId_followingId: { followerId: user.id, followingId: target.id } },
-      select: { id: true },
-    });
-    if (!existing && (await isBlockedBetween(user.id, target.id))) {
-      return { ok: false, error: 'No puedes seguir a esta cuenta.' };
-    }
-
-    if (existing) {
-      await prisma.userFollow.delete({ where: { id: existing.id } });
-    } else {
-      const me = await prisma.user.findUnique({
-        where: { id: user.id },
-        select: { username: true },
-      });
-      await prisma.$transaction(async (tx) => {
-        await tx.userFollow.create({ data: { followerId: user.id, followingId: target.id } });
-        await createNotification(tx, {
-          userId: target.id,
-          type: 'NEW_FOLLOWER',
-          title: `${user.name ?? 'Alguien'} empezo a seguirte`,
-          link: me?.username ? `/u/${me.username}` : '/',
-        });
-      });
-    }
-
-    const followers = await prisma.userFollow.count({ where: { followingId: target.id } });
-    if (target.username) revalidatePath(`/u/${target.username}`);
-    return { ok: true, data: { following: !existing, followers } };
-  } catch (error) {
-    return { ok: false, error: toMessage(error) };
-  }
+  return { ok: false, error: 'Solo se puede seguir a creadores.' };
 }
 
 function toMessage(error: unknown): string {

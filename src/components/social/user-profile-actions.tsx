@@ -15,60 +15,9 @@ import { USERNAME_PATTERN } from '@/lib/usernames';
 import { cn, initials } from '@/lib/utils';
 import {
   requestUserAvatarUploadUrlAction,
-  toggleUserFollowAction,
   updateUserProfileAction,
 } from '@/server/actions/social';
 import { useJoinPrompt } from '@/components/providers/join-prompt';
-
-/** Boton Seguir de un perfil de persona, con respuesta inmediata. */
-export function FollowPersonButton({
-  userId,
-  initialFollowing,
-  isAuthenticated,
-  onCountChange,
-}: {
-  userId: string;
-  initialFollowing: boolean;
-  isAuthenticated: boolean;
-  onCountChange?: (followers: number) => void;
-}) {
-  const router = useRouter();
-  const joinPrompt = useJoinPrompt();
-  const [following, setFollowing] = useState(initialFollowing);
-  const [isPending, startTransition] = useTransition();
-
-  function toggle() {
-    if (!isAuthenticated) {
-      joinPrompt('para seguir a esta persona');
-      return;
-    }
-    const previous = following;
-    setFollowing(!previous);
-    startTransition(async () => {
-      const result = await toggleUserFollowAction(userId);
-      if (!result.ok || !result.data) {
-        setFollowing(previous);
-        toast.error(result.error ?? 'No se pudo completar.');
-        return;
-      }
-      setFollowing(result.data.following);
-      onCountChange?.(result.data.followers);
-      router.refresh();
-    });
-  }
-
-  return (
-    <Button
-      variant={following ? 'secondary' : 'brand'}
-      className="h-10 flex-1 px-5 sm:flex-none"
-      onClick={toggle}
-      disabled={isPending}
-    >
-      {following ? <UserCheck className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
-      {following ? 'Siguiendo' : 'Seguir'}
-    </Button>
-  );
-}
 
 export interface EditableUserProfile {
   name: string;
