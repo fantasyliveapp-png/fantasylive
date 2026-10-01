@@ -278,6 +278,9 @@ function StreamSummaryView({
 
 type Source = 'BROWSER' | 'OBS_RTMP';
 
+/** Ultimo modo de emision usado en este dispositivo (camara u OBS). */
+const LAST_SOURCE_KEY = 'fl:live-source';
+
 interface ActiveStream {
   streamId: string;
   token: string | null;
@@ -335,9 +338,17 @@ export function BroadcastPanel({
   const [acceptsPrivate, setAcceptsPrivate] = useState<boolean | null>(null);
   /** Vista previa de la camara en la pantalla de empezar. */
   const previewRef = useRef<MediaStream | null>(null);
-  const [source, setSource] = useState<Source>(
-    existing?.source ?? (obsConfigured ? 'OBS_RTMP' : 'BROWSER'),
-  );
+  // Por defecto, la camara del movil/navegador. OBS solo si lo eligio la
+  // ultima vez (se recuerda en este dispositivo) o si retoma un directo OBS.
+  const [source, setSource] = useState<Source>(existing?.source ?? 'BROWSER');
+  useEffect(() => {
+    if (existing || !obsConfigured) return;
+    try {
+      if (localStorage.getItem(LAST_SOURCE_KEY) === 'OBS_RTMP') setSource('OBS_RTMP');
+    } catch {
+      // Sin almacenamiento: se queda la camara.
+    }
+  }, [existing, obsConfigured]);
   const [active, setActive] = useState<ActiveStream | null>(null);
   const [viewerCount, setViewerCount] = useState(0);
   const [startedAt, setStartedAt] = useState<number | null>(null);
@@ -418,6 +429,11 @@ export function BroadcastPanel({
       if (!result.ok || !result.data) {
         toast.error(result.error ?? t('common.somethingWentWrong'));
         return;
+      }
+      try {
+        localStorage.setItem(LAST_SOURCE_KEY, source);
+      } catch {
+        // Sin almacenamiento: no se recuerda, no pasa nada.
       }
       markedRef.current = false;
       setSummary(null);
