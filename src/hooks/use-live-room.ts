@@ -102,8 +102,14 @@ interface UseLiveRoomOptions {
 const MAX_CHAT_MESSAGES = 200;
 const MAX_HEARTS = 24;
 const HEART_LIFETIME_MS = 2_400;
-/** Como mucho un "me gusta" por la red cada tanto, por mucho que se pulse. */
+/**
+ * Los "me gusta" se agrupan: como mucho un mensaje por la red cada tanto,
+ * con el numero de toques ("+7"), asi no se satura la sala ni se pierde
+ * ninguno por el camino.
+ */
 const LIKE_SEND_INTERVAL_MS = 300;
+/** Tope de toques que se aceptan en un solo mensaje (evita inflar el contador). */
+const MAX_LIKES_PER_MESSAGE = 50;
 
 export interface LiveReplyTo {
   from: string;
@@ -168,6 +174,9 @@ export function useLiveRoom({
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [noiseSuppression, setNoiseSuppressionState] = useState(true);
   const lastLikeSentRef = useRef(0);
+  /** Toques aun sin enviar y el temporizador que los manda juntos. */
+  const pendingLikesRef = useRef(0);
+  const likeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // El filtro se lee desde el manejador de la sala sin reconectarla.
   const blockedWordsRef = useRef<string[]>(liveState.blockedWords);
   blockedWordsRef.current = liveState.blockedWords;
@@ -191,22 +200,29 @@ export function useLiveRoom({
     setMessages((prev) => [...prev, message].slice(-MAX_CHAT_MESSAGES));
   }, []);
 
-  const addHeart = useCallback(() => {
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const heart: LiveHeart = {
-      id,
-      drift: Math.round(Math.random() * 60 - 30),
-      color: HEART_COLORS[Math.floor(Math.random() * HEART_COLORS.length)]!,
-    };
-    setHearts((prev) => [...prev, heart].slice(-MAX_HEARTS));
-    setLikeCount((count) => count + 1);
-    setTimeout(
-      () => setHearts((prev) => prev.filter((h) => h.id !== id)),
-      HEART_LIFETIME_MS,
-    );
+  /** Suma `count` me gusta al contador y lanza unos pocos corazones. */
+  const addHeart = useCallback((count = 1) => {
+    setLikeCount((c) => c + count);
+    const shown = Math.min(count, 3);
+    for (let i = 0; i < shown; i++) {
+      const id = `${Date.now()}-${i}-${Math.random().toString(36).slice(2)}`;
+      const heart: LiveHeart = {
+        id,
+        drift: Math.round(Math.random() * 60 - 30),
+        color: HEART_COLORS[Math.floor(Math.random() * HEART_COLORS.length)]!,
+      };
+      setHearts((prev) => [...prev, heart].slice(-MAX_HEARTS));
+      setTimeout(
+        () => setHearts((prev) => prev.filter((h) => h.id !== id)),
+        HEART_LIFETIME_MS,
+      );
+    }
   }, []);
 
   const cleanup = useCallback(() => {
+    if (likeTimerRef.current) clearTimeout(likeTimerRef.current);
+    likeTimerRef.current = null;
+    pendingLikesRef.current = 0;
     localTracksRef.current.forEach((track) => {
       track.stop();
       track.detach().forEach((el) => el.remove());
@@ -301,6 +317,8 @@ export function useLiveRoom({
               tokens?: number;
               emoji?: string;
               avatar?: string | null;
+              /** "me gusta" agrupados en este mensaje. */
+              n?: number;
             };
             try {
               parsed = JSON.parse(new TextDecoder().decode(payload));
@@ -392,7 +410,8 @@ export function useLiveRoom({
             }
 
             if (parsed.type === 'like') {
-              addHeart();
+              const n = typeof parsed.n === 'number' && Number.isFinite(parsed.n) ? Math.floor(parsed.n) : 1;
+              addHeart(Math.min(MAX_LIKES_PER_MESSAGE, Math.max(1, n)));
               return;
             }
 
@@ -571,21 +590,32 @@ export function useLiveRoom({
     [chatBlockReason, displayName, pushMessage],
   );
 
-  /** Corazon: se ve al instante y se reparte a la sala sin saturarla. */
-  const sendLike = useCallback(() => {
-    addHeart();
+  /** Manda de una vez los toques acumulados ("+n"). */
+  const flushLikes = useCallback(() => {
+    likeTimerRef.current = null;
+    const n = pendingLikesRef.current;
     const room = roomRef.current;
-    const now = Date.now();
-    if (!room || now - lastLikeSentRef.current < LIKE_SEND_INTERVAL_MS) return;
-    lastLikeSentRef.current = now;
+    if (!n || !room) return;
+    pendingLikesRef.current = 0;
+    lastLikeSentRef.current = Date.now();
     void room.localParticipant
-      .publishData(new TextEncoder().encode(JSON.stringify({ type: 'like' })), {
-        reliable: false,
+      .publishData(new TextEncoder().encode(JSON.stringify({ type: 'like', n })), {
+        reliable: true,
       })
       .catch(() => {
-        // Un corazon perdido no importa.
+        // Si falla el envio, se vuelven a intentar con el siguiente toque.
+        pendingLikesRef.current += n;
       });
-  }, [addHeart]);
+  }, []);
+
+  /** Corazon: se ve al instante y se reparte a la sala sin perder ninguno. */
+  const sendLike = useCallback(() => {
+    addHeart();
+    pendingLikesRef.current = Math.min(pendingLikesRef.current + 1, MAX_LIKES_PER_MESSAGE);
+    if (likeTimerRef.current) return;
+    const wait = Math.max(0, LIKE_SEND_INTERVAL_MS - (Date.now() - lastLikeSentRef.current));
+    likeTimerRef.current = setTimeout(flushLikes, wait);
+  }, [addHeart, flushLikes]);
 
   const toggleMic = useCallback(async () => {
     const next = !isMicEnabled;
