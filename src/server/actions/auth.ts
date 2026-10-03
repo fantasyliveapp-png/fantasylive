@@ -12,6 +12,8 @@ import { config } from '@/lib/config';
 import { isHandleFree } from '@/lib/creator-profile';
 import { isReservedUsername, USERNAME_PATTERN } from '@/lib/usernames';
 import { calculateAge } from '@/lib/utils';
+import { createAuthToken } from '@/lib/auth-tokens';
+import { appLink, sendVerifyEmail } from '@/lib/email';
 
 export interface ActionState {
   error?: string;
@@ -159,6 +161,14 @@ export async function registerAction(
       return { fieldErrors: { username: ['Ese @usuario ya esta cogido'] } };
     }
     throw error;
+  }
+
+  // Bienvenida + enlace para confirmar el email (si falla, se puede reenviar).
+  try {
+    const token = await createAuthToken(user.id, 'EMAIL_VERIFY');
+    if (token) await sendVerifyEmail(email, username, appLink(`/verificar-email?token=${token}`), true);
+  } catch (error) {
+    console.error('[register] no se pudo enviar el correo de bienvenida', error);
   }
 
   if (bonus > 0) {

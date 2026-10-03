@@ -12,6 +12,7 @@ import { parseTipMenu } from '@/lib/live-state';
 import { sendRoomData } from '@/lib/livekit';
 import { createNotification } from '@/lib/notifications';
 import { startTokenPurchase } from '@/lib/payments';
+import { emailVerificationBlock } from '@/lib/auth-tokens';
 import {
   InsufficientTokensError,
   applyLedgerEntry,
@@ -33,6 +34,8 @@ export async function purchaseTokensAction(
 ): Promise<WalletActionResult> {
   try {
     const user = await getAuthedUserOrThrow();
+    const unverified = await emailVerificationBlock(user.id);
+    if (unverified) return { ok: false, error: unverified };
 
     const result = await startTokenPurchase({
       userId: user.id,

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
+import { emailVerificationBlock } from '@/lib/auth-tokens';
 import { assertCreatorVerified } from '@/lib/creator-kyc';
 import { prisma } from '@/lib/prisma';
 import { onlineLabel } from '@/lib/gender-words';
@@ -463,6 +464,8 @@ export async function requestPayoutAction(input: {
 }): Promise<ModelActionResult> {
   try {
     const { user, profile } = await requireModelProfile();
+    const unverified = await emailVerificationBlock(user.id);
+    if (unverified) return { ok: false, error: unverified };
 
     const parsed = payoutSchema.safeParse(input);
     if (!parsed.success) {

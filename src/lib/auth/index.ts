@@ -118,12 +118,19 @@ export const { handlers, auth, signIn, signOut, unstable_update: refreshSession 
           status: true,
           isVip: true,
           ageVerified: true,
+          passwordChangedAt: true,
           modelProfile: { select: { id: true } },
         },
       });
 
       // Cuenta borrada: se invalida la sesion.
       if (!fresh) return null;
+      // Contraseña cambiada despues de abrir esta sesion: se cierra (salvo la
+      // que se acaba de abrir con la contraseña nueva).
+      const issuedAt = Number(token.iat ?? 0) * 1000;
+      if (!params.user && fresh.passwordChangedAt && issuedAt && fresh.passwordChangedAt.getTime() > issuedAt) {
+        return null;
+      }
 
       token.role = fresh.role;
       token.status = fresh.status;

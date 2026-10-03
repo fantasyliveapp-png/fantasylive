@@ -6,6 +6,7 @@ import type { Gender } from '@prisma/client';
 
 import { refreshSession } from '@/lib/auth';
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
+import { emailVerificationBlock } from '@/lib/auth-tokens';
 import { GENDER_LABELS } from '@/lib/constants';
 import { createCreatorProfile } from '@/lib/creator-profile';
 import { prisma } from '@/lib/prisma';
@@ -22,6 +23,8 @@ export async function createModelProfileAction(input: {
 }): Promise<{ ok: boolean; error?: string }> {
   try {
     const user = await getAuthedUserOrThrow();
+    const unverified = await emailVerificationBlock(user.id);
+    if (unverified) return { ok: false, error: unverified };
     const parsed = schema.safeParse(input);
     if (!parsed.success) return { ok: false, error: 'Revisa tu nombre de creador.' };
 

@@ -3,7 +3,10 @@ import { BottomNav } from '@/components/layout/bottom-nav';
 import { Footer } from '@/components/layout/footer';
 import { Navbar } from '@/components/layout/navbar';
 import { SideNavServer } from '@/components/layout/side-nav-server';
+import { VerifyEmailBanner } from '@/components/auth/password-reset-forms';
 import { getCurrentUser } from '@/lib/auth/guards';
+import { emailEnabled } from '@/lib/email';
+import { prisma } from '@/lib/prisma';
 import { getOwnUsername, getProfileShortcut } from '@/lib/profile-shortcut';
 
 export default async function MainLayout({
@@ -12,9 +15,13 @@ export default async function MainLayout({
   children: React.ReactNode;
 }) {
   const user = await getCurrentUser();
-  const [profile, username] = await Promise.all([
+  const [profile, username, account] = await Promise.all([
     getProfileShortcut(user?.modelProfileId),
     getOwnUsername(user?.id),
+    // Aviso de "confirma tu email" (solo si el envio de correos esta activo).
+    user && emailEnabled()
+      ? prisma.user.findUnique({ where: { id: user.id }, select: { email: true, emailVerified: true } })
+      : null,
   ]);
 
   const page = (
@@ -23,6 +30,7 @@ export default async function MainLayout({
     <div className="flex min-h-screen flex-col md:pl-[72px] lg:pl-60">
       <SideNavServer />
       <Navbar />
+      {account && !account.emailVerified && <VerifyEmailBanner email={account.email} />}
       {/* pb-16 en movil deja sitio a la barra inferior fija. */}
       <main className="flex-1 pb-16 md:pb-0">{children}</main>
       <Footer />

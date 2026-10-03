@@ -294,15 +294,17 @@ enum VisitSource {
 // =============================================================================
 
 model User {
-  id            String     @id @default(cuid())
-  email         String     @unique
-  emailVerified DateTime?
-  passwordHash  String?
-  name          String?
-  username      String?    @unique
-  image         String?
-  role          Role       @default(USER)
-  status        UserStatus @default(ACTIVE)
+  id                String     @id @default(cuid())
+  email             String     @unique
+  emailVerified     DateTime?
+  passwordHash      String?
+  /// Ultimo cambio de contraseña: las sesiones abiertas antes se cierran.
+  passwordChangedAt DateTime?
+  name              String?
+  username          String?    @unique
+  image             String?
+  role              Role       @default(USER)
+  status            UserStatus @default(ACTIVE)
 
   // Perfil / compliance
   birthDate       DateTime?
@@ -405,6 +407,7 @@ model User {
   liveViews                LiveView[]
   /// Inicio de la oferta "Te echamos de menos" (48 h tras 30 dias sin comprar).
   winbackOfferStartedAt    DateTime?
+  authTokens               AuthToken[]
 
   @@index([role, status])
   @@index([createdAt])
@@ -442,6 +445,29 @@ model Session {
 
   @@index([userId])
   @@map("sessions")
+}
+
+enum AuthTokenKind {
+  PASSWORD_RESET
+  EMAIL_VERIFY
+}
+
+/// Enlace de un solo uso enviado por email (recuperar contraseña, verificar
+/// email). Solo se guarda el hash del token: quien lea la base de datos no
+/// puede usar los enlaces.
+model AuthToken {
+  id        String        @id @default(cuid())
+  userId    String
+  kind      AuthTokenKind
+  tokenHash String        @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime      @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, kind, createdAt])
+  @@map("auth_tokens")
 }
 
 model VerificationToken {
@@ -2294,40 +2320,40 @@ enum DistributorSaleStatus {
 
 /// Compra con garantia entre un fan y un distribuidor, dentro de la web.
 model DistributorSale {
-  id              String                @id @default(cuid())
-  distributorId   String
-  fanId           String
-  accountId       String
-  packageId       String?
-  tokens          Int
-  currency        String
+  id                 String                @id @default(cuid())
+  distributorId      String
+  fanId              String
+  accountId          String
+  packageId          String?
+  tokens             Int
+  currency           String
   /// Lo que paga el fan, en centesimas de su moneda.
-  amount          Int
+  amount             Int
   /// Lo que valian esos tokens al cambio oficial del dia (centesimas). Solo referencia para disputas.
-  referenceAmount Int
-  status          DistributorSaleStatus @default(AWAITING_PAYMENT)
+  referenceAmount    Int
+  status             DistributorSaleStatus @default(AWAITING_PAYMENT)
   /// Referencia del pago que pone el fan.
-  paymentRef      String?
+  paymentRef         String?
   /// Captura del comprobante (obligatoria al marcar "Ya pagué").
-  paymentProofKey String?
-  expiresAt       DateTime
-  paidAt          DateTime?
-  completedAt     DateTime?
-  cancelledAt     DateTime?
-  cancelReason    String?
-  disputedAt      DateTime?
+  paymentProofKey    String?
+  expiresAt          DateTime
+  paidAt             DateTime?
+  completedAt        DateTime?
+  cancelledAt        DateTime?
+  cancelReason       String?
+  disputedAt         DateTime?
   /// FAN o DISTRIBUTOR
-  disputeBy       String?
-  disputeReason   String?
+  disputeBy          String?
+  disputeReason      String?
   /// Prueba que sube quien abre la disputa (captura de su cuenta, del chat...).
   disputeEvidenceKey String?
-  resolvedById    String?
-  resolvedAt      DateTime?
+  resolvedById       String?
+  resolvedAt         DateTime?
   /// Lo que decidio el equipo y por que (lo ven el fan y el distribuidor).
-  resolutionNote  String?
+  resolutionNote     String?
   /// Valoracion del fan: 1 bien, -1 mal.
-  rating          Int?
-  createdAt       DateTime              @default(now())
+  rating             Int?
+  createdAt          DateTime              @default(now())
 
   distributor Distributor         @relation(fields: [distributorId], references: [id], onDelete: Cascade)
   fan         User                @relation("DistributorBuyer", fields: [fanId], references: [id], onDelete: Cascade)

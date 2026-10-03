@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import type { KycStatus, PayoutStatus, ReportStatus } from '@prisma/client';
 
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
+import { sendAccountNotice } from '@/lib/email';
 import { prisma } from '@/lib/prisma';
 import { assignFounderNumber } from '@/lib/referrals';
 import { applyLedgerEntry } from '@/lib/tokens';
@@ -51,7 +52,7 @@ export async function reviewKycAction(input: {
 
     const kyc = await prisma.kycVerification.findUnique({
       where: { id: input.kycId },
-      include: { model: { select: { id: true, userId: true, stageName: true } } },
+      include: { model: { select: { id: true, userId: true, stageName: true, user: { select: { email: true } } } } },
     });
     if (!kyc) return { ok: false, error: 'Verificacion no encontrada.' };
     if (kyc.status !== 'PENDING') {
@@ -107,6 +108,30 @@ export async function reviewKycAction(input: {
     await audit(admin.id, `KYC_${input.decision}`, 'KycVerification', kyc.id, {
       model: kyc.model.stageName,
     });
+
+    await sendAccountNotice(
+      kyc.model.user.email,
+      input.decision === 'APPROVED'
+        ? {
+            subject: 'Tu verificación está aprobada',
+            heading: '¡Ya eres creadora verificada!',
+            body: [
+              `Hola, ${kyc.model.stageName}. Hemos revisado tus documentos y tu cuenta de creadora está verificada.`,
+              'Ya puedes hacer directos, recibir llamadas y publicar contenido de pago.',
+            ],
+            link: { label: 'Ir a mi panel', path: '/dashboard/model' },
+          }
+        : {
+            subject: 'Tu verificación necesita cambios',
+            heading: 'No pudimos aprobar tu verificación',
+            body: [
+              `Hola, ${kyc.model.stageName}. Revisamos tus documentos y no pudimos aprobarlos.`,
+              `Motivo: ${input.rejectionReason?.trim() || 'revisa que los documentos se lean bien y coincidan con tus datos.'}`,
+              'Puedes enviarlos de nuevo desde tu panel.',
+            ],
+            link: { label: 'Enviar de nuevo', path: '/dashboard/model' },
+          },
+    );
 
     revalidatePath('/admin/kyc');
     revalidatePath('/models');
@@ -279,7 +304,7 @@ export async function processPayoutAction(input: {
 
     const payout = await prisma.payoutRequest.findUnique({
       where: { id: input.payoutId },
-      include: { model: { select: { userId: true, stageName: true } } },
+      include: { model: { select: { userId: true, stageName: true, user: { select: { email: true } } } } },
     });
     if (!payout) return { ok: false, error: 'Retiro no encontrado.' };
     if (payout.status === 'PAID' || payout.status === 'REJECTED') {
@@ -353,6 +378,33 @@ export async function processPayoutAction(input: {
       method: payout.method,
       model: payout.model.stageName,
     });
+
+    if (input.decision === 'PAID' || input.decision === 'REJECTED') {
+      const amount = `${(payout.amountCents / 100).toLocaleString('es', { minimumFractionDigits: 2 })} $`;
+      await sendAccountNotice(
+        payout.model.user.email,
+        input.decision === 'PAID'
+          ? {
+              subject: `Retiro pagado: ${amount}`,
+              heading: 'Tu retiro está pagado',
+              body: [
+                `Hola, ${payout.model.stageName}. Hemos enviado tu retiro de ${amount}.`,
+                'Según el método que elegiste, puede tardar un poco en verse en tu cuenta.',
+              ],
+              link: { label: 'Ver mis retiros', path: '/dashboard/model/payouts' },
+            }
+          : {
+              subject: 'Tu retiro no se pudo pagar',
+              heading: 'Retiro rechazado',
+              body: [
+                `Hola, ${payout.model.stageName}. No pudimos pagar tu retiro de ${amount}.`,
+                `Motivo: ${input.notes?.trim() ?? '—'}`,
+                'Los tokens han vuelto a tu saldo para que lo pidas de nuevo.',
+              ],
+              link: { label: 'Ver mis retiros', path: '/dashboard/model/payouts' },
+            },
+      );
+    }
 
     revalidatePath('/admin/payouts');
     revalidatePath('/dashboard/model/payouts');

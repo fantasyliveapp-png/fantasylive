@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
+import { emailVerificationBlock } from '@/lib/auth-tokens';
 import { config } from '@/lib/config';
 import { normalizeCountryCode } from '@/lib/countries';
 import {
@@ -88,7 +89,7 @@ export async function createSaleAction(packageId: string, acceptedTerms: boolean
     if (!config.distributors.enabled) return { ok: false, error: 'El programa de distribuidores no está activo.' };
     if (!acceptedTerms) return { ok: false, error: 'Confirma que entiendes cómo funciona la compra.' };
     await expireSales();
-    const block = await fanBlock(me.id);
+    const block = (await fanBlock(me.id)) ?? (await emailVerificationBlock(me.id));
     if (block) return { ok: false, error: block };
 
     const pkg = await prisma.distributorPackage.findUnique({

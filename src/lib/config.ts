@@ -213,6 +213,24 @@ export const config = {
     /** Red de esa cartera (TRC20, ERC20...). Pagar por otra red pierde el dinero. */
     usdtNetwork: process.env.DISTRIBUTOR_USDT_NETWORK ?? 'TRC20',
   },
+  /**
+   * Correo saliente (SMTP): recuperar contraseña, verificar email y avisos.
+   * Sirve cualquier servidor SMTP (el propio del VPS, o un proveedor). Sin
+   * SMTP_HOST no se envia nada: los enlaces salen en el registro del servidor
+   * y la verificacion del email no se exige (nadie podria verificar).
+   */
+  email: {
+    host: process.env.SMTP_HOST ?? '',
+    port: num(process.env.SMTP_PORT, 587),
+    /** true = TLS directo (puerto 465); false = STARTTLS (587) o sin cifrar (25 local). */
+    secure: bool(process.env.SMTP_SECURE, false),
+    user: process.env.SMTP_USER ?? '',
+    pass: process.env.SMTP_PASS ?? '',
+    from: process.env.EMAIL_FROM || 'FantasyLive <no-reply@fantasylive.app>',
+    get configured() {
+      return Boolean(process.env.SMTP_HOST);
+    },
+  },
   moderation: {
     adminAlertEmail: process.env.ADMIN_ALERT_EMAIL || 'admin@fantasylive.test',
     requireKycToStream: bool(process.env.REQUIRE_KYC_TO_STREAM, true),
