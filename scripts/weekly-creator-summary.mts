@@ -13,7 +13,8 @@ import { sendWeeklySummaries } from '../src/lib/weekly-summary';
 
 async function main() {
   const r = await sendWeeklySummaries({ force: process.argv.includes('--force') });
-  if (r.alreadyDone) console.log(`[weekly] la semana ${r.week} ya se envio; nada que hacer`);
+  if (r.noEmail) console.log('[weekly] el correo no esta configurado (SMTP_HOST): no se envia nada');
+  else if (r.alreadyDone) console.log(`[weekly] la semana ${r.week} ya se envio; nada que hacer`);
   else console.log(`[weekly] ${r.week}: ${r.sent} enviados, ${r.skipped} sin actividad`);
 }
 

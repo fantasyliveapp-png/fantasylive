@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { config } from '@/lib/config';
-import { appLink, formatEmailDate, formatUsd, sendTemplate } from '@/lib/email';
+import { appLink, emailEnabled, formatEmailDate, formatUsd, sendTemplate } from '@/lib/email';
 import { prisma } from '@/lib/prisma';
 import { EARNING_TYPES } from '@/lib/tokens';
 
@@ -33,9 +33,11 @@ const tokensLabel = (tokens: number) =>
 export async function sendWeeklySummaries(opts: { force?: boolean } = {}) {
   const now = new Date();
   const week = isoWeek(now);
+  // Sin correo configurado no se envia nada ni se da la semana por hecha.
+  if (!emailEnabled()) return { week, sent: 0, skipped: 0, alreadyDone: false, noEmail: true };
   if (!opts.force) {
     const last = await prisma.platformSetting.findUnique({ where: { key: LAST_RUN_KEY } });
-    if (last?.value === week) return { week, sent: 0, skipped: 0, alreadyDone: true };
+    if (last?.value === week) return { week, sent: 0, skipped: 0, alreadyDone: true, noEmail: false };
   }
   const since = new Date(now.getTime() - 7 * 86_400_000);
 
@@ -94,5 +96,5 @@ export async function sendWeeklySummaries(opts: { force?: boolean } = {}) {
     create: { key: LAST_RUN_KEY, value: week, description: 'Ultima semana en que se envio el resumen semanal' },
     update: { value: week },
   });
-  return { week, sent, skipped, alreadyDone: false };
+  return { week, sent, skipped, alreadyDone: false, noEmail: false };
 }
