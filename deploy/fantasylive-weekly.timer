@@ -1,0 +1,16 @@
+##############################################################################
+# Resumen semanal de creadoras: los lunes a las 09:00 (hora del servidor)
+# Instalar en /etc/systemd/system/fantasylive-weekly.timer y habilitar con:
+#   systemctl enable --now fantasylive-weekly.timer
+##############################################################################
+
+[Unit]
+Description=FantasyLive - resumen semanal de creadoras (lunes)
+
+[Timer]
+OnCalendar=Mon *-*-* 09:00:00
+Persistent=true
+Unit=fantasylive-weekly.service
+
+[Install]
+WantedBy=timers.target

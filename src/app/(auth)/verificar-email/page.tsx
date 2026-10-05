@@ -1,44 +1,37 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
-import { CheckCircle2, XCircle } from 'lucide-react';
+import { redirect } from 'next/navigation';
 
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { consumeAuthToken, revokeAuthTokens } from '@/lib/auth-tokens';
+import { VerifyCodeForm } from '@/components/auth/password-reset-forms';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { getCurrentUser } from '@/lib/auth/guards';
+import { emailEnabled } from '@/lib/email';
 import { prisma } from '@/lib/prisma';
 
-export const metadata: Metadata = { title: 'Confirmar email' };
+export const metadata: Metadata = { title: 'Confirma tu email' };
 export const dynamic = 'force-dynamic';
 
-/** Enlace del correo de bienvenida: /verificar-email?token=... */
-export default async function VerifyEmailPage({ searchParams }: { searchParams: Promise<{ token?: string }> }) {
-  const { token = '' } = await searchParams;
-  const userId = await consumeAuthToken(token, 'EMAIL_VERIFY');
-  if (userId) {
-    await prisma.user.updateMany({ where: { id: userId, emailVerified: null }, data: { emailVerified: new Date() } });
-    await revokeAuthTokens(userId, 'EMAIL_VERIFY');
-  }
+/** Solo rutas internas como destino (nada de saltar a otra web). */
+function safeNext(v: string | undefined) {
+  return v && v.startsWith('/') && !v.startsWith('//') ? v : '/';
+}
+
+/** Escribir el codigo OTP de 6 cifras que llega por correo. */
+export default async function VerifyEmailPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
+  const next = safeNext((await searchParams).next);
+  const me = await getCurrentUser();
+  if (!me) redirect(`/login?callbackUrl=${encodeURIComponent('/verificar-email')}`);
+  const user = await prisma.user.findUnique({ where: { id: me.id }, select: { email: true, emailVerified: true } });
+  // Sin correo activo no hay codigo que escribir; si ya esta confirmado, a seguir.
+  if (!user || user.emailVerified || !emailEnabled()) redirect(next);
+
   return (
     <Card>
-      <CardHeader className="items-center text-center">
-        {userId ? (
-          <CheckCircle2 className="h-10 w-10 text-state-connected" />
-        ) : (
-          <XCircle className="h-10 w-10 text-muted-foreground" />
-        )}
-        <CardTitle className="text-2xl">{userId ? '¡Email confirmado!' : 'Enlace no válido'}</CardTitle>
+      <CardHeader>
+        <CardTitle className="text-2xl">Confirma tu email</CardTitle>
+        <CardDescription>Lo necesitas para comprar tokens, hacerte creadora y retirar tus ganancias.</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4 text-center text-sm text-muted-foreground">
-        <p>
-          {userId
-            ? 'Ya puedes comprar tokens, hacerte creadora y retirar tus ganancias.'
-            : 'Este enlace ya se usó o ha caducado (duran 48 horas). Entra en tu cuenta y pide otro desde el aviso de arriba.'}
-        </p>
-        <Link href="/" className="block">
-          <Button variant="brand" size="lg" className="w-full">
-            Ir a FantasyLive
-          </Button>
-        </Link>
+      <CardContent>
+        <VerifyCodeForm email={user.email} next={next} />
       </CardContent>
     </Card>
   );

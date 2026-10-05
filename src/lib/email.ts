@@ -1,5 +1,8 @@
 import 'server-only';
 
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+
 import nodemailer, { type Transporter } from 'nodemailer';
 
 import { config } from '@/lib/config';
@@ -7,13 +10,15 @@ import { config } from '@/lib/config';
 /**
  * CORREO SALIENTE
  *
- * Todo pasa por SMTP, asi que sirve cualquier servidor: el Postfix del propio
- * VPS o un proveedor. Cambiar de uno a otro es tocar SMTP_* en el .env.
+ * Todo pasa por SMTP, asi que sirve cualquier servidor: el Stalwart del
+ * propio VPS o un proveedor. Cambiar de uno a otro es tocar SMTP_* en el .env.
  *
- * Sin SMTP configurado no se envia nada: el enlace se escribe en el registro
- * del servidor (asi se puede probar en local y un admin puede pasarlo a mano).
+ * Sin SMTP configurado no se envia nada: el asunto (y el enlace o codigo) se
+ * escriben en el registro del servidor, asi se puede probar en local.
  *
- * Los correos nunca llevan contenido adulto: solo texto de cuenta.
+ * Las plantillas estan en /emails (diseño de Fantazy Live): HTML con
+ * variables {{nombre}} (se escapan) y {{{nombre}}} (HTML ya preparado aqui).
+ * Las imagenes `assets/...` se sirven desde /public/email-assets.
  */
 
 let transporter: Transporter | null = null;
@@ -21,13 +26,14 @@ let transporter: Transporter | null = null;
 function getTransporter(): Transporter | null {
   if (!config.email.configured) return null;
   if (!transporter) {
+    const local = config.email.host === 'localhost' || config.email.host === '127.0.0.1';
     transporter = nodemailer.createTransport({
       host: config.email.host,
       port: config.email.port,
       secure: config.email.secure,
       auth: config.email.user ? { user: config.email.user, pass: config.email.pass } : undefined,
-      // El Postfix local usa un certificado propio: no se exige que sea publico.
-      tls: { rejectUnauthorized: config.email.host !== 'localhost' && config.email.host !== '127.0.0.1' },
+      // El servidor de correo local usa su propio certificado.
+      tls: { rejectUnauthorized: !local },
     });
   }
   return transporter;
@@ -37,141 +43,149 @@ export function emailEnabled() {
   return config.email.configured;
 }
 
-type Mail = {
-  to: string;
-  subject: string;
-  /** Titulo grande dentro del correo. */
-  heading: string;
-  /** Parrafos de texto (sin HTML). */
-  paragraphs: string[];
-  /** Boton principal. */
-  action?: { label: string; url: string };
-  /** Nota pequeña al final ("Si no fuiste tu..."). */
-  footnote?: string;
-};
+export function appLink(p: string) {
+  return `${config.app.url.replace(/\/$/, '')}${p}`;
+}
 
-/** Envia un correo. Nunca lanza: devuelve false si no se pudo. */
-export async function sendEmail(mail: Mail): Promise<boolean> {
+// ---------------------------------------------------------------------------
+// Plantillas
+// ---------------------------------------------------------------------------
+
+export type TemplateName =
+  | '00-aviso'
+  | '01-bienvenida-verificar-email'
+  | '02-restablecer-contrasena'
+  | '05-suscripcion-confirmada'
+  | '09-suscripcion-cancelada'
+  | '11-creador-solicitud-aprobada'
+  | '12-creador-solicitud-rechazada'
+  | '13-creador-pago-enviado'
+  | '14-creador-resumen-semanal'
+  | '15-contrasena-cambiada'
+  | '16-nuevo-inicio-sesion'
+  | '17-cambio-email';
+
+const cache = new Map<string, string>();
+
+function loadTemplate(name: TemplateName) {
+  const cached = process.env.NODE_ENV === 'production' ? cache.get(name) : undefined;
+  if (cached) return cached;
+  const html = readFileSync(path.join(process.cwd(), 'emails', `${name}.html`), 'utf8');
+  cache.set(name, html);
+  return html;
+}
+
+const esc = (t: string) =>
+  t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+type Vars = Record<string, string | number | null | undefined>;
+
+function commonVars(): Vars {
+  return {
+    appUrl: config.app.url.replace(/\/$/, ''),
+    year: new Date().getFullYear(),
+    companyAddress: process.env.COMPANY_ADDRESS || config.app.url.replace(/^https?:\/\//, ''),
+    preferencesUrl: appLink('/dashboard/settings'),
+    supportUrl: appLink('/soporte'),
+    securityUrl: appLink('/forgot-password'),
+    settingsUrl: appLink('/dashboard/settings'),
+  };
+}
+
+export function renderTemplate(name: TemplateName, vars: Vars) {
+  const all = { ...commonVars(), ...vars };
+  const value = (key: string) => {
+    const v = all[key];
+    return v == null ? '' : String(v);
+  };
+  return loadTemplate(name)
+    .replace(/\{\{\{\s*(\w+)\s*\}\}\}/g, (_, k: string) => value(k))
+    .replace(/\{\{\s*(\w+)\s*\}\}/g, (_, k: string) => esc(value(k)))
+    .replace(/(src="|url\(')assets\//g, `$1${appLink('/email-assets/')}`);
+}
+
+/** Version en texto plano (para clientes sin HTML y para el filtro antispam). */
+function toText(html: string) {
+  const body = html.slice(html.indexOf('<body'));
+  return body
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<a [^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g, (_, href: string, label: string) => `${label.replace(/<[^>]+>/g, '').trim()} (${href})`)
+    .replace(/<(br|\/p|\/h1|\/tr|\/li)[^>]*>/g, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;|&#8202;|&#847;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .join('\n');
+}
+
+/** Envia una plantilla. Nunca lanza: devuelve false si no se pudo. */
+export async function sendTemplate(name: TemplateName, to: string, subject: string, vars: Vars): Promise<boolean> {
+  let html: string;
+  try {
+    html = renderTemplate(name, vars);
+  } catch (error) {
+    console.error('[email] no se pudo preparar la plantilla', name, error);
+    return false;
+  }
   const t = getTransporter();
   if (!t) {
-    console.info(
-      `[email] (sin SMTP) Para ${mail.to}: ${mail.subject}${mail.action ? ` -> ${mail.action.url}` : ''}`,
-    );
+    const hint = vars.code ? ` (codigo ${vars.code})` : vars.actionUrl ? ` -> ${vars.actionUrl}` : '';
+    console.info(`[email] (sin SMTP) Para ${to}: ${subject}${hint}`);
     return false;
   }
   try {
-    await t.sendMail({
-      from: config.email.from,
-      to: mail.to,
-      subject: mail.subject,
-      text: renderText(mail),
-      html: renderHtml(mail),
-    });
+    await t.sendMail({ from: config.email.from, to, subject, html, text: toText(html) });
     return true;
   } catch (error) {
-    console.error('[email] no se pudo enviar', mail.subject, 'a', mail.to, error);
+    console.error('[email] no se pudo enviar', subject, 'a', to, error);
     return false;
   }
 }
 
 // ---------------------------------------------------------------------------
-// Plantilla
+// Ayudas de formato
 // ---------------------------------------------------------------------------
 
-const esc = (t: string) =>
-  t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-
-function renderText(m: Mail) {
-  return [
-    m.heading,
-    '',
-    ...m.paragraphs.flatMap((p) => [p, '']),
-    ...(m.action ? [`${m.action.label}: ${m.action.url}`, ''] : []),
-    ...(m.footnote ? [m.footnote, ''] : []),
-    `— ${config.app.name}`,
-  ].join('\n');
+export function formatEmailDate(d: Date, withTime = false) {
+  const date = d.toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+  if (!withTime) return date;
+  const time = d.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
+  return `${date}, ${time} (UTC)`;
 }
 
-function renderHtml(m: Mail) {
-  const brand = '#e0283c';
-  const paragraphs = m.paragraphs
-    .map((p) => `<p style="margin:0 0 14px;font-size:15px;line-height:1.55;color:#d6d6dc">${esc(p)}</p>`)
-    .join('');
-  const button = m.action
-    ? `<p style="margin:24px 0"><a href="${esc(m.action.url)}" style="display:inline-block;background:${brand};color:#fff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 22px;border-radius:10px">${esc(m.action.label)}</a></p>
-<p style="margin:0 0 14px;font-size:12px;line-height:1.5;color:#8b8b95">Si el botón no funciona, copia este enlace:<br><span style="word-break:break-all;color:#b9b9c2">${esc(m.action.url)}</span></p>`
-    : '';
-  const foot = m.footnote
-    ? `<p style="margin:18px 0 0;font-size:12px;line-height:1.5;color:#8b8b95">${esc(m.footnote)}</p>`
-    : '';
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(m.subject)}</title></head>
-<body style="margin:0;background:#0b0b0f;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0b0b0f;padding:28px 12px"><tr><td align="center">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#16161c;border-radius:16px;padding:28px">
-<tr><td>
-<p style="margin:0 0 22px;font-size:20px;font-weight:800;letter-spacing:.5px;color:#fff">${esc(config.app.name)}</p>
-<h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;color:#fff">${esc(m.heading)}</h1>
-${paragraphs}${button}${foot}
-</td></tr></table>
-<p style="margin:16px 0 0;font-size:11px;color:#6b6b75">${esc(config.app.name)} · ${esc(config.app.url.replace(/^https?:\/\//, ''))} · Solo mayores de 18 años</p>
-</td></tr></table></body></html>`;
+export function formatUsd(cents: number) {
+  return `${(cents / 100).toLocaleString('es', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} US$`;
 }
 
 // ---------------------------------------------------------------------------
-// Correos de la web
+// Aviso generico (00-aviso): para lo que no tiene plantilla propia
 // ---------------------------------------------------------------------------
 
-export function appLink(path: string) {
-  return `${config.app.url.replace(/\/$/, '')}${path}`;
+const P_STYLE =
+  'margin:0 0 16px; font-family:Arial, Helvetica, sans-serif; font-size:16px; line-height:26px; mso-line-height-rule:exactly; color:#F5F1EC;';
+
+function buttonHtml(label: string, url: string) {
+  const u = esc(url);
+  const l = esc(label);
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td height="12" style="height:12px; font-size:0; line-height:0;">&nbsp;</td></tr><tr><td align="center"><table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;"><tr><td align="center" bgcolor="#C0273C" style="background:#C0273C; border-radius:6px;"><a href="${u}" style="display:block; padding:16px 40px; font-family:Arial, Helvetica, sans-serif; font-size:16px; font-weight:bold; color:#F5F1EC; text-decoration:none; letter-spacing:1px; text-transform:uppercase;">${l}</a></td></tr></table></td></tr><tr><td height="28" style="height:28px; font-size:0; line-height:0;">&nbsp;</td></tr></table>`;
 }
 
-export function sendVerifyEmail(to: string, name: string, url: string, welcome: boolean) {
-  return sendEmail({
-    to,
-    subject: welcome ? `Bienvenido a ${config.app.name}: confirma tu email` : 'Confirma tu email',
-    heading: welcome ? `¡Hola, ${name}!` : 'Confirma tu email',
-    paragraphs: [
-      ...(welcome ? [`Tu cuenta en ${config.app.name} ya está creada.`] : []),
-      'Confirma que este email es tuyo. Lo necesitas para comprar tokens, hacerte creadora y retirar tus ganancias, y para poder recuperar tu cuenta si olvidas la contraseña.',
-    ],
-    action: { label: 'Confirmar mi email', url },
-    footnote: 'El enlace caduca en 48 horas. Si no creaste esta cuenta, ignora este correo.',
-  });
-}
-
-export function sendPasswordResetEmail(to: string, url: string) {
-  return sendEmail({
-    to,
-    subject: 'Restablece tu contraseña',
-    heading: 'Restablece tu contraseña',
-    paragraphs: ['Alguien (seguramente tú) pidió cambiar la contraseña de tu cuenta.'],
-    action: { label: 'Poner una contraseña nueva', url },
-    footnote:
-      'El enlace caduca en 1 hora y solo sirve una vez. Si no lo pediste tú, ignora este correo: tu contraseña no cambia.',
-  });
-}
-
-export function sendPasswordChangedEmail(to: string) {
-  return sendEmail({
-    to,
-    subject: 'Tu contraseña se ha cambiado',
-    heading: 'Tu contraseña se ha cambiado',
-    paragraphs: [
-      'La contraseña de tu cuenta acaba de cambiar y se cerró la sesión en tus otros dispositivos.',
-      'Si fuiste tú, no tienes que hacer nada.',
-    ],
-    action: { label: 'No fui yo: recuperar mi cuenta', url: appLink('/forgot-password') },
-    footnote: 'Si no fuiste tú, recupera la cuenta enseguida y escríbenos desde Soporte.',
-  });
-}
-
-/** Aviso de la cuenta (KYC, retiros...): texto corto y un enlace. */
-export function sendAccountNotice(to: string, notice: { subject: string; heading: string; body: string[]; link?: { label: string; path: string } }) {
-  return sendEmail({
-    to,
-    subject: notice.subject,
-    heading: notice.heading,
-    paragraphs: notice.body,
-    action: notice.link ? { label: notice.link.label, url: appLink(notice.link.path) } : undefined,
+export function sendNotice(
+  to: string,
+  n: { subject: string; heading: string; paragraphs: string[]; action?: { label: string; url: string }; footnote?: string },
+) {
+  return sendTemplate('00-aviso', to, n.subject, {
+    subject: n.subject,
+    preheader: n.paragraphs[0] ?? n.heading,
+    heading: n.heading,
+    bodyHtml: n.paragraphs.map((p) => `<p style="${P_STYLE}">${esc(p)}</p>`).join('\n'),
+    buttonHtml: n.action ? buttonHtml(n.action.label, n.action.url) : '',
+    footnote: n.footnote ?? '',
   });
 }

@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Ban, Coins, Mail, MessageCircle, ShieldCheck, User as UserIcon } from 'lucide-react';
 
 import { LogoutButton } from '@/components/auth/logout-button';
+import { ChangeEmailForm } from '@/components/auth/password-reset-forms';
 import { BlockedAccounts } from '@/components/social/blocked-accounts';
 import { MessagePrivacySetting } from '@/components/social/message-privacy-setting';
 import { Badge } from '@/components/ui/badge';
@@ -70,6 +71,7 @@ export default async function SettingsPage() {
             <Field label="Nombre" value={user.name ?? '-'} />
             <Separator />
             <Field label="Email" value={user.email} />
+            <ChangeEmailForm />
             <Separator />
             <Field
               label="Fecha de nacimiento"

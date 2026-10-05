@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 
 import { prisma } from '@/lib/prisma';
+import { recordLoginDevice } from '@/lib/account-mail';
 import { authConfig } from './auth.config';
 
 const credentialsSchema = z.object({
@@ -49,6 +50,9 @@ const providers = [
         where: { id: user.id },
         data: { lastSeenAt: new Date() },
       });
+
+      // Aviso si entra desde un dispositivo nuevo (no frena el inicio de sesion).
+      void recordLoginDevice(user);
 
       return {
         id: user.id,

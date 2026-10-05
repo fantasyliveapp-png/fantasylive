@@ -226,7 +226,7 @@ export const config = {
     secure: bool(process.env.SMTP_SECURE, false),
     user: process.env.SMTP_USER ?? '',
     pass: process.env.SMTP_PASS ?? '',
-    from: process.env.EMAIL_FROM || 'FantasyLive <no-reply@fantasylive.app>',
+    from: process.env.EMAIL_FROM || 'Fantazy Live <no-reply@fantasylive.app>',
     get configured() {
       return Boolean(process.env.SMTP_HOST);
     },

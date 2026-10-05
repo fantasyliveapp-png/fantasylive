@@ -408,6 +408,7 @@ model User {
   /// Inicio de la oferta "Te echamos de menos" (48 h tras 30 dias sin comprar).
   winbackOfferStartedAt    DateTime?
   authTokens               AuthToken[]
+  devices                  UserDevice[]
 
   @@index([role, status])
   @@index([createdAt])
@@ -449,7 +450,10 @@ model Session {
 
 enum AuthTokenKind {
   PASSWORD_RESET
+  /// Codigo OTP de 6 cifras para confirmar el email.
   EMAIL_VERIFY
+  /// Enlace al email nuevo para confirmar un cambio de email.
+  EMAIL_CHANGE
 }
 
 /// Enlace de un solo uso enviado por email (recuperar contraseña, verificar
@@ -462,12 +466,34 @@ model AuthToken {
   tokenHash String        @unique
   expiresAt DateTime
   usedAt    DateTime?
+  /// Intentos fallidos (codigos OTP: se invalida al 5.o).
+  attempts  Int           @default(0)
+  /// Dato extra: el email nuevo en EMAIL_CHANGE.
+  payload   String?
   createdAt DateTime      @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, kind, createdAt])
   @@map("auth_tokens")
+}
+
+/// Dispositivos desde los que ha entrado cada cuenta (para avisar de un
+/// inicio de sesion desde uno nuevo). deviceKey = hash de sistema + navegador.
+model UserDevice {
+  id          String   @id @default(cuid())
+  userId      String
+  deviceKey   String
+  label       String
+  lastIp      String?
+  lastCountry String?
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deviceKey])
+  @@map("user_devices")
 }
 
 model VerificationToken {

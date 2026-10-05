@@ -4,7 +4,8 @@ import { revalidatePath } from 'next/cache';
 import type { KycStatus, PayoutStatus, ReportStatus } from '@prisma/client';
 
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
-import { sendAccountNotice } from '@/lib/email';
+import { DEAL_SELECT, effectiveTerms } from '@/lib/deals';
+import { appLink, formatEmailDate, formatUsd, sendNotice, sendTemplate } from '@/lib/email';
 import { prisma } from '@/lib/prisma';
 import { assignFounderNumber } from '@/lib/referrals';
 import { applyLedgerEntry } from '@/lib/tokens';
@@ -52,7 +53,7 @@ export async function reviewKycAction(input: {
 
     const kyc = await prisma.kycVerification.findUnique({
       where: { id: input.kycId },
-      include: { model: { select: { id: true, userId: true, stageName: true, user: { select: { email: true } } } } },
+      include: { model: { select: { id: true, userId: true, stageName: true, user: { select: { email: true, username: true } } } } },
     });
     if (!kyc) return { ok: false, error: 'Verificacion no encontrada.' };
     if (kyc.status !== 'PENDING') {
@@ -109,29 +110,22 @@ export async function reviewKycAction(input: {
       model: kyc.model.stageName,
     });
 
-    await sendAccountNotice(
-      kyc.model.user.email,
-      input.decision === 'APPROVED'
-        ? {
-            subject: 'Tu verificación está aprobada',
-            heading: '¡Ya eres creadora verificada!',
-            body: [
-              `Hola, ${kyc.model.stageName}. Hemos revisado tus documentos y tu cuenta de creadora está verificada.`,
-              'Ya puedes hacer directos, recibir llamadas y publicar contenido de pago.',
-            ],
-            link: { label: 'Ir a mi panel', path: '/dashboard/model' },
-          }
-        : {
-            subject: 'Tu verificación necesita cambios',
-            heading: 'No pudimos aprobar tu verificación',
-            body: [
-              `Hola, ${kyc.model.stageName}. Revisamos tus documentos y no pudimos aprobarlos.`,
-              `Motivo: ${input.rejectionReason?.trim() || 'revisa que los documentos se lean bien y coincidan con tus datos.'}`,
-              'Puedes enviarlos de nuevo desde tu panel.',
-            ],
-            link: { label: 'Enviar de nuevo', path: '/dashboard/model' },
-          },
-    );
+    if (input.decision === 'APPROVED') {
+      await sendTemplate('11-creador-solicitud-aprobada', kyc.model.user.email, 'Tu solicitud de creadora está aprobada', {
+        creatorName: kyc.model.stageName,
+        actionUrl: appLink('/dashboard/model'),
+        guidelinesUrl: appLink('/legal/terms'),
+      });
+    } else {
+      await sendTemplate('12-creador-solicitud-rechazada', kyc.model.user.email, 'Sobre tu solicitud de creadora', {
+        userName: kyc.model.user.username ?? kyc.model.stageName,
+        rejectionReason:
+          input.rejectionReason?.trim() || 'Los documentos no se leen bien o no coinciden con tus datos.',
+        // Puede corregirlo y volver a enviarla en cuanto quiera.
+        reapplyDate: formatEmailDate(new Date()),
+        actionUrl: appLink('/dashboard/model'),
+      });
+    }
 
     revalidatePath('/admin/kyc');
     revalidatePath('/models');
@@ -304,7 +298,7 @@ export async function processPayoutAction(input: {
 
     const payout = await prisma.payoutRequest.findUnique({
       where: { id: input.payoutId },
-      include: { model: { select: { userId: true, stageName: true, user: { select: { email: true } } } } },
+      include: { model: { select: { userId: true, stageName: true, createdAt: true, ...DEAL_SELECT, user: { select: { email: true } } } } },
     });
     if (!payout) return { ok: false, error: 'Retiro no encontrado.' };
     if (payout.status === 'PAID' || payout.status === 'REJECTED') {
@@ -379,31 +373,43 @@ export async function processPayoutAction(input: {
       model: payout.model.stageName,
     });
 
-    if (input.decision === 'PAID' || input.decision === 'REJECTED') {
-      const amount = `${(payout.amountCents / 100).toLocaleString('es', { minimumFractionDigits: 2 })} $`;
-      await sendAccountNotice(
-        payout.model.user.email,
-        input.decision === 'PAID'
-          ? {
-              subject: `Retiro pagado: ${amount}`,
-              heading: 'Tu retiro está pagado',
-              body: [
-                `Hola, ${payout.model.stageName}. Hemos enviado tu retiro de ${amount}.`,
-                'Según el método que elegiste, puede tardar un poco en verse en tu cuenta.',
-              ],
-              link: { label: 'Ver mis retiros', path: '/dashboard/model/payouts' },
-            }
-          : {
-              subject: 'Tu retiro no se pudo pagar',
-              heading: 'Retiro rechazado',
-              body: [
-                `Hola, ${payout.model.stageName}. No pudimos pagar tu retiro de ${amount}.`,
-                `Motivo: ${input.notes?.trim() ?? '—'}`,
-                'Los tokens han vuelto a tu saldo para que lo pidas de nuevo.',
-              ],
-              link: { label: 'Ver mis retiros', path: '/dashboard/model/payouts' },
-            },
-      );
+    if (input.decision === 'PAID') {
+      // Periodo: desde el retiro pagado anterior (o el alta) hasta que pidio este.
+      const prev = await prisma.payoutRequest.findFirst({
+        where: { modelId: payout.modelId, status: 'PAID', id: { not: payout.id } },
+        orderBy: { paidAt: 'desc' },
+        select: { paidAt: true },
+      });
+      const arrival =
+        payout.method === 'USDT_TRC20' || payout.method === 'CRYPTO' ? '1' : payout.method === 'PAYPAL' ? '1-2' : '3-5';
+      const destination =
+        payout.destinationMasked ??
+        ({ WIRE_TRANSFER: 'Transferencia bancaria', BANK_TRANSFER: 'Transferencia bancaria', USDT_TRC20: 'USDT (TRC20)', CRYPTO: 'Cripto', PAYPAL: 'PayPal' } as Record<string, string>)[
+          payout.method
+        ] ?? payout.method;
+      await sendTemplate('13-creador-pago-enviado', payout.model.user.email, `Pago enviado: ${formatUsd(payout.amountCents)}`, {
+        creatorName: payout.model.stageName,
+        amount: formatUsd(payout.amountCents),
+        periodStart: formatEmailDate(prev?.paidAt ?? payout.model.createdAt),
+        periodEnd: formatEmailDate(payout.requestedAt),
+        payoutDestination: destination,
+        payoutId: input.externalRef?.trim() || payout.externalRef || payout.id.slice(-8).toUpperCase(),
+        payoutDate: formatEmailDate(new Date()),
+        arrivalDays: arrival,
+        feePercent: effectiveTerms(payout.model).platformPercent,
+        actionUrl: appLink('/dashboard/model/payouts'),
+      });
+    } else if (input.decision === 'REJECTED') {
+      await sendNotice(payout.model.user.email, {
+        subject: 'Tu retiro no se pudo pagar',
+        heading: 'Retiro rechazado',
+        paragraphs: [
+          `Hola, ${payout.model.stageName}. No pudimos pagar tu retiro de ${formatUsd(payout.amountCents)}.`,
+          `Motivo: ${input.notes?.trim() ?? '—'}`,
+          'Los tokens han vuelto a tu saldo para que lo pidas de nuevo.',
+        ],
+        action: { label: 'Ver mis retiros', url: appLink('/dashboard/model/payouts') },
+      });
     }
 
     revalidatePath('/admin/payouts');

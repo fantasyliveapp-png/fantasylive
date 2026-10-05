@@ -134,12 +134,10 @@ export function RegisterForm({
   useEffect(() => {
     if (state.success) {
       toast.success(state.success);
-      // A los fans se les pregunta que les gusta para su Descubrir.
-      router.push(
-        wantsCreator
-          ? '/hazte-creador'
-          : `/bienvenida${next ? `?next=${encodeURIComponent(next)}` : ''}`,
-      );
+      // Primero el codigo OTP del email; despues, a los fans se les pregunta
+      // que les gusta para su Descubrir (o la creadora sigue a su alta).
+      const after = wantsCreator ? '/hazte-creador' : `/bienvenida${next ? `?next=${encodeURIComponent(next)}` : ''}`;
+      router.push(`/verificar-email?next=${encodeURIComponent(after)}`);
       router.refresh();
     }
     if (state.error) toast.error(state.error);

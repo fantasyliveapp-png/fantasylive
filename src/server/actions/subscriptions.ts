@@ -7,6 +7,7 @@ import { revalidatePath } from 'next/cache';
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { createNotification } from '@/lib/notifications';
 import { prisma } from '@/lib/prisma';
+import { appLink, formatEmailDate, sendTemplate } from '@/lib/email';
 import { GEO_BLOCKED_MESSAGE, isBlockedForViewer } from '@/lib/geo';
 import { InsufficientTokensError, transferWithCommission } from '@/lib/tokens';
 import { getActiveSubscription, subscriptionPeriodEnd } from '@/lib/subscriptions';
@@ -112,6 +113,8 @@ export async function subscribeAction(
       });
     });
 
+    await sendSubscriptionMail('05-suscripcion-confirmada', user.id, modelId, { price, offerLabel: offer?.label ?? null });
+
     revalidatePath(`/models/${slug}`);
     revalidatePath('/wallet');
     return {
@@ -148,10 +151,55 @@ export async function cancelSubscriptionAction(
       }),
     ]);
 
+    await sendSubscriptionMail('09-suscripcion-cancelada', user.id, modelId, { price: sub.priceTokens, offerLabel: null });
+
     revalidatePath(`/models/${slug}`);
     return { ok: true, active: false, message: 'Suscripcion cancelada.' };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
+  }
+}
+
+/** 05 al suscribirse / 09 al cancelar. Nunca frena la accion. */
+async function sendSubscriptionMail(
+  template: '05-suscripcion-confirmada' | '09-suscripcion-cancelada',
+  userId: string,
+  modelId: string,
+  data: { price: number; offerLabel: string | null },
+) {
+  try {
+    const [fan, sub] = await Promise.all([
+      prisma.user.findUnique({ where: { id: userId }, select: { email: true, username: true, name: true } }),
+      prisma.subscription.findUnique({
+        where: { userId_modelId: { userId, modelId } },
+        select: { id: true, currentPeriodEnd: true, model: { select: { stageName: true, slug: true } } },
+      }),
+    ]);
+    if (!fan || !sub) return;
+    const common = {
+      userName: fan.username ?? fan.name ?? 'hola',
+      creatorName: sub.model.stageName,
+      planName: data.offerLabel ? `Mensual (${data.offerLabel})` : 'Mensual',
+      actionUrl: appLink(`/models/${sub.model.slug}`),
+    };
+    if (template === '05-suscripcion-confirmada') {
+      await sendTemplate(template, fan.email, `Ya estás suscrito a ${sub.model.stageName}`, {
+        ...common,
+        amount: `${data.price} tokens`,
+        accessEndDate: formatEmailDate(sub.currentPeriodEnd),
+        paymentMethod: 'Tokens del monedero',
+        receiptNumber: sub.id.slice(-8).toUpperCase(),
+      });
+    } else {
+      const today = formatEmailDate(new Date());
+      await sendTemplate(template, fan.email, `Cancelaste tu suscripción a ${sub.model.stageName}`, {
+        ...common,
+        accessEndDate: today,
+        cancelDate: today,
+      });
+    }
+  } catch (error) {
+    console.error('[subscriptions] no se pudo enviar el correo', error);
   }
 }
 

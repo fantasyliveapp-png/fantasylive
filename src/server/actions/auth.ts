@@ -12,8 +12,7 @@ import { config } from '@/lib/config';
 import { isHandleFree } from '@/lib/creator-profile';
 import { isReservedUsername, USERNAME_PATTERN } from '@/lib/usernames';
 import { calculateAge } from '@/lib/utils';
-import { createAuthToken } from '@/lib/auth-tokens';
-import { appLink, sendVerifyEmail } from '@/lib/email';
+import { sendEmailOtp } from '@/lib/account-mail';
 
 export interface ActionState {
   error?: string;
@@ -163,12 +162,11 @@ export async function registerAction(
     throw error;
   }
 
-  // Bienvenida + enlace para confirmar el email (si falla, se puede reenviar).
+  // Bienvenida con el codigo OTP para confirmar el email (si falla, se reenvia).
   try {
-    const token = await createAuthToken(user.id, 'EMAIL_VERIFY');
-    if (token) await sendVerifyEmail(email, username, appLink(`/verificar-email?token=${token}`), true);
+    await sendEmailOtp(user.id, true);
   } catch (error) {
-    console.error('[register] no se pudo enviar el correo de bienvenida', error);
+    console.error('[register] no se pudo enviar el codigo de bienvenida', error);
   }
 
   if (bonus > 0) {
