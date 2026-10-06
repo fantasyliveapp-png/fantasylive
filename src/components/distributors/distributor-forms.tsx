@@ -139,7 +139,7 @@ export function LotProofForm({ orderId, usdt }: { orderId: string; usdt: boolean
     setUploading(true);
     try {
       const type = f.type || 'image/jpeg';
-      const r = await requestLotProofUploadUrlAction(orderId, f.name, type, f.size);
+      const r = await requestLotProofUploadUrlAction(orderId, f.name, type);
       if (!r.ok || !r.uploadUrl || !r.key) return void toast.error(r.error ?? 'No se pudo subir.');
       const up = await fetch(r.uploadUrl, { method: 'PUT', body: f, headers: { 'Content-Type': type } });
       if (!up.ok) return void toast.error('No se pudo subir el recibo.');

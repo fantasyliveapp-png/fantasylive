@@ -103,7 +103,6 @@ export function KycForm({
         kind,
         filename: file.name,
         contentType: file.type || 'image/jpeg',
-        sizeBytes: file.size,
       });
 
       if (!urlResult.ok || !urlResult.data) {

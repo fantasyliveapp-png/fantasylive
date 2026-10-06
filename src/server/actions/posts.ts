@@ -171,7 +171,6 @@ export async function requestPostUploadUrlAction(input: {
   postId: string;
   filename: string;
   contentType: string;
-  sizeBytes: number;
   isPreview?: boolean;
 }): Promise<PostActionResult<{ uploadUrl: string; key: string }>> {
   try {
@@ -183,7 +182,7 @@ export async function requestPostUploadUrlAction(input: {
       select: { id: true },
     });
     if (!post) return { ok: false, error: 'Publicacion no encontrada.' };
-    const invalid = checkUpload(input.contentType, input.sizeBytes, input.isPreview ? ['image'] : ['image', 'video']);
+    const invalid = checkUpload(input.contentType, input.isPreview ? ['image'] : ['image', 'video']);
     if (invalid) return { ok: false, error: invalid };
 
     const key = buildPostKey({
@@ -196,7 +195,6 @@ export async function requestPostUploadUrlAction(input: {
     const uploadUrl = await createUploadUrl({
       key,
       contentType: input.contentType,
-      sizeBytes: input.sizeBytes,
     });
     if (!uploadUrl) {
       return {

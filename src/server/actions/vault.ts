@@ -70,21 +70,20 @@ async function dropEmptyPacks(modelId: string) {
 export async function requestVaultUploadUrlAction(input: {
   filename: string;
   contentType: string;
-  sizeBytes: number;
 }): Promise<VaultActionResult<{ uploadUrl: string; key: string }>> {
   try {
     const { profile } = await requireCreator();
     if (!/^(image|video)\//.test(input.contentType)) {
       return { ok: false, error: 'Solo fotos o videos.' };
     }
-    const invalid = checkUpload(input.contentType, input.sizeBytes, ['image', 'video']);
+    const invalid = checkUpload(input.contentType, ['image', 'video']);
     if (invalid) return { ok: false, error: invalid };
     const count = await prisma.vaultItem.count({ where: { modelId: profile.id } });
     if (count >= MAX_VAULT_ITEMS) {
       return { ok: false, error: `Maximo ${MAX_VAULT_ITEMS} archivos en la Boveda.` };
     }
     const key = buildVaultKey({ modelId: profile.id, filename: input.filename });
-    const uploadUrl = await createUploadUrl({ key, contentType: input.contentType, sizeBytes: input.sizeBytes });
+    const uploadUrl = await createUploadUrl({ key, contentType: input.contentType });
     if (!uploadUrl) return { ok: false, error: 'El almacenamiento no esta configurado.' };
     return { ok: true, data: { uploadUrl, key } };
   } catch (error) {

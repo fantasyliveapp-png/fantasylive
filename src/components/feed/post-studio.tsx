@@ -600,7 +600,6 @@ export function PostStudio({
           postId,
           filename: item.filename,
           contentType: item.mimeType,
-          sizeBytes: item.blob.size,
         });
         if (!signed.ok || !signed.data) {
           setProgress(null);
@@ -622,7 +621,6 @@ export function PostStudio({
             postId,
             filename: `${item.filename}.jpg`,
             contentType: 'image/jpeg',
-            sizeBytes: item.previewBlob.size,
             isPreview: true,
           });
           if (signedPreview.ok && signedPreview.data) {

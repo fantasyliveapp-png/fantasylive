@@ -296,7 +296,7 @@ function Uploader({ group, economy, onDone }: { group: Group; economy: EconomyPa
     for (let n = 0; n < keep.length; n++) {
       const { file, hash } = keep[n]!;
       setBusy(`Subiendo ${n + 1}/${keep.length}`);
-      const url = await requestVaultUploadUrlAction({ filename: file.name, contentType: file.type, sizeBytes: file.size });
+      const url = await requestVaultUploadUrlAction({ filename: file.name, contentType: file.type });
       if (!url.ok || !url.data) {
         toast.error(url.error ?? 'No se pudo subir');
         break;

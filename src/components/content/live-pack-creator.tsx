@@ -147,7 +147,7 @@ export function LivePackCreator({
         setProgress({ label: `Subiendo ${i + 1} de ${files.length}...`, value: ((i + 2) * 100) / total });
         const mimeType = item.file.type || (item.isVideo ? 'video/mp4' : 'image/jpeg');
 
-        const signed = await requestPostUploadUrlAction({ postId, filename: item.file.name, contentType: mimeType, sizeBytes: item.file.size });
+        const signed = await requestPostUploadUrlAction({ postId, filename: item.file.name, contentType: mimeType });
         if (!signed.ok || !signed.data || !(await putToSignedUrl(signed.data.uploadUrl, item.file, mimeType))) {
           setProgress(null);
           toast.error(`No se pudo subir ${item.file.name}.`);
@@ -162,7 +162,6 @@ export function LivePackCreator({
             postId,
             filename: `${item.file.name}.jpg`,
             contentType: 'image/jpeg',
-            sizeBytes: preview.blob.size,
             isPreview: true,
           });
           if (sp.ok && sp.data && (await putToSignedUrl(sp.data.uploadUrl, preview.blob, 'image/jpeg'))) {

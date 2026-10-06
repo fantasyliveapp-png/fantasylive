@@ -237,7 +237,6 @@ export async function requestLotProofUploadUrlAction(
   orderId: string,
   filename: string,
   contentType: string,
-  sizeBytes: number,
 ): Promise<DistributorActionResult & { uploadUrl?: string; key?: string }> {
   try {
     const { d } = await requireDistributor();
@@ -247,10 +246,10 @@ export async function requestLotProofUploadUrlAction(
     if (!/^(image\/(jpeg|png|webp|heic|heif)|application\/pdf)$/.test(contentType)) {
       return { ok: false, error: 'Sube una imagen o un PDF del recibo.' };
     }
-    const invalid = checkUpload(contentType, sizeBytes, ['image', 'pdf']);
+    const invalid = checkUpload(contentType, ['image', 'pdf']);
     if (invalid) return { ok: false, error: invalid };
     const key = buildDistributorLotProofKey({ orderId, filename });
-    const uploadUrl = await createUploadUrl({ key, contentType, sizeBytes });
+    const uploadUrl = await createUploadUrl({ key, contentType });
     if (!uploadUrl) return { ok: false, error: 'No se pueden subir archivos ahora.' };
     return { ok: true, uploadUrl, key };
   } catch (error) {

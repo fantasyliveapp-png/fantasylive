@@ -10,7 +10,6 @@ import { prisma } from '@/lib/prisma';
 import { isReservedUsername, USERNAME_PATTERN } from '@/lib/usernames';
 import {
   buildUserAvatarKey,
-  checkUpload,
   createUploadUrl,
   isProfileImageKey,
   profileImageUrl,
@@ -55,15 +54,13 @@ const profileSchema = z.object({
 });
 
 /** URL firmada para subir la foto de perfil (ya recortada en el navegador). */
-export async function requestUserAvatarUploadUrlAction(input: { sizeBytes: number }): Promise<
+export async function requestUserAvatarUploadUrlAction(): Promise<
   SocialActionResult<{ uploadUrl: string; publicUrl: string }>
 > {
   try {
     const user = await getAuthedUserOrThrow();
-    const invalid = checkUpload('image/jpeg', input?.sizeBytes, ['image']);
-    if (invalid) return { ok: false, error: invalid };
     const key = buildUserAvatarKey(user.id);
-    const uploadUrl = await createUploadUrl({ key, contentType: 'image/jpeg', sizeBytes: input.sizeBytes });
+    const uploadUrl = await createUploadUrl({ key, contentType: 'image/jpeg' });
     if (!uploadUrl) return { ok: false, error: 'El almacenamiento no esta configurado.' };
     return { ok: true, data: { uploadUrl, publicUrl: profileImageUrl(key) } };
   } catch (error) {
