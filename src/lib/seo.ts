@@ -47,7 +47,7 @@ export function creatorDescription(stageName: string, headline?: string | null) 
  */
 export function creatorShareImage(slug: string, stageName: string, live = false) {
   return {
-    url: `/api/og/creator/${encodeURIComponent(slug)}${live ? '?live=1' : ''}`,
+    url: `/api/og/creator/${encodeURIComponent(slug)}`,
     width: 1200,
     height: 630,
     alt: live ? `${stageName} en directo en ${config.app.name}` : `${stageName} en ${config.app.name}`,
