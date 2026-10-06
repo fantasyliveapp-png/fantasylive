@@ -17,7 +17,7 @@ export const SHARE_IMAGE = {
  * Next sustituye el bloque openGraph/twitter entero del layout en vez de
  * mezclarlo: por eso aqui se repiten siteName, type, locale, imagen y card.
  */
-export function pageMeta(title: string, description: string): Metadata {
+export function pageMeta(title: string, description: string, image = SHARE_IMAGE): Metadata {
   const full = `${title} | ${config.app.name}`;
   return {
     title,
@@ -28,9 +28,9 @@ export function pageMeta(title: string, description: string): Metadata {
       siteName: config.app.name,
       type: 'website',
       locale: 'es_ES',
-      images: [SHARE_IMAGE],
+      images: [image],
     },
-    twitter: { card: 'summary_large_image', title: full, description, images: [SHARE_IMAGE.url] },
+    twitter: { card: 'summary_large_image', title: full, description, images: [image.url] },
   };
 }
 
@@ -39,4 +39,17 @@ export function creatorDescription(stageName: string, headline?: string | null) 
   const own = headline?.trim();
   if (own) return own.length > 155 ? `${own.slice(0, 152).trimEnd()}…` : own;
   return `Sigue a ${stageName} en ${config.app.name}: directos, videollamadas, mensajes y contenido exclusivo.`;
+}
+
+/**
+ * Vista previa con la foto de perfil de la creadora (api/og/creator). Si no
+ * tiene foto, esa ruta devuelve la imagen general de la marca.
+ */
+export function creatorShareImage(slug: string, stageName: string, live = false) {
+  return {
+    url: `/api/og/creator/${encodeURIComponent(slug)}${live ? '?live=1' : ''}`,
+    width: 1200,
+    height: 630,
+    alt: live ? `${stageName} en directo en ${config.app.name}` : `${stageName} en ${config.app.name}`,
+  };
 }

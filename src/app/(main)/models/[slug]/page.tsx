@@ -64,7 +64,7 @@ import { founderLabel } from '@/lib/gender-words';
 import { prisma } from '@/lib/prisma';
 import { applySubscriberDiscount, getActiveSubscription } from '@/lib/subscriptions';
 import { cn, formatDate, formatTokens, initials, relativeTime } from '@/lib/utils';
-import { creatorDescription, pageMeta } from '@/lib/seo';
+import { creatorDescription, creatorShareImage, pageMeta } from '@/lib/seo';
 
 export const dynamic = 'force-dynamic';
 
@@ -79,7 +79,11 @@ export async function generateMetadata({
     select: { stageName: true, headline: true },
   });
   if (!model) return { title: 'Creador' };
-  return pageMeta(model.stageName, creatorDescription(model.stageName, model.headline));
+  return pageMeta(
+    model.stageName,
+    creatorDescription(model.stageName, model.headline),
+    creatorShareImage(slug, model.stageName),
+  );
 }
 
 const WEEKDAYS = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'];

@@ -15,7 +15,7 @@ import { applySubscriberDiscount, getActiveSubscription } from '@/lib/subscripti
 import { getWalletSummary } from '@/lib/tokens';
 import { getActiveTokenPromo } from '@/lib/token-promos';
 import { initials } from '@/lib/utils';
-import { pageMeta } from '@/lib/seo';
+import { creatorShareImage, pageMeta } from '@/lib/seo';
 import { config } from '@/lib/config';
 
 export const dynamic = 'force-dynamic';
@@ -34,6 +34,7 @@ export async function generateMetadata({
   return pageMeta(
     `${model.stageName} en directo`,
     `${model.stageName} está en directo en ${config.app.name}. Entra a verlo, chatea en vivo y envía propinas.`,
+    creatorShareImage(slug, model.stageName, true),
   );
 }
 
