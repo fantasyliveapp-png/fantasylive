@@ -200,9 +200,11 @@ export async function getOfferContext(userId: string | null, now = new Date()): 
   const hour = 3600_000;
 
   if (purchases === 0) {
-    ctx.welcome = true;
+    // Una detras de otra, nunca las dos a la vez: el primer dia "Primeras 24 h";
+    // si no compro en ese dia, desde entonces "Bienvenida" hasta su primera compra.
     const ends = new Date(user.createdAt.getTime() + 24 * hour);
     if (ends > now) ctx.first24hEndsAt = ends;
+    else ctx.welcome = true;
   } else if (lastPurchase) {
     const sinceLast = now.getTime() - lastPurchase.createdAt.getTime();
     ctx.lowBalance = (user.wallet?.balance ?? 0) < OFFER_RULES.lowBalanceTokens && sinceLast >= 24 * hour;

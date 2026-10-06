@@ -50,12 +50,12 @@ export default async function TokenPromosPage() {
         </p>
         <ul className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
           <li className="rounded-xl bg-muted/40 p-3">
-            <span className="font-semibold">Bienvenida</span> · primera compra, paquete más barato: +
-            {OFFER_RULES.welcomeBonusPercent}% de tokens.
+            <span className="font-semibold">Bienvenida</span> · si no compró en sus primeras 24 h, desde entonces hasta
+            su primera compra, paquete más barato: +{OFFER_RULES.welcomeBonusPercent}% de tokens.
           </li>
           <li className="rounded-xl bg-muted/40 p-3">
             <span className="font-semibold">Primeras 24 h</span> · primera compra en sus 24 h tras registrarse, dos
-            paquetes más baratos: −{OFFER_RULES.first24hPercentOff}%.
+            paquetes más baratos: −{OFFER_RULES.first24hPercentOff}%. Va antes que Bienvenida: nunca las dos a la vez.
           </li>
           <li className="rounded-xl bg-muted/40 p-3">
             <span className="font-semibold">Saldo bajo</span> · le quedan menos de {OFFER_RULES.lowBalanceTokens}{' '}
