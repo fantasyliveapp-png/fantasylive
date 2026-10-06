@@ -1,18 +1,20 @@
 import type { Metadata, Viewport } from 'next';
+import { cookies } from 'next/headers';
 import { Toaster } from 'sonner';
 
 import { AgeGate } from '@/components/age-gate';
 import { InstallApp } from '@/components/pwa/install-app';
 import { PushPrompt } from '@/components/pwa/push';
 import { AuthProvider } from '@/components/providers/auth-provider';
+import { AGE_COOKIE } from '@/lib/age-gate';
 import { I18nProvider } from '@/components/providers/i18n-provider';
 import { JoinPromptProvider } from '@/components/providers/join-prompt';
 import { config } from '@/lib/config';
 import { fontVariables } from '@/lib/fonts';
 import { getLocale } from '@/lib/i18n/server';
+import { SHARE_IMAGE } from '@/lib/seo';
 
 import './globals.css';
-import { SHARE_IMAGE } from '@/lib/seo';
 
 const SITE_TITLE = `${config.app.name} - Conoce gente y a tus creadores favoritos`;
 const SITE_DESCRIPTION =
@@ -70,6 +72,7 @@ export default async function RootLayout({
   // El idioma se resuelve aqui una vez y baja por contexto, asi que `lang`
   // del documento y el texto de la interfaz nunca se contradicen.
   const locale = await getLocale();
+  const ageConfirmed = (await cookies()).get(AGE_COOKIE)?.value === '1';
 
   return (
     <html
@@ -80,7 +83,7 @@ export default async function RootLayout({
       <body className="min-h-screen bg-background font-sans">
         <I18nProvider locale={locale}>
           <AuthProvider>
-            <AgeGate />
+            <AgeGate initialConfirmed={ageConfirmed} />
             <JoinPromptProvider>{children}</JoinPromptProvider>
             <InstallApp />
             <PushPrompt />
