@@ -77,12 +77,15 @@ const nextConfig = {
       },
       {
         // Nada de lo que sirve la API debe cachearse en proxies intermedios:
-        // lleva URLs firmadas, saldos y datos de sesion.
+        // lleva URLs firmadas, saldos y datos de sesion. Salvo las fotos de
+        // perfil (public-media) y las imagenes de vista previa (og), que son
+        // publicas y ponen su propia cache: si no, esta regla la pisaria.
+        source: '/api/:path((?!public-media/|og/).*)',
+        headers: [{ key: 'Cache-Control', value: 'no-store, max-age=0' }],
+      },
+      {
         source: '/api/:path*',
-        headers: [
-          { key: 'Cache-Control', value: 'no-store, max-age=0' },
-          { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
-        ],
+        headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }],
       },
     ];
   },
