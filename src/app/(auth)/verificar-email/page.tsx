@@ -6,18 +6,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { getCurrentUser } from '@/lib/auth/guards';
 import { emailEnabled } from '@/lib/email';
 import { prisma } from '@/lib/prisma';
+import { safeNext } from '@/lib/safe-next';
 
 export const metadata: Metadata = { title: 'Confirma tu email' };
 export const dynamic = 'force-dynamic';
 
-/** Solo rutas internas como destino (nada de saltar a otra web). */
-function safeNext(v: string | undefined) {
-  return v && v.startsWith('/') && !v.startsWith('//') ? v : '/';
-}
-
 /** Escribir el codigo OTP de 6 cifras que llega por correo. */
 export default async function VerifyEmailPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
-  const next = safeNext((await searchParams).next);
+  const next = safeNext((await searchParams).next) ?? '/';
   const me = await getCurrentUser();
   if (!me) redirect(`/login?callbackUrl=${encodeURIComponent('/verificar-email')}`);
   const user = await prisma.user.findUnique({ where: { id: me.id }, select: { email: true, emailVerified: true } });
