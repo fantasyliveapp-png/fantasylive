@@ -72,6 +72,7 @@ export function AutoGreetingForm({
         const signed = await requestGreetingUploadUrlAction({
           filename: file.name,
           contentType: file.type || 'image/jpeg',
+          sizeBytes: file.size,
         });
         if (!signed.ok || !signed.data) {
           toast.error(signed.error ?? 'No se pudo subir la foto.');
@@ -96,6 +97,7 @@ export function AutoGreetingForm({
           const signedPreview = await requestGreetingUploadUrlAction({
             filename: `${file.name}.jpg`,
             contentType: 'image/jpeg',
+            sizeBytes: preview.blob.size,
             isPreview: true,
           });
           if (signedPreview.ok && signedPreview.data) {

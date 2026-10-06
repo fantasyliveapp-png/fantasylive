@@ -227,7 +227,7 @@ export function ProfileEditor({
     };
 
     setUploading(kind);
-    const signed = await requestProfileImageUploadUrlAction({ kind });
+    const signed = await requestProfileImageUploadUrlAction({ kind, sizeBytes: blob.size });
     if (!signed.ok || !signed.data) {
       revert(signed.error ?? 'No se pudo subir la imagen.');
       return;

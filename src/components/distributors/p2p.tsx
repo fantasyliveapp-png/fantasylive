@@ -572,7 +572,7 @@ export function FanPayForm({ saleId }: { saleId: string }) {
     setUploading(true);
     try {
       const type = file.type || 'image/jpeg';
-      const r = await requestProofUploadUrlAction(saleId, file.name, type);
+      const r = await requestProofUploadUrlAction(saleId, file.name, type, file.size);
       if (!r.ok || !r.uploadUrl || !r.key) {
         toast.error(r.error ?? 'No se pudo subir.');
         return;
@@ -675,7 +675,7 @@ export function DisputeForm({ saleId, label, hint }: { saleId: string; label: st
     setUploading(true);
     try {
       const type = file.type || 'image/jpeg';
-      const r = await requestDisputeEvidenceUploadUrlAction(saleId, file.name, type);
+      const r = await requestDisputeEvidenceUploadUrlAction(saleId, file.name, type, file.size);
       if (!r.ok || !r.uploadUrl || !r.key) return void toast.error(r.error ?? 'No se pudo subir.');
       const up = await fetch(r.uploadUrl, { method: 'PUT', body: file, headers: { 'Content-Type': type } });
       if (!up.ok) return void toast.error('No se pudo subir la captura.');

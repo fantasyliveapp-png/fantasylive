@@ -35,6 +35,7 @@ import {
 import {
   buildKycKey,
   buildProfileImageKey,
+  checkUpload,
   createUploadUrl,
   deleteObject,
   isProfileImageKey,
@@ -150,15 +151,18 @@ export async function updateModelProfileAction(input: {
  */
 export async function requestProfileImageUploadUrlAction(input: {
   kind: 'avatar' | 'cover';
+  sizeBytes: number;
 }): Promise<ModelActionResult<{ uploadUrl: string; publicUrl: string }>> {
   try {
     const { profile } = await requireModelProfile();
     if (input.kind !== 'avatar' && input.kind !== 'cover') {
       return { ok: false, error: 'Tipo de imagen invalido.' };
     }
+    const invalid = checkUpload('image/jpeg', input.sizeBytes, ['image']);
+    if (invalid) return { ok: false, error: invalid };
 
     const key = buildProfileImageKey({ modelId: profile.id, kind: input.kind });
-    const uploadUrl = await createUploadUrl({ key, contentType: 'image/jpeg' });
+    const uploadUrl = await createUploadUrl({ key, contentType: 'image/jpeg', sizeBytes: input.sizeBytes });
     if (!uploadUrl) {
       return {
         ok: false,
@@ -332,9 +336,12 @@ export async function requestKycUploadUrlAction(input: {
   kind: 'front' | 'back' | 'selfie' | 'note';
   filename: string;
   contentType: string;
+  sizeBytes: number;
 }): Promise<ModelActionResult<{ uploadUrl: string; key: string }>> {
   try {
     const { profile } = await requireModelProfile();
+    const invalid = checkUpload(input.contentType, input.sizeBytes, ['image', 'pdf']);
+    if (invalid) return { ok: false, error: invalid };
 
     const key = buildKycKey({
       modelId: profile.id,
@@ -345,6 +352,7 @@ export async function requestKycUploadUrlAction(input: {
     const uploadUrl = await createUploadUrl({
       key,
       contentType: input.contentType,
+      sizeBytes: input.sizeBytes,
     });
 
     if (!uploadUrl) {

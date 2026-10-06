@@ -161,11 +161,48 @@ export function isDistributorLotProofKeyOf(orderId: string, key: string): boolea
   return key.startsWith(`distributor-lots/${orderId}/`) && !key.includes('..');
 }
 
-/** URL firmada para SUBIR un objeto directamente desde el navegador. */
+// ---------------------------------------------------------------------------
+// Que se puede subir
+// ---------------------------------------------------------------------------
+
+/**
+ * Tipos admitidos y tamaño maximo de cada uno. El almacenamiento se sirve
+ * desde el mismo dominio que la web: un archivo HTML o SVG subido ahi podria
+ * ejecutar codigo como si fuera la propia web, por eso solo pasan estos.
+ */
+const UPLOAD_KINDS = {
+  image: { re: /^image\/(jpeg|png|webp|gif|heic|heif)$/, maxBytes: 30 * 1024 * 1024, label: 'imágenes de 30 MB' },
+  video: { re: /^video\/(mp4|quicktime|webm|x-m4v)$/, maxBytes: 2 * 1024 * 1024 * 1024, label: 'videos de 2 GB' },
+  pdf: { re: /^application\/pdf$/, maxBytes: 15 * 1024 * 1024, label: 'PDF de 15 MB' },
+} as const;
+
+export type UploadKind = keyof typeof UPLOAD_KINDS;
+
+/** null si el archivo vale; si no, el motivo para enseñarlo. */
+export function checkUpload(contentType: string, sizeBytes: unknown, allowed: UploadKind[]): string | null {
+  const kind = allowed.find((k) => UPLOAD_KINDS[k].re.test(contentType));
+  if (!kind) return 'Ese tipo de archivo no se admite aquí.';
+  if (typeof sizeBytes !== 'number' || !Number.isInteger(sizeBytes) || sizeBytes <= 0) {
+    return 'No se pudo leer el tamaño del archivo.';
+  }
+  if (sizeBytes > UPLOAD_KINDS[kind].maxBytes) {
+    return `El archivo es demasiado grande (máximo: ${UPLOAD_KINDS[kind].label}).`;
+  }
+  return null;
+}
+
+/**
+ * URL firmada para SUBIR un objeto directamente desde el navegador.
+ *
+ * Tipo y tamaño van dentro de la firma: el almacenamiento rechaza (403) una
+ * subida con otro Content-Type u otro tamaño. Sin esto, una URL pedida para
+ * una foto servia para subir una pagina web, o un archivo de cualquier tamaño.
+ * Llamar antes a checkUpload().
+ */
 export async function createUploadUrl(params: {
   key: string;
   contentType: string;
-  maxSizeBytes?: number;
+  sizeBytes: number;
 }): Promise<string | null> {
   const s3 = getClient();
   if (!s3) return null;
@@ -174,9 +211,13 @@ export async function createUploadUrl(params: {
     Bucket: config.storage.bucket,
     Key: params.key,
     ContentType: params.contentType,
+    ContentLength: params.sizeBytes,
   });
 
-  return getSignedUrl(s3, command, { expiresIn: 60 * 10 });
+  return getSignedUrl(s3, command, {
+    expiresIn: 60 * 10,
+    signableHeaders: new Set(['content-type']),
+  });
 }
 
 /** URL firmada para LEER contenido privado ya desbloqueado. */

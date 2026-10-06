@@ -163,6 +163,7 @@ export function MessageThread({
           conversationId,
           filename: file.name,
           contentType: type,
+          sizeBytes: file.size,
         });
         if (!urlResult.ok || !urlResult.data) {
           toast.error(urlResult.error ?? 'No se pudo preparar la subida');

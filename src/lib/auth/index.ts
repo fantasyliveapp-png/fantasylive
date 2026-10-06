@@ -1,4 +1,4 @@
-import NextAuth from 'next-auth';
+import NextAuth, { CredentialsSignin } from 'next-auth';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import Credentials from 'next-auth/providers/credentials';
 import Google from 'next-auth/providers/google';
@@ -7,7 +7,22 @@ import { z } from 'zod';
 
 import { prisma } from '@/lib/prisma';
 import { recordLoginDevice } from '@/lib/account-mail';
+import { currentIp, loginBlocked, loginFailed, loginSucceeded } from '@/lib/rate-limit';
 import { authConfig } from './auth.config';
+
+/**
+ * Rechazo con motivo: el `code` llega al formulario (signIn devuelve
+ * result.code), que enseña el mensaje de LOGIN_ERROR_MESSAGES.
+ */
+class LoginRefused extends CredentialsSignin {
+  constructor(code: 'too_many' | 'banned' | 'suspended') {
+    super();
+    this.code = code;
+  }
+}
+
+/** Hash de una contraseña que nadie tiene (para cuentas que no existen). */
+const DUMMY_HASH = '$2a$10$kTYObFP///8LqG0MdUOIDeEoIBASsmUtgHGTqniXdCsjzSPqnl626';
 
 const credentialsSchema = z.object({
   email: z.string().email(),
@@ -25,26 +40,39 @@ const providers = [
       const parsed = credentialsSchema.safeParse(raw);
       if (!parsed.success) return null;
 
-      const { email, password } = parsed.data;
+      const email = parsed.data.email.toLowerCase().trim();
+      const { password } = parsed.data;
+
+      // Freno contra quien prueba contraseñas: tambien aqui y no solo en el
+      // formulario, porque se puede llamar a /api/auth directamente.
+      const ip = await currentIp();
+      if (loginBlocked(email, ip)) throw new LoginRefused('too_many');
 
       const user = await prisma.user.findUnique({
-        where: { email: email.toLowerCase() },
+        where: { email },
         include: { modelProfile: { select: { id: true } } },
       });
 
-      if (!user?.passwordHash) return null;
+      // La contraseña se comprueba ANTES de decir si la cuenta esta baneada o
+      // suspendida: si no, bastaria el email para saber que existe y su estado.
+      // Sin cuenta se compara igual contra un hash cualquiera, para que la
+      // respuesta tarde lo mismo exista o no.
+      const valid = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH);
+      if (!user?.passwordHash || !valid) {
+        loginFailed(email, ip);
+        return null;
+      }
+      loginSucceeded(email, ip);
+
       if (user.status === 'BANNED') {
-        throw new Error('Esta cuenta ha sido baneada.');
+        throw new LoginRefused('banned');
       }
       if (
         user.status === 'SUSPENDED' &&
         (!user.suspendedUntil || user.suspendedUntil > new Date())
       ) {
-        throw new Error('Esta cuenta esta suspendida temporalmente.');
+        throw new LoginRefused('suspended');
       }
-
-      const valid = await bcrypt.compare(password, user.passwordHash);
-      if (!valid) return null;
 
       await prisma.user.update({
         where: { id: user.id },

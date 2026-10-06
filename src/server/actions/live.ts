@@ -660,9 +660,24 @@ export async function joinStreamAction(
  * Lo consulta el cliente cada pocos segundos. Se apoya en LiveKit y refresca
  * el espejo de BD, que es lo que ordena la portada.
  */
+/**
+ * Lo piden todos los espectadores, y sin iniciar sesion: el resultado se
+ * reutiliza unos segundos por directo para que mil peticiones no sean mil
+ * consultas a LiveKit y mil escrituras en la base.
+ */
+const VIEWERS_CACHE_MS = 5_000;
+const viewersCache = new Map<string, { at: number; data: { viewerCount: number; status: string } }>();
+
 export async function getStreamViewersAction(
   streamId: string,
 ): Promise<LiveActionResult<{ viewerCount: number; status: string }>> {
+  if (typeof streamId !== 'string' || streamId.length > 64) {
+    return { ok: false, error: 'Directo no encontrado.' };
+  }
+  const cached = viewersCache.get(streamId);
+  if (cached && Date.now() - cached.at < VIEWERS_CACHE_MS) return { ok: true, data: cached.data };
+  if (viewersCache.size > 5_000) viewersCache.clear();
+
   try {
     const stream = await prisma.liveStream.findUnique({
       where: { id: streamId },
@@ -672,10 +687,9 @@ export async function getStreamViewersAction(
 
     const participants = await countRoomParticipants(stream.roomName);
     if (participants === null) {
-      return {
-        ok: true,
-        data: { viewerCount: 0, status: stream.status },
-      };
+      const data = { viewerCount: 0, status: stream.status };
+      viewersCache.set(streamId, { at: Date.now(), data });
+      return { ok: true, data };
     }
 
     const viewerCount = Math.max(0, participants - 1);
@@ -687,7 +701,9 @@ export async function getStreamViewersAction(
       },
     });
 
-    return { ok: true, data: { viewerCount, status: stream.status } };
+    const data = { viewerCount, status: stream.status };
+    viewersCache.set(streamId, { at: Date.now(), data });
+    return { ok: true, data };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
   }

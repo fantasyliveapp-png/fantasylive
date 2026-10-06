@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { loginErrorMessage } from '@/lib/auth/login-errors';
 
 /** Cuentas del seed, visibles solo en desarrollo para acelerar las pruebas. */
 const DEMO_ACCOUNTS = [
@@ -46,7 +47,7 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
       });
 
       if (result?.error) {
-        setError('Email o contraseña incorrectos.');
+        setError(loginErrorMessage(result.code));
         return;
       }
 

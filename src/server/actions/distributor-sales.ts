@@ -16,7 +16,7 @@ import {
   paymentMethodLabel,
   SALE_PAY_MINUTES,
 } from '@/lib/distributor-shared';
-import { buildDistributorProofKey, createUploadUrl, isDistributorProofKeyOf } from '@/lib/storage';
+import { buildDistributorProofKey, checkUpload, createUploadUrl, isDistributorProofKeyOf } from '@/lib/storage';
 import { expireSales, openTokensForFan, operatingBlock, receivedToday, SANCTIONED_COUNTRIES, syncCoverage } from '@/lib/distributors';
 import { usdRate } from '@/lib/fx';
 import { createNotification } from '@/lib/notifications';
@@ -176,6 +176,7 @@ export async function requestProofUploadUrlAction(
   saleId: string,
   filename: string,
   contentType: string,
+  sizeBytes: number,
 ): Promise<SaleResult & { uploadUrl?: string; key?: string }> {
   try {
     const me = await getAuthedUserOrThrow();
@@ -183,8 +184,10 @@ export async function requestProofUploadUrlAction(
     if (!sale || sale.fanId !== me.id) throw new Error('FORBIDDEN');
     if (sale.status !== 'AWAITING_PAYMENT') return { ok: false, error: 'Este pedido ya no está esperando pago.' };
     if (!/^image\/(jpeg|png|webp|heic|heif)$/.test(contentType)) return { ok: false, error: 'Sube una imagen (captura o foto del comprobante).' };
+    const invalid = checkUpload(contentType, sizeBytes, ['image']);
+    if (invalid) return { ok: false, error: invalid };
     const key = buildDistributorProofKey({ saleId, filename });
-    const uploadUrl = await createUploadUrl({ key, contentType });
+    const uploadUrl = await createUploadUrl({ key, contentType, sizeBytes });
     if (!uploadUrl) return { ok: false, error: 'No se pueden subir archivos ahora.' };
     return { ok: true, uploadUrl, key };
   } catch (error) {
@@ -197,6 +200,7 @@ export async function requestDisputeEvidenceUploadUrlAction(
   saleId: string,
   filename: string,
   contentType: string,
+  sizeBytes: number,
 ): Promise<SaleResult & { uploadUrl?: string; key?: string }> {
   try {
     const me = await getAuthedUserOrThrow();
@@ -207,8 +211,10 @@ export async function requestDisputeEvidenceUploadUrlAction(
     if (!sale || (sale.fanId !== me.id && sale.distributor.userId !== me.id)) throw new Error('FORBIDDEN');
     if (sale.status !== 'PAID') return { ok: false, error: 'Solo al abrir una disputa en un pedido pagado.' };
     if (!/^image\/(jpeg|png|webp|heic|heif)$/.test(contentType)) return { ok: false, error: 'Sube una imagen (captura o foto).' };
+    const invalid = checkUpload(contentType, sizeBytes, ['image']);
+    if (invalid) return { ok: false, error: invalid };
     const key = buildDistributorProofKey({ saleId, filename });
-    const uploadUrl = await createUploadUrl({ key, contentType });
+    const uploadUrl = await createUploadUrl({ key, contentType, sizeBytes });
     if (!uploadUrl) return { ok: false, error: 'No se pueden subir archivos ahora.' };
     return { ok: true, uploadUrl, key };
   } catch (error) {

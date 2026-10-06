@@ -9,6 +9,7 @@ import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { checkEmailOtp, consumeAuthToken, createAuthToken, revokeAuthTokens, TOKEN_TTL_MS } from '@/lib/auth-tokens';
 import { appLink, emailEnabled, formatEmailDate, sendTemplate } from '@/lib/email';
 import { prisma } from '@/lib/prisma';
+import { limitByIp } from '@/lib/rate-limit';
 import { getRequestInfo } from '@/lib/request-info';
 
 /**
@@ -31,6 +32,10 @@ const emailSchema = z.object({ email: z.string().trim().toLowerCase().email('Pon
 export async function requestPasswordResetAction(_prev: EmailFormState, formData: FormData): Promise<EmailFormState> {
   const parsed = emailSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { fieldErrors: parsed.error.flatten().fieldErrors };
+  // Ademas del limite por cuenta: que nadie use esto para mandar correos a
+  // muchas direcciones (5 cada 15 min por conexion).
+  const limited = await limitByIp('password-reset', 5, 15 * 60 * 1000);
+  if (limited) return { error: limited };
   const done: EmailFormState = {
     success: 'Si hay una cuenta con ese email, te hemos enviado un enlace. Revisa también la carpeta de spam.',
   };

@@ -13,6 +13,8 @@ import { isHandleFree } from '@/lib/creator-profile';
 import { isReservedUsername, USERNAME_PATTERN } from '@/lib/usernames';
 import { calculateAge } from '@/lib/utils';
 import { sendEmailOtp } from '@/lib/account-mail';
+import { limitByIp } from '@/lib/rate-limit';
+import { loginErrorMessage } from '@/lib/auth/login-errors';
 
 export interface ActionState {
   error?: string;
@@ -76,6 +78,9 @@ export async function registerAction(
   if (!parsed.success) {
     return { fieldErrors: parsed.error.flatten().fieldErrors as any };
   }
+  // Freno contra la creacion masiva de cuentas: 10 intentos por hora y conexion.
+  const limited = await limitByIp('register', 10, 60 * 60 * 1000);
+  if (limited) return { error: limited };
 
   const data = parsed.data;
   const birthDate = new Date(data.birthDate);
@@ -221,7 +226,7 @@ export async function loginAction(
   } catch (error) {
     if (error instanceof AuthError) {
       if (error.type === 'CredentialsSignin') {
-        return { error: 'Email o contraseña incorrectos.' };
+        return { error: loginErrorMessage((error as { code?: string }).code) };
       }
       return {
         error: error.cause?.err?.message ?? 'No se pudo iniciar sesion.',

@@ -22,6 +22,7 @@ import {
 import { GEO_BLOCKED_MESSAGE, isBlockedForViewer } from '@/lib/geo';
 import {
   buildMessageAttachmentKey,
+  checkUpload,
   createUploadUrl,
 } from '@/lib/storage';
 import { InsufficientTokensError, transferWithCommission } from '@/lib/tokens';
@@ -264,6 +265,7 @@ export async function requestMessageAttachmentUploadUrlAction(input: {
   conversationId: string;
   filename: string;
   contentType: string;
+  sizeBytes: number;
 }): Promise<MessageActionResultWithData<{ uploadUrl: string; key: string }>> {
   try {
     const user = await getAuthedUserOrThrow();
@@ -276,6 +278,8 @@ export async function requestMessageAttachmentUploadUrlAction(input: {
     if (conversation.model.userId !== user.id) {
       return { ok: false, error: 'Solo la modelo puede adjuntar archivos.' };
     }
+    const invalid = checkUpload(input.contentType, input.sizeBytes, ['image', 'video']);
+    if (invalid) return { ok: false, error: invalid };
 
     const key = buildMessageAttachmentKey({
       conversationId: conversation.id,
@@ -284,6 +288,7 @@ export async function requestMessageAttachmentUploadUrlAction(input: {
     const uploadUrl = await createUploadUrl({
       key,
       contentType: input.contentType,
+      sizeBytes: input.sizeBytes,
     });
     if (!uploadUrl) {
       return { ok: false, error: 'El almacenamiento no esta configurado.' };

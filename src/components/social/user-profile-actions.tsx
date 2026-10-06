@@ -84,7 +84,7 @@ export function UserProfileEditor({
     const local = URL.createObjectURL(blob);
     setPreview(local);
     setUploading(true);
-    const signed = await requestUserAvatarUploadUrlAction();
+    const signed = await requestUserAvatarUploadUrlAction({ sizeBytes: blob.size });
     const ok =
       signed.ok && signed.data
         ? await putToSignedUrl(signed.data.uploadUrl, blob, 'image/jpeg').catch(() => false)

@@ -9,7 +9,7 @@ import { normalizeCountryCode } from '@/lib/countries';
 import { operatingBlock, ORDER_LIMITS, quoteOrder, SANCTIONED_COUNTRIES } from '@/lib/distributors';
 import { peerPair } from '@/lib/chat';
 import { createNotification } from '@/lib/notifications';
-import { buildDistributorLotProofKey, createUploadUrl, isDistributorLotProofKeyOf } from '@/lib/storage';
+import { buildDistributorLotProofKey, checkUpload, createUploadUrl, isDistributorLotProofKeyOf } from '@/lib/storage';
 import { prisma } from '@/lib/prisma';
 import { formatMoney, formatTokens } from '@/lib/utils';
 
@@ -237,6 +237,7 @@ export async function requestLotProofUploadUrlAction(
   orderId: string,
   filename: string,
   contentType: string,
+  sizeBytes: number,
 ): Promise<DistributorActionResult & { uploadUrl?: string; key?: string }> {
   try {
     const { d } = await requireDistributor();
@@ -246,8 +247,10 @@ export async function requestLotProofUploadUrlAction(
     if (!/^(image\/(jpeg|png|webp|heic|heif)|application\/pdf)$/.test(contentType)) {
       return { ok: false, error: 'Sube una imagen o un PDF del recibo.' };
     }
+    const invalid = checkUpload(contentType, sizeBytes, ['image', 'pdf']);
+    if (invalid) return { ok: false, error: invalid };
     const key = buildDistributorLotProofKey({ orderId, filename });
-    const uploadUrl = await createUploadUrl({ key, contentType });
+    const uploadUrl = await createUploadUrl({ key, contentType, sizeBytes });
     if (!uploadUrl) return { ok: false, error: 'No se pueden subir archivos ahora.' };
     return { ok: true, uploadUrl, key };
   } catch (error) {

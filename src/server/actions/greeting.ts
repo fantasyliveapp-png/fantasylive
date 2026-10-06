@@ -9,6 +9,7 @@ import { assertCreatorVerified } from '@/lib/creator-kyc';
 import { prisma } from '@/lib/prisma';
 import {
   buildGreetingKey,
+  checkUpload,
   createUploadUrl,
   deleteObject,
 } from '@/lib/storage';
@@ -126,11 +127,14 @@ export async function updateAutoGreetingAction(input: {
 export async function requestGreetingUploadUrlAction(input: {
   filename: string;
   contentType: string;
+  sizeBytes: number;
   isPreview?: boolean;
 }): Promise<GreetingActionResult<{ uploadUrl: string; key: string }>> {
   try {
     const { profile } = await requireModelProfile();
     await assertCreatorVerified({ modelId: profile.id });
+    const invalid = checkUpload(input.contentType, input.sizeBytes, ['image']);
+    if (invalid) return { ok: false, error: invalid };
 
     const key = buildGreetingKey({
       modelId: profile.id,
@@ -141,6 +145,7 @@ export async function requestGreetingUploadUrlAction(input: {
     const uploadUrl = await createUploadUrl({
       key,
       contentType: input.contentType,
+      sizeBytes: input.sizeBytes,
     });
     if (!uploadUrl) {
       return {
