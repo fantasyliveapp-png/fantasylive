@@ -27,7 +27,7 @@ function escapeXml(value: string) {
 
 /** SVG del tamano de la imagen con la marca repetida en diagonal. */
 export function watermarkSvg(width: number, height: number, label: string): string {
-  const text = escapeXml(`${label}  ·  FantasyLive`);
+  const text = escapeXml(`${label}  ·  Fantasy Live`);
   const fontSize = Math.max(14, Math.round(Math.min(width, height) / 26));
   const stepX = Math.round(fontSize * text.length * 0.62);
   const stepY = Math.round(fontSize * 4.2);

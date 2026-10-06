@@ -30,7 +30,7 @@ import { formatTokens } from '@/lib/utils';
  *      quedan reservados.
  *   2. El fan paga directamente al distribuidor (Nequi, OXXO...) y marca
  *      "Ya pagué" con la referencia y la captura del comprobante (obligatoria).
- *   FantasyLive nunca recibe ni devuelve el dinero del fan: solo reserva tokens.
+ *   Fantasy Live nunca recibe ni devuelve el dinero del fan: solo reserva tokens.
  *   3. El distribuidor confirma que le llego y los tokens se liberan al fan.
  * Si el fan no paga en 30 min, caduca y los tokens vuelven al stock. Si hay
  * problema, cualquiera abre una disputa y la resuelve el equipo.

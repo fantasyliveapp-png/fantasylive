@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
 import { config } from '@/lib/config';
+import { pageMeta } from '@/lib/seo';
 
 export const dynamic = 'force-static';
 
@@ -13,20 +14,20 @@ type LegalDoc = {
 
 const DOCS: Record<string, LegalDoc> = {
   terms: {
-    title: 'Terminos de servicio',
+    title: 'Términos de servicio',
     updated: '2026-01-01',
     sections: [
       {
         heading: '1. Edad minima y elegibilidad',
         body: [
-          'El acceso a FantasyLive esta restringido a personas mayores de 18 años o de la mayoria de edad legal en su jurisdiccion, la que sea mayor. Al registrarte declaras cumplir este requisito.',
+          'El acceso a Fantasy Live esta restringido a personas mayores de 18 años o de la mayoria de edad legal en su jurisdiccion, la que sea mayor. Al registrarte declaras cumplir este requisito.',
           'La plataforma se reserva el derecho de solicitar verificacion documental de la edad en cualquier momento y de suspender las cuentas que no la superen.',
         ],
       },
       {
         heading: '2. Naturaleza del servicio',
         body: [
-          'FantasyLive es una plataforma de intermediacion que conecta a usuarios con creadores adultos independientes mediante videollamadas y contenido digital. Los creadores no son empleados de la plataforma.',
+          'Fantasy Live es una plataforma de intermediacion que conecta a usuarios con creadores adultos independientes mediante videollamadas y contenido digital. Los creadores no son empleados de la plataforma.',
           'El contenido y las conversaciones son responsabilidad de sus autores. La plataforma no produce contenido propio.',
         ],
       },
@@ -60,13 +61,13 @@ const DOCS: Record<string, LegalDoc> = {
     ],
   },
   privacy: {
-    title: 'Politica de privacidad',
+    title: 'Política de privacidad',
     updated: '2026-01-01',
     sections: [
       {
         heading: '1. Responsable del tratamiento',
         body: [
-          `FantasyLive trata tus datos personales conforme al RGPD (UE 2016/679) y a la normativa local aplicable. Contacto: ${config.moderation.adminAlertEmail}.`,
+          `Fantasy Live trata tus datos personales conforme al RGPD (UE 2016/679) y a la normativa local aplicable. Contacto: ${config.moderation.adminAlertEmail}.`,
         ],
       },
       {
@@ -98,14 +99,14 @@ const DOCS: Record<string, LegalDoc> = {
     ],
   },
   '2257': {
-    title: 'Declaracion de cumplimiento 18 U.S.C. 2257',
+    title: 'Declaración de cumplimiento 18 U.S.C. 2257',
     updated: '2026-01-01',
     sections: [
       {
         heading: 'Declaracion de mantenimiento de registros',
         body: [
           'Todos los modelos, actores, actrices y demas personas que aparecen en cualquier representacion visual de conducta sexualmente explicita real o simulada publicada en esta plataforma tenian 18 años de edad o mas en el momento de la creacion de dichas representaciones.',
-          'FantasyLive verifica la identidad y la edad de cada creador mediante documentacion oficial antes de permitir la emision o publicacion de contenido. Los registros exigidos por 18 U.S.C. 2257 y 28 C.F.R. 75 se conservan por el custodio de registros designado.',
+          'Fantasy Live verifica la identidad y la edad de cada creador mediante documentacion oficial antes de permitir la emision o publicacion de contenido. Los registros exigidos por 18 U.S.C. 2257 y 28 C.F.R. 75 se conservan por el custodio de registros designado.',
         ],
       },
       {
@@ -123,7 +124,7 @@ const DOCS: Record<string, LegalDoc> = {
     ],
   },
   dmca: {
-    title: 'Politica DMCA',
+    title: 'Política DMCA',
     updated: '2026-01-01',
     sections: [
       {
@@ -152,13 +153,21 @@ export async function generateStaticParams() {
   return Object.keys(DOCS).map((doc) => ({ doc }));
 }
 
+const LEGAL_DESCRIPTIONS: Record<string, string> = {
+  terms: `Condiciones de uso de ${config.app.name}: edad mínima, tokens y pagos, conducta prohibida y responsabilidades.`,
+  privacy: `Qué datos personales trata ${config.app.name}, para qué, cuánto tiempo y cómo ejercer tus derechos.`,
+  '2257': 'Declaración de cumplimiento de 18 U.S.C. 2257: verificación de edad e identidad de quienes aparecen en el contenido.',
+  dmca: 'Cómo notificar contenido que infringe derechos de autor o contenido íntimo no consentido, y cómo contranotificar.',
+};
+
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ doc: string }>;
 }): Promise<Metadata> {
   const { doc } = await params;
-  return { title: DOCS[doc]?.title ?? 'Legal' };
+  const title = DOCS[doc]?.title ?? 'Legal';
+  return pageMeta(title, LEGAL_DESCRIPTIONS[doc] ?? `${title} de ${config.app.name}.`);
 }
 
 export default async function LegalPage({

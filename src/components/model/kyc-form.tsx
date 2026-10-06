@@ -47,7 +47,7 @@ const DOC_LABELS: Record<DocKind, { title: string; hint: string; required: boole
   },
   note: {
     title: 'Nota manuscrita',
-    hint: 'Papel con "FantasyLive" y la fecha de hoy, escrito a mano.',
+    hint: 'Papel con "Fantasy Live" y la fecha de hoy, escrito a mano.',
     required: false,
   },
 };

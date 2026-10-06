@@ -18,7 +18,7 @@ interface LogoProps {
 /**
  * Lockup horizontal de marca (icono + wordmark), uso por defecto en
  * navbar/header/footer. El wordmark usa Akira Expanded exclusivamente
- * para el texto "Fantazy Live" (BRAND_HANDOFF.md #3).
+ * para el texto "Fantasy Live" (BRAND_HANDOFF.md #3).
  */
 export function Logo({
   size = 'sm',
@@ -32,7 +32,7 @@ export function Logo({
     <span className={cn('flex items-center gap-2', className)}>
       <Image
         src="/brand/logo-fantazy-live.png"
-        alt="Fantazy Live"
+        alt="Fantasy Live"
         width={px}
         height={px}
         className="shrink-0 rounded-lg"
@@ -44,7 +44,7 @@ export function Logo({
           wordmarkClassName,
         )}
       >
-        FantasyLive
+        Fantasy Live
       </span>
     </span>
   );

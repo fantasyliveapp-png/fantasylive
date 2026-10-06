@@ -45,7 +45,7 @@ const platformCommissionPercent = clampPercent(
 
 export const config = {
   app: {
-    name: process.env.NEXT_PUBLIC_APP_NAME || 'FantasyLive',
+    name: process.env.NEXT_PUBLIC_APP_NAME || 'Fantasy Live',
     url: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
     minAge: num(process.env.NEXT_PUBLIC_MIN_AGE, 18),
   },
@@ -226,7 +226,7 @@ export const config = {
     secure: bool(process.env.SMTP_SECURE, false),
     user: process.env.SMTP_USER ?? '',
     pass: process.env.SMTP_PASS ?? '',
-    from: process.env.EMAIL_FROM || 'Fantazy Live <no-reply@fantasylive.app>',
+    from: process.env.EMAIL_FROM || 'Fantasy Live <no-reply@fantasylive.app>',
     get configured() {
       return Boolean(process.env.SMTP_HOST);
     },

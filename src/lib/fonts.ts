@@ -1,7 +1,7 @@
 import localFont from 'next/font/local';
 import { Inter } from 'next/font/google';
 
-/** Wordmark de marca — exclusivo para el texto "Fantazy Live" / "FANTAZY LIVE". */
+/** Wordmark de marca — exclusivo para el texto "Fantasy Live" / "FANTASY LIVE". */
 export const fontBrand = localFont({
   src: '../../public/fonts/Akira-Expanded-Demo.otf',
   weight: '800',

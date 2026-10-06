@@ -1,4 +1,4 @@
-# Plantillas de email — Fantazy Live
+# Plantillas de email — Fantasy Live
 
 HTML listo para enviar (tablas + estilos inline, compatible con Gmail, Outlook y Apple Mail). Las variables usan sintaxis **Handlebars** `{{variable}}`.
 
@@ -26,7 +26,7 @@ HTML listo para enviar (tablas + estilos inline, compatible con Gmail, Outlook y
 **Variables comunes:** `appUrl`, `year`, `companyAddress`, `preferencesUrl`, `supportUrl`.
 
 ## Logo y fuente
-- **Logo + nombre en Akira:** `assets/header-fantazy-live.png` (imagen, se ve en todos los clientes).
+- **Logo + nombre en Akira:** `assets/header-fantasy-live.png` (imagen, se ve en todos los clientes).
 - **Títulos en Bebas Neue:** `assets/BebasNeue-Regular.ttf` vía @font-face. Se ve en Apple Mail, iOS Mail, Outlook.com/app de Mac y Thunderbird. **Gmail y Outlook de Windows no permiten fuentes propias** y muestran Arial Black (ya ajustado).
 - Las plantillas usan rutas relativas `assets/...` para que se vean al abrirlas en el navegador. El mailer las convierte a URL absoluta antes de enviar (ver abajo).
 
@@ -76,7 +76,7 @@ async function render(name, data) {
 
 export async function sendMail(name, to, subject, data) {
   const html = await render(name, data);
-  return transport.sendMail({ from: '"Fantazy Live" <no-reply@fantazylive.com>', to, subject, html });
+  return transport.sendMail({ from: '"Fantasy Live" <no-reply@fantazylive.com>', to, subject, html });
 }
 ```
 

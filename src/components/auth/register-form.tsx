@@ -426,7 +426,7 @@ export function RegisterForm({
                     Tienes que ser mayor de edad
                   </strong>
                   <span className="text-xs text-muted-foreground">
-                    FantasyLive es solo para personas de {MIN_AGE} años o mas.
+                    Fantasy Live es solo para personas de {MIN_AGE} años o mas.
                     No puedes crear una cuenta ni ver contenido.
                   </span>
                 </span>

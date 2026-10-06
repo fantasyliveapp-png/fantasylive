@@ -211,7 +211,7 @@ export default async function SalePage({ params }: { params: Promise<{ id: strin
         <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-state-connected" />
         Compra protegida: los tokens se reservan al crear el pedido y solo se entregan cuando el distribuidor confirma el
         pago. Si no se paga en 30 minutos, el pedido caduca solo. Si hay un problema, el equipo revisa la disputa con el
-        comprobante. El pago va directo al distribuidor: FantasyLive no recibe ni devuelve ese dinero.
+        comprobante. El pago va directo al distribuidor: Fantasy Live no recibe ni devuelve ese dinero.
       </p>
     </div>
   );

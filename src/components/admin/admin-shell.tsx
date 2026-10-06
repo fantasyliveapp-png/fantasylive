@@ -146,7 +146,7 @@ export function AdminShell({
           height={30}
           className="rounded-lg"
         />
-        <span className="brand-wordmark text-base leading-none">FantasyLive</span>
+        <span className="brand-wordmark text-base leading-none">Fantasy Live</span>
         <span className="ml-auto rounded-md bg-primary/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
           Admin
         </span>

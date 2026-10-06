@@ -10,8 +10,9 @@ import { getI18n } from '@/lib/i18n/server';
 import { rankLiveStreamsForRequest } from '@/lib/live-rank';
 import { liveModelIds } from '@/lib/live';
 import { prisma } from '@/lib/prisma';
+import { pageMeta } from '@/lib/seo';
 
-export const metadata: Metadata = { title: 'Directos' };
+export const metadata: Metadata = pageMeta('Directos', 'Creadoras y creadores emitiendo ahora mismo. Entra, chatea en vivo y envía propinas.');
 export const dynamic = 'force-dynamic';
 
 export default async function LivePage() {

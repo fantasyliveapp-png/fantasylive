@@ -38,7 +38,7 @@ export default async function RecruiterPage() {
       <header>
         <h1 className="font-heading text-3xl uppercase tracking-wide">Panel de reclutador</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Trae creadores a FantasyLive y gana con cada venta que hagan.
+          Trae creadores a Fantasy Live y gana con cada venta que hagan.
         </p>
       </header>
 
@@ -63,7 +63,7 @@ export default async function RecruiterPage() {
 
       <section className="space-y-2 rounded-2xl border border-border/60 bg-card p-4">
         <p className="text-sm font-semibold">Tu enlace para creadores</p>
-        <ReferralLink url={link} shareText="Unete a FantasyLive como creador" />
+        <ReferralLink url={link} shareText="Unete a Fantasy Live como creador" />
         <p className="text-[11px] text-muted-foreground">
           Quien lo abra y se registre en los proximos 30 dias queda como tuya.
         </p>
@@ -134,7 +134,7 @@ export default async function RecruiterPage() {
             suscripciones, chats y publicaciones.
           </li>
           <li>Cada creador cuenta cuando verifica su identidad y hace su primera venta.</li>
-          <li>Nada de spam, nada dirigido a menores y no te hagas pasar por FantasyLive.</li>
+          <li>Nada de spam, nada dirigido a menores y no te hagas pasar por Fantasy Live.</li>
           <li>Si se incumplen las normas, se pausa la cuenta y se pierde lo pendiente.</li>
         </ul>
       </section>

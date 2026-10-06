@@ -30,7 +30,7 @@ export function StudioLauncher({
 
   function leave() {
     // Volver atras solo si se llego desde la propia web; si se abrio el
-    // enlace directamente, al perfil (atras sacaria de FantasyLive).
+    // enlace directamente, al perfil (atras sacaria de Fantasy Live).
     const cameFromApp =
       window.history.length > 1 &&
       (!document.referrer || document.referrer.startsWith(window.location.origin));

@@ -86,7 +86,7 @@ export default async function MoneyPage() {
             {purchased > 0 && (
               <p className="mt-1 text-xs text-muted-foreground">
                 Ademas tienes {formatTokens(purchased)} tokens comprados: solo sirven para
-                gastar dentro de FantasyLive, no se pueden retirar.
+                gastar dentro de Fantasy Live, no se pueden retirar.
               </p>
             )}
           </div>

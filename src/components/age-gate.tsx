@@ -35,7 +35,7 @@ export function AgeGate() {
 
         <h2 className="text-2xl font-bold">Confirma tu edad</h2>
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-          FantasyLive conecta personas mayores de edad para chatear en vivo y
+          Fantasy Live conecta personas mayores de edad para chatear en vivo y
           descubrir contenido de sus creadores favoritos. Algunas áreas son
           privadas y pueden incluir contenido íntimo. Al continuar declaras
           tener al menos 18 años o la mayoría de edad legal en tu

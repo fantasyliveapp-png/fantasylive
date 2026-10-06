@@ -16,7 +16,7 @@ import { config } from '@/lib/config';
  * Sin SMTP configurado no se envia nada: el asunto (y el enlace o codigo) se
  * escriben en el registro del servidor, asi se puede probar en local.
  *
- * Las plantillas estan en /emails (diseño de Fantazy Live): HTML con
+ * Las plantillas estan en /emails (diseño de Fantasy Live): HTML con
  * variables {{nombre}} (se escapan) y {{{nombre}}} (HTML ya preparado aqui).
  * Las imagenes `assets/...` se sirven desde /public/email-assets.
  */

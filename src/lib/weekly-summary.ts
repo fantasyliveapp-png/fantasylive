@@ -74,7 +74,7 @@ export async function sendWeeklySummaries(opts: { force?: boolean } = {}) {
       continue;
     }
 
-    const ok = await sendTemplate('14-creador-resumen-semanal', c.user.email, `Tu semana en Fantazy Live: ${total.toLocaleString('es')} tokens`, {
+    const ok = await sendTemplate('14-creador-resumen-semanal', c.user.email, `Tu semana en Fantasy Live: ${total.toLocaleString('es')} tokens`, {
       creatorName: c.stageName,
       weekStart: formatEmailDate(since),
       weekEnd: formatEmailDate(now),

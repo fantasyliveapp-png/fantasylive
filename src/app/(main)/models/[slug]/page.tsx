@@ -64,6 +64,7 @@ import { founderLabel } from '@/lib/gender-words';
 import { prisma } from '@/lib/prisma';
 import { applySubscriberDiscount, getActiveSubscription } from '@/lib/subscriptions';
 import { cn, formatDate, formatTokens, initials, relativeTime } from '@/lib/utils';
+import { creatorDescription, pageMeta } from '@/lib/seo';
 
 export const dynamic = 'force-dynamic';
 
@@ -77,10 +78,8 @@ export async function generateMetadata({
     where: { slug },
     select: { stageName: true, headline: true },
   });
-  return {
-    title: model?.stageName ?? 'Modelo',
-    description: model?.headline ?? undefined,
-  };
+  if (!model) return { title: 'Creador' };
+  return pageMeta(model.stageName, creatorDescription(model.stageName, model.headline));
 }
 
 const WEEKDAYS = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'];
@@ -490,7 +489,7 @@ export default async function ModelProfilePage({
                     <Badge
                       variant="muted"
                       className="gap-1 border border-champagne-gold/40 bg-champagne-gold/15 text-champagne-gold"
-                      title="De los 100 primeros creadores de FantasyLive"
+                      title="De los 100 primeros creadores de Fantasy Live"
                     >
                       <Crown className="h-3 w-3" />
                       {founderLabel(model.gender)}

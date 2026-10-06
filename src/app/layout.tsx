@@ -12,14 +12,35 @@ import { fontVariables } from '@/lib/fonts';
 import { getLocale } from '@/lib/i18n/server';
 
 import './globals.css';
+import { SHARE_IMAGE } from '@/lib/seo';
+
+const SITE_TITLE = `${config.app.name} - Conoce gente y a tus creadores favoritos`;
+const SITE_DESCRIPTION =
+  'Directos, videollamadas, mensajes y contenido exclusivo de tus creadores favoritos, todo con un único monedero de tokens.';
 
 export const metadata: Metadata = {
+  // Base para que las imagenes de vista previa salgan con URL completa.
+  metadataBase: new URL(config.app.url),
   title: {
-    default: `${config.app.name} - Conoce gente y a tus creadores favoritos`,
+    default: SITE_TITLE,
     template: `%s | ${config.app.name}`,
   },
-  description:
-    'Conecta con gente nueva y con tus creadores de contenido favoritos: videollamadas en vivo, directos, mensajeria y contenido exclusivo, todo con un unico monedero de tokens.',
+  description: SITE_DESCRIPTION,
+  // Vista previa al compartir el enlace.
+  openGraph: {
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    siteName: config.app.name,
+    type: 'website',
+    locale: 'es_ES',
+    images: [SHARE_IMAGE],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    images: [SHARE_IMAGE.url],
+  },
   // Se mantiene sin indexar y con el rating RTA: el contenido intimo sigue
   // existiendo en areas privadas, aunque la superficie publica ya no lo
   // muestre. No es solo cosmetica de marketing.

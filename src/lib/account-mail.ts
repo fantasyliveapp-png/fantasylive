@@ -21,7 +21,7 @@ export async function sendEmailOtp(userId: string, welcome: boolean): Promise<'s
   const ok = await sendTemplate(
     '01-bienvenida-verificar-email',
     user.email,
-    welcome ? `${code} es tu código de Fantazy Live` : `Tu código: ${code}`,
+    welcome ? `${code} es tu código de Fantasy Live` : `Tu código: ${code}`,
     {
       userName: nameOf(user),
       code,

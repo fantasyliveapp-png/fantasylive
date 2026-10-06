@@ -20,7 +20,7 @@ import { cn, formatTokens } from '@/lib/utils';
  * Lenguaje visual: capsulas de cristal oscuro sobre el video, rojo de marca
  * para lo social (directo, seguir, corazones) y dorado para el dinero
  * (regalos, meta, tokens). La disposicion es la de TikTok Live para que se
- * entienda sin explicaciones; el acabado es el de FantasyLive.
+ * entienda sin explicaciones; el acabado es el de Fantasy Live.
  */
 
 const GIFT_BURST_MS = 4_500;

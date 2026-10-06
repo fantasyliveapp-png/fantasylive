@@ -48,7 +48,7 @@ export default async function SupportTicketPage({ params }: { params: Promise<{ 
           <li key={m.id} className={cn('flex flex-col', m.fromStaff ? 'items-start' : 'items-end')}>
             <span className="mb-0.5 flex items-center gap-1 px-1 text-[11px] text-muted-foreground">
               {m.fromStaff && <LifeBuoy className="h-3 w-3 text-primary" />}
-              {m.fromStaff ? 'Equipo de FantasyLive' : 'Tu'} · {formatDateTime(m.createdAt)}
+              {m.fromStaff ? 'Equipo de Fantasy Live' : 'Tu'} · {formatDateTime(m.createdAt)}
             </span>
             <p
               className={cn(

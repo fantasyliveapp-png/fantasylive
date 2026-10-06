@@ -7,8 +7,9 @@ import { getCurrentUser } from '@/lib/auth/guards';
 import { getVisibilityContext } from '@/lib/geo';
 import { getAffinityContext, getExploreMosaic } from '@/lib/personal-search';
 import { searchCreators } from '@/lib/search';
+import { pageMeta } from '@/lib/seo';
 
-export const metadata: Metadata = { title: 'Buscar' };
+export const metadata: Metadata = pageMeta('Buscar', 'Busca creadores, perfiles y publicaciones.');
 export const dynamic = 'force-dynamic';
 
 export default async function SearchPage({

@@ -10,8 +10,9 @@ import { getVisibilityContext } from '@/lib/geo';
 import { getI18n } from '@/lib/i18n/server';
 import { prisma } from '@/lib/prisma';
 import { getForYouFeed } from '@/lib/recommend';
+import { pageMeta } from '@/lib/seo';
 
-export const metadata: Metadata = { title: 'Feed' };
+export const metadata: Metadata = pageMeta('Feed', 'Las últimas publicaciones, fotos y videos de tus creadores favoritos.');
 export const dynamic = 'force-dynamic';
 
 /** Primera tanda; el resto llega sola al bajar (InfiniteFeed). */

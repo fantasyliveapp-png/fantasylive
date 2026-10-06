@@ -2,8 +2,9 @@ import type { Metadata } from 'next';
 
 import { RegisterForm } from '@/components/auth/register-form';
 import { safeNext } from '@/lib/safe-next';
+import { pageMeta } from '@/lib/seo';
 
-export const metadata: Metadata = { title: 'Crear cuenta' };
+export const metadata: Metadata = pageMeta('Crear cuenta', 'Crea tu cuenta gratis y conecta con tus creadores favoritos en directo, por videollamada y por mensaje. Solo mayores de 18.');
 
 export default async function RegisterPage({
   searchParams,

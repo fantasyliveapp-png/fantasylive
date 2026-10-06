@@ -5,8 +5,9 @@ import { BadgeCheck, Coins, Crown, Radio, Sparkles } from 'lucide-react';
 import { OnboardingForm } from '@/components/model/onboarding-form';
 import { requireUser } from '@/lib/auth/guards';
 import { prisma } from '@/lib/prisma';
+import { pageMeta } from '@/lib/seo';
 
-export const metadata: Metadata = { title: 'Hazte creador' };
+export const metadata: Metadata = pageMeta('Hazte creador', 'Gana dinero con directos, videollamadas, suscripciones y contenido exclusivo. Regístrate y empieza al verificar tu identidad.');
 export const dynamic = 'force-dynamic';
 
 const PERKS = [

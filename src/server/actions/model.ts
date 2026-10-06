@@ -502,8 +502,8 @@ export async function requestPayoutAction(input: {
         ok: false,
         error:
           withdrawable > 0
-            ? `Solo puedes retirar tokens ganados: tienes ${withdrawable} para retirar. Los tokens comprados solo sirven para gastar dentro de FantasyLive.`
-            : 'Aun no tienes tokens ganados para retirar. Los tokens comprados solo sirven para gastar dentro de FantasyLive.',
+            ? `Solo puedes retirar tokens ganados: tienes ${withdrawable} para retirar. Los tokens comprados solo sirven para gastar dentro de Fantasy Live.`
+            : 'Aun no tienes tokens ganados para retirar. Los tokens comprados solo sirven para gastar dentro de Fantasy Live.',
       };
     }
 

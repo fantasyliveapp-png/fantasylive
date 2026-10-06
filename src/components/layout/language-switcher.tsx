@@ -38,7 +38,7 @@ function useChooseLocale() {
 
 /**
  * El idioma como submenu, para el menu de la cuenta: en el movil el boton
- * del globo no cabe en la barra de arriba junto al nombre FantasyLive.
+ * del globo no cabe en la barra de arriba junto al nombre Fantasy Live.
  */
 export function LanguageSubMenu({ className }: { className?: string }) {
   const { locale, t, choose } = useChooseLocale();

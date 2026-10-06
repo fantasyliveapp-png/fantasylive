@@ -4,8 +4,9 @@ import { MatchmakingLobby } from '@/components/calls/matchmaking-lobby';
 import { requireUser } from '@/lib/auth/guards';
 import { getQueueStats } from '@/lib/matchmaking';
 import { getWalletSummary } from '@/lib/tokens';
+import { pageMeta } from '@/lib/seo';
 
-export const metadata: Metadata = { title: 'Llamadas aleatorias' };
+export const metadata: Metadata = pageMeta('Llamadas aleatorias', 'Conecta al azar por videollamada con creadoras y creadores disponibles ahora.');
 export const dynamic = 'force-dynamic';
 
 export default async function RandomPage() {

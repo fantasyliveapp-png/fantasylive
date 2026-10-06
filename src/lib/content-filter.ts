@@ -254,7 +254,7 @@ export function contactBlockMessage(reasons: ContactKind[]): string {
         ? list[0]!
         : `${list.slice(0, -1).join(', ')} y ${list[list.length - 1]}`;
 
-  return `Por seguridad no se pueden compartir ${detail}. Todo el contacto tiene que ocurrir dentro de ${'FantasyLive'}: si sales de la plataforma pierdes la proteccion de pagos y de moderacion.`;
+  return `Por seguridad no se pueden compartir ${detail}. Todo el contacto tiene que ocurrir dentro de ${'Fantasy Live'}: si sales de la plataforma pierdes la proteccion de pagos y de moderacion.`;
 }
 
 /**

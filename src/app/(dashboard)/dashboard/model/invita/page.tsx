@@ -146,7 +146,7 @@ export default async function InvitePage() {
             </p>
           </div>
         </div>
-        <ReferralLink url={fanLink} shareText="Encuentrame en FantasyLive" />
+        <ReferralLink url={fanLink} shareText="Encuentrame en Fantasy Live" />
       </section>
 
       {/* Enlace para creadoras */}
@@ -165,7 +165,7 @@ export default async function InvitePage() {
             </p>
           </div>
         </div>
-        <ReferralLink url={creatorLink} shareText="Unete a FantasyLive como creador" />
+        <ReferralLink url={creatorLink} shareText="Unete a Fantasy Live como creador" />
         <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
           <BadgeCheck className="h-3.5 w-3.5" />
           Cuenta cuando verifica su identidad y hace su primera venta.

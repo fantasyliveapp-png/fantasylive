@@ -99,7 +99,7 @@ export async function createDistributorAction(input: {
     await createNotification(prisma, {
       userId: user.id,
       type: 'ANNOUNCEMENT',
-      title: 'Ya eres distribuidor oficial de FantasyLive',
+      title: 'Ya eres distribuidor oficial de Fantasy Live',
       body: 'Entra a tu panel para añadir tus métodos de pago y tus paquetes.',
       link: '/distribuidor',
     });

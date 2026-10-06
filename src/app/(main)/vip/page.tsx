@@ -13,8 +13,9 @@ import { liveModelIds } from '@/lib/live';
 import { prisma } from '@/lib/prisma';
 import { DEFAULT_RATE_CENTITOKENS } from '@/lib/rates';
 import { getWalletSummary } from '@/lib/tokens';
+import { pageMeta } from '@/lib/seo';
 
-export const metadata: Metadata = { title: 'Sala VIP' };
+export const metadata: Metadata = pageMeta('Sala VIP', 'Ventajas y contenido exclusivo para miembros VIP.');
 export const dynamic = 'force-dynamic';
 
 export default async function VipPage() {

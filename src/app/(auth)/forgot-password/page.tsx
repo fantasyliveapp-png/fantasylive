@@ -3,8 +3,9 @@ import Link from 'next/link';
 
 import { ForgotPasswordForm } from '@/components/auth/password-reset-forms';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { pageMeta } from '@/lib/seo';
 
-export const metadata: Metadata = { title: 'Recuperar contraseña' };
+export const metadata: Metadata = pageMeta('Recuperar contraseña', 'Te enviamos un enlace a tu email para crear una contraseña nueva.');
 
 export default function ForgotPasswordPage() {
   return (

@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 export function DistributorBadge({ compact = false, className }: { compact?: boolean; className?: string }) {
   return (
     <span
-      title="Distribuidor oficial de FantasyLive"
+      title="Distribuidor oficial de Fantasy Live"
       className={cn(
         'inline-flex items-center gap-1 rounded-full bg-state-connected/15 font-semibold text-state-connected',
         compact ? 'px-1.5 py-0.5 text-[10px]' : 'px-2.5 py-1 text-xs',

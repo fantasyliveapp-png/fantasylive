@@ -2,8 +2,9 @@ import type { Metadata } from 'next';
 
 import { LoginForm } from '@/components/auth/login-form';
 import { safeNext } from '@/lib/safe-next';
+import { pageMeta } from '@/lib/seo';
 
-export const metadata: Metadata = { title: 'Iniciar sesion' };
+export const metadata: Metadata = pageMeta('Iniciar sesión', 'Entra en tu cuenta para ver a tus creadores favoritos, tus mensajes y tu monedero de tokens.');
 
 export default async function LoginPage({
   searchParams,

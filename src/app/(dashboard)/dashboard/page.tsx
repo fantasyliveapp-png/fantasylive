@@ -82,7 +82,7 @@ export default async function UserDashboardPage() {
             Hola, {user.name ?? 'de nuevo'}
           </h1>
           <p className="mt-2 text-muted-foreground">
-            Resumen de tu actividad en FantasyLive.
+            Resumen de tu actividad en Fantasy Live.
           </p>
         </div>
         {user.isVip && (

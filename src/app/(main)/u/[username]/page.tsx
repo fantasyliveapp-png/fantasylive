@@ -303,7 +303,7 @@ export default async function PersonProfilePage({
           )}
 
           <p className="text-center text-xs text-muted-foreground">
-            En FantasyLive desde {formatDate(person.createdAt)}
+            En Fantasy Live desde {formatDate(person.createdAt)}
           </p>
         </>
       )}

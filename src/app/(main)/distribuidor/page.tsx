@@ -270,7 +270,7 @@ export default async function DistributorPage({ searchParams }: { searchParams: 
 
       <p className="flex items-start gap-1.5 px-1 text-[11px] text-muted-foreground">
         <ShieldCheck className="mt-px h-3.5 w-3.5 shrink-0" />
-        Vende solo con pedidos dentro de FantasyLive. Nunca a menores ni con tarjetas de terceros.
+        Vende solo con pedidos dentro de Fantasy Live. Nunca a menores ni con tarjetas de terceros.
       </p>
     </div>
   );

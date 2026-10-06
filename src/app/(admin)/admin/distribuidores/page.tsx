@@ -1002,7 +1002,7 @@ async function ManageTab() {
           <li>Cada distribuidor pone sus paquetes y precios en su moneda. Se le recomienda no ganar más del 20% por venta.</li>
           <li>
             Las ventas a fans son compras protegidas: los tokens se reservan, el fan paga al distribuidor y sube el
-            comprobante, y el distribuidor los libera. FantasyLive no recibe el dinero del fan. Si no se paga en 30 min
+            comprobante, y el distribuidor los libera. Fantasy Live no recibe el dinero del fan. Si no se paga en 30 min
             caduca; las disputas las resuelves en el Resumen.
           </li>
           <li>

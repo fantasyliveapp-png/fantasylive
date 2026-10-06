@@ -13,8 +13,9 @@ import { formatLocal, PAYMENT_METHODS, paymentMethodLabel } from '@/lib/distribu
 import { distributorStats, expireSales, operatingBlock } from '@/lib/distributors';
 import { prisma } from '@/lib/prisma';
 import { cn } from '@/lib/utils';
+import { pageMeta } from '@/lib/seo';
 
-export const metadata: Metadata = { title: 'Distribuidores oficiales' };
+export const metadata: Metadata = pageMeta('Distribuidores oficiales', 'Compra tokens en tu país y en tu moneda con un distribuidor oficial, con métodos de pago locales y compra protegida.');
 export const dynamic = 'force-dynamic';
 
 /**
@@ -101,7 +102,7 @@ export default async function DistributorsPage({
         <h1 className="font-heading text-3xl uppercase tracking-wide">Comprar tokens sin tarjeta</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Compra a un distribuidor oficial y paga en tu moneda con Nequi, OXXO, Pago Móvil, transferencia… Todo dentro de
-          FantasyLive y con compra protegida.
+          Fantasy Live y con compra protegida.
         </p>
       </header>
 

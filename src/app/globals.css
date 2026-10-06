@@ -94,7 +94,7 @@
     @apply text-accent;
   }
 
-  /* Wordmark "Fantazy Live" — nunca usar en botones, headers de seccion ni body copy */
+  /* Wordmark "Fantasy Live" — nunca usar en botones, headers de seccion ni body copy */
   .brand-wordmark {
     @apply font-brand;
     font-weight: 800;

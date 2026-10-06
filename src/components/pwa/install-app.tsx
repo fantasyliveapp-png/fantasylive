@@ -185,7 +185,7 @@ export function InstallApp() {
           className="shrink-0 rounded-xl"
         />
         <div className="min-w-0 space-y-1">
-          <p className="font-semibold">Instala FantasyLive</p>
+          <p className="font-semibold">Instala Fantasy Live</p>
           {mode === 'prompt' && (
             <p className="text-sm text-muted-foreground">
               Tenla en tu pantalla de inicio, a pantalla completa y con avisos.

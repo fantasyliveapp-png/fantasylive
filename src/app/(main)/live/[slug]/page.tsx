@@ -15,6 +15,8 @@ import { applySubscriberDiscount, getActiveSubscription } from '@/lib/subscripti
 import { getWalletSummary } from '@/lib/tokens';
 import { getActiveTokenPromo } from '@/lib/token-promos';
 import { initials } from '@/lib/utils';
+import { pageMeta } from '@/lib/seo';
+import { config } from '@/lib/config';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +30,11 @@ export async function generateMetadata({
     where: { slug },
     select: { stageName: true },
   });
-  return { title: model ? `${model.stageName} en directo` : 'Directo' };
+  if (!model) return { title: 'Directo' };
+  return pageMeta(
+    `${model.stageName} en directo`,
+    `${model.stageName} está en directo en ${config.app.name}. Entra a verlo, chatea en vivo y envía propinas.`,
+  );
 }
 
 export default async function LiveStreamPage({

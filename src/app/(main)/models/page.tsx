@@ -6,8 +6,9 @@ import { ModelFilters } from '@/components/models/model-filters';
 import { liveModelIds } from '@/lib/live';
 import { prisma } from '@/lib/prisma';
 import { getVisibilityContext } from '@/lib/geo';
+import { pageMeta } from '@/lib/seo';
 
-export const metadata: Metadata = { title: 'Descubrir creadores' };
+export const metadata: Metadata = pageMeta('Descubrir creadores', 'Descubre creadoras y creadores: mira sus perfiles, síguelos y habla con ellos en directo o por videollamada.');
 export const dynamic = 'force-dynamic';
 
 const PAGE_SIZE = 24;

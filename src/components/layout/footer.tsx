@@ -73,7 +73,7 @@ export async function Footer() {
 
         <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-border/60 pt-6 text-xs text-muted-foreground sm:flex-row">
           <p>
-            &copy; {new Date().getFullYear()} FantasyLive. {t('footer.rights')}
+            &copy; {new Date().getFullYear()} Fantasy Live. {t('footer.rights')}
           </p>
           <p>{t('footer.ratingNotice')}</p>
         </div>
