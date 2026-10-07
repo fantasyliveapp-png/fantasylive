@@ -13,7 +13,7 @@ import {
 import { ReferralLink } from '@/components/model/referral-link';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { requireModel } from '@/lib/auth/guards';
-import { effectiveTerms, FOUNDER_PLATFORM_PERCENT } from '@/lib/deals';
+import { effectiveTerms } from '@/lib/deals';
 import { founderLabel, gw } from '@/lib/gender-words';
 import { config } from '@/lib/config';
 import { prisma } from '@/lib/prisma';
@@ -104,9 +104,8 @@ export default async function InvitePage() {
                 </p>
                 <p className="text-sm text-muted-foreground">
                   Eres {gw(profile.gender, { f: 'de las', m: 'de los', pl: 'de los' })} {FOUNDER_SPOTS}{' '}
-                  {gw(profile.gender, { f: 'primeras', m: 'primeros', pl: 'primeros' })}: ganas el{' '}
-                  <strong className="text-foreground">{100 - FOUNDER_PLATFORM_PERCENT}% de tus ventas</strong> y tu{' '}
-                  {ambassadorPercent}% por cada creador que invites es{' '}
+                  {gw(profile.gender, { f: 'primeras', m: 'primeros', pl: 'primeros' })}: tu insignia y lo que
+                  ganas por cada creador que invites son{' '}
                   <strong className="text-foreground">para siempre</strong>.
                 </p>
               </>
@@ -115,8 +114,8 @@ export default async function InvitePage() {
                 <p className="font-heading text-xl uppercase tracking-wide">Programa Fundadores</p>
                 <p className="text-sm text-muted-foreground">
                   {spotsLeft > 0
-                    ? `Los ${FOUNDER_SPOTS} primeros creadores verificados ganan el ${100 - FOUNDER_PLATFORM_PERCENT}% de sus ventas y cobran su ${ambassadorPercent}% por invitar para siempre. Quedan ${spotsLeft} plazas.`
-                    : `Las ${FOUNDER_SPOTS} plazas de Fundador ya estan cogidas. Tu ${ambassadorPercent}% dura ${AMBASSADOR_MONTHS} meses por cada creador que invites.`}
+                    ? `Los ${FOUNDER_SPOTS} primeros perfiles verificados llevan la insignia de fundacion y ganan por invitar creadores para siempre. Quedan ${spotsLeft} plazas.`
+                    : `Las ${FOUNDER_SPOTS} plazas de fundacion ya estan cogidas. Ganas por cada creador que invites durante ${AMBASSADOR_MONTHS} meses.`}
                 </p>
               </>
             )}
@@ -138,11 +137,21 @@ export default async function InvitePage() {
             <Heart className="h-5 w-5" />
           </span>
           <div className="min-w-0">
-            <h2 className="font-semibold">Tus fans, tu comision</h2>
+            <h2 className="font-semibold">Tus fans, mas ganancia</h2>
             <p className="text-sm text-muted-foreground">
-              Ponlo en tu Instagram, TikTok o X. Lo que gasten contigo los fans que entren por
-              aqui te deja el <strong className="text-foreground">{fanShare}%</strong> en vez del{' '}
-              {normalShare}% durante sus primeros {FAN_LINK_MONTHS} meses.
+              Ponlo en tu Instagram, TikTok o X.{' '}
+              {fanShare > normalShare ? (
+                <>
+                  Los fans que entren por aqui te dejan mas: por cada {formatMoney(1000)} que gasten contigo
+                  ganas <strong className="text-foreground">{formatMoney(fanShare * 10)}</strong> en vez de{' '}
+                  {formatMoney(normalShare * 10)}, durante sus primeros {FAN_LINK_MONTHS} meses.
+                </>
+              ) : (
+                <>
+                  Los fans que entren por aqui llegan directo a tu perfil: por cada {formatMoney(1000)} que
+                  gasten contigo ganas <strong className="text-foreground">{formatMoney(fanShare * 10)}</strong>.
+                </>
+              )}
             </p>
           </div>
         </div>
@@ -158,10 +167,10 @@ export default async function InvitePage() {
           <div className="min-w-0">
             <h2 className="font-semibold">Invita a otros creadores</h2>
             <p className="text-sm text-muted-foreground">
-              Cuando un creador que invites venda, ganas el{' '}
-              <strong className="text-foreground">{ambassadorPercent}% de cada venta suya</strong>{' '}
-              {isFounder ? 'para siempre' : `durante ${AMBASSADOR_MONTHS} meses`}. Sale de nuestra
-              comision: a esa persona no le quitamos nada.
+              Cuando un creador que invites venda, ganas{' '}
+              <strong className="text-foreground">{formatMoney(ambassadorPercent * 100)} por cada {formatMoney(10000)} que venda</strong>{' '}
+              {isFounder ? 'para siempre' : `durante ${AMBASSADOR_MONTHS} meses`}. A esa persona no le
+              quitamos nada.
             </p>
           </div>
         </div>

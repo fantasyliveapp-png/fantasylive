@@ -14,12 +14,11 @@ import {
 } from '@/components/ui/table';
 import { requireModel } from '@/lib/auth/guards';
 import { config } from '@/lib/config';
-import { effectiveTerms } from '@/lib/deals';
 import { PAYOUT_STATUS_LABELS } from '@/lib/constants';
 import { PAYOUT_METHOD_LABELS } from '@/lib/payout-methods';
 import { prisma } from '@/lib/prisma';
 import { getWalletSummary, tokensToNetPayoutCents, withdrawableTokens } from '@/lib/tokens';
-import { formatDateTime, formatMoney, formatTokens, formatUtcDate } from '@/lib/utils';
+import { formatDateTime, formatMoney, formatTokens } from '@/lib/utils';
 
 export const metadata: Metadata = { title: 'Retiros' };
 export const dynamic = 'force-dynamic';
@@ -36,7 +35,6 @@ const OPEN_STATUSES = ['REQUESTED', 'APPROVED', 'PROCESSING'] as const;
 
 export default async function PayoutsPage() {
   const { user, profile } = await requireModel();
-  const terms = effectiveTerms(profile);
 
   const [wallet, payouts] = await Promise.all([
     getWalletSummary(user.id),
@@ -94,15 +92,12 @@ export default async function PayoutsPage() {
           hint={`Retirado hasta hoy: ${formatMoney(withdrawnCents)}`}
           highlight
         />
+        {/* Solo cantidades: a la creadora no se le muestran porcentajes ni comisiones. */}
         <SummaryCard
           icon={<PieChart className="h-4 w-4 text-primary" />}
-          label="Tu reparto"
-          value={`${100 - terms.platformPercent}%`}
-          hint={
-            terms.active && terms.platformPercent !== config.economy.platformCommissionPercent
-              ? `Tu trato: la plataforma retiene el ${terms.platformPercent}%${terms.until ? ` hasta el ${formatUtcDate(terms.until)}` : ''}`
-              : `La plataforma retiene el ${terms.platformPercent}% de cada gasto`
-          }
+          label="Retiro minimo"
+          value={formatMoney(config.economy.minPayoutTokens * centsPerToken)}
+          hint={config.economy.payoutFeePercent > 0 ? `${formatTokens(config.economy.minPayoutTokens)} tokens` : 'Lo recibes integro, sin descuentos'}
         />
       </div>
 
