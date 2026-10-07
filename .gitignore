@@ -49,3 +49,6 @@ Thumbs.db
 # uploads locales de prueba
 /public/uploads
 /tmp
+
+# Material de marketing (no va al repositorio ni al servidor)
+marketing/
