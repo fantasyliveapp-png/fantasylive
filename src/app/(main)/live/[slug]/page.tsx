@@ -7,7 +7,7 @@ import { LiveViewer } from '@/components/live/live-viewer';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { getCurrentUser } from '@/lib/auth/guards';
-import { getViewerCountry, getVisibilityContext, isCountryBlocked } from '@/lib/geo';
+import { getVisibilityContext, isBlockedForViewer } from '@/lib/geo';
 import { getI18n } from '@/lib/i18n/server';
 import { rankLiveStreams } from '@/lib/live-rank';
 import { prisma } from '@/lib/prisma';
@@ -87,7 +87,7 @@ export default async function LiveStreamPage({
 
   // El bloqueo geografico se comprueba tambien aqui: entrar por la URL
   // directa del directo no puede ser una via para saltarselo.
-  if (isCountryBlocked(model.blockedCountries, await getViewerCountry())) {
+  if (await isBlockedForViewer(model.blockedCountries)) {
     redirect('/403');
   }
 

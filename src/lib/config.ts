@@ -100,6 +100,14 @@ export const config = {
     overrideCountry: (process.env.GEO_OVERRIDE_COUNTRY || '')
       .trim()
       .toUpperCase() || null,
+    /**
+     * Lista de rangos IPv4 de servicios VPN (uno por linea, en CIDR). La
+     * descarga deploy/update-vpn-list.sh una vez al dia. Si no existe, no se
+     * detectan VPN (todo sigue funcionando).
+     */
+    vpnListFile: process.env.VPN_LIST_FILE || '/var/lib/fantasylive/vpn-ipv4.txt',
+    /** Fuerza "esta conexion es VPN". Solo para pruebas de QA. */
+    overrideVpn: bool(process.env.GEO_OVERRIDE_VPN, false),
   },
   media: {
     provider: (process.env.NEXT_PUBLIC_MEDIA_PROVIDER || 'livekit') as

@@ -1,0 +1,17 @@
+##############################################################################
+# Lista de VPN: una vez al dia (y al arrancar si se perdio la ultima)
+# Instalar en /etc/systemd/system/fantasylive-vpn-list.timer y habilitar con:
+#   systemctl enable --now fantasylive-vpn-list.timer
+##############################################################################
+
+[Unit]
+Description=FantasyLive - actualizar lista de VPN (diario)
+
+[Timer]
+OnCalendar=*-*-* 04:30:00
+RandomizedDelaySec=15m
+Persistent=true
+Unit=fantasylive-vpn-list.service
+
+[Install]
+WantedBy=timers.target

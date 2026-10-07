@@ -7,6 +7,7 @@ import { config } from '@/lib/config';
 import { prisma } from '@/lib/prisma';
 import { getOfferContext, pricePackages } from '@/lib/token-offers';
 import { applyLedgerEntry } from '@/lib/tokens';
+import { recordPaymentCountry } from '@/lib/geo';
 
 let stripeClient: Stripe | null = null;
 
@@ -329,6 +330,8 @@ export async function capturePaypalOrder(orderId: string): Promise<{
 
   const payload = (await response.json().catch(() => null)) as {
     status?: string;
+    payer?: { address?: { country_code?: string } };
+    payment_source?: { paypal?: { address?: { country_code?: string } }; card?: { country_code?: string } };
     details?: { issue?: string }[];
   } | null;
 
@@ -356,6 +359,14 @@ export async function capturePaypalOrder(orderId: string): Promise<{
     provider: 'PAYPAL',
     providerRef: orderId,
   });
+
+  // Bloqueo por paises: el pais de la tarjeta/cuenta con la que pago.
+  await recordPaymentCountry(
+    pending.userId,
+    payload?.payment_source?.card?.country_code ??
+      payload?.payment_source?.paypal?.address?.country_code ??
+      payload?.payer?.address?.country_code,
+  );
 
   return { ok: true };
 }

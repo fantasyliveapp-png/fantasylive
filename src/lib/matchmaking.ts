@@ -5,7 +5,7 @@ import type { Gender, QueueMode } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { MIN_BILLED_CALL_SECONDS } from '@/lib/rates';
 import { config } from '@/lib/config';
-import { isCountryBlocked } from '@/lib/geo';
+import { isBlockedFor } from '@/lib/geo';
 import { randomRoomName } from '@/lib/utils';
 
 export interface JoinQueueInput {
@@ -16,6 +16,10 @@ export interface JoinQueueInput {
   countryPreference?: string | null;
   /** Pais ISO del usuario, resuelto por geolocalizacion al entrar en cola. */
   selfCountry?: string | null;
+  /** Todos sus paises conocidos (actual, historico y de pago). */
+  selfCountries?: string[];
+  /** Entraba con VPN: ningun perfil que bloquee paises se le empareja. */
+  selfVpn?: boolean;
 }
 
 export interface MatchResult {
@@ -69,6 +73,14 @@ async function getExcludedUserIds(userId: string): Promise<string[]> {
  *     y se marca MATCHED con un UPDATE condicional (evita doble emparejamiento).
  *  4. Si no hay candidato, queda WAITING y el cliente hace polling/SSE.
  */
+/** Paises y VPN de una entrada de cola (las antiguas solo tienen selfCountry). */
+function geoOf(e: { selfCountry: string | null; selfCountries: string[]; selfVpn: boolean }) {
+  return {
+    countries: e.selfCountries.length > 0 ? e.selfCountries : e.selfCountry ? [e.selfCountry] : [],
+    vpn: e.selfVpn,
+  };
+}
+
 export async function joinQueue(input: JoinQueueInput): Promise<MatchResult> {
   await reapStaleEntries();
 
@@ -88,6 +100,8 @@ export async function joinQueue(input: JoinQueueInput): Promise<MatchResult> {
       genderPreference: input.genderPreference ?? [],
       countryPreference: input.countryPreference ?? undefined,
       selfCountry: input.selfCountry ?? undefined,
+      selfCountries: input.selfCountries ?? (input.selfCountry ? [input.selfCountry] : []),
+      selfVpn: input.selfVpn ?? false,
       heartbeatAt: now,
       expiresAt: new Date(now.getTime() + QUEUE_TTL_MS),
     },
@@ -198,10 +212,10 @@ export async function tryMatch(entryId: string): Promise<MatchResult | null> {
       }
       // Bloqueo geografico, en los dos sentidos: ni la modelo atiende a un
       // pais que bloquea, ni se le manda a alguien que ella bloquea.
-      if (isCountryBlocked(c.user.modelProfile?.blockedCountries, entry.selfCountry)) {
+      if (isBlockedFor(c.user.modelProfile?.blockedCountries, geoOf(entry))) {
         return false;
       }
-      if (isCountryBlocked(entry.user.modelProfile?.blockedCountries, c.selfCountry)) {
+      if (isBlockedFor(entry.user.modelProfile?.blockedCountries, geoOf(c))) {
         return false;
       }
 

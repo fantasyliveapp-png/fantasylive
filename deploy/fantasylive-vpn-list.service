@@ -1,0 +1,18 @@
+##############################################################################
+# Descarga diaria de la lista de rangos de VPN (bloqueo por paises)
+# Instalar en /etc/systemd/system/fantasylive-vpn-list.service
+##############################################################################
+
+[Unit]
+Description=FantasyLive - actualizar lista de VPN
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/var/www/fantasylive/deploy/update-vpn-list.sh
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/fantasylive

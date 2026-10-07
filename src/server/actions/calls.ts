@@ -10,7 +10,7 @@ import { prisma } from '@/lib/prisma';
 import { createNotification } from '@/lib/notifications';
 import {
   GEO_BLOCKED_MESSAGE,
-  getViewerCountry,
+  getViewerGeo,
   isBlockedForViewer,
 } from '@/lib/geo';
 import { config } from '@/lib/config';
@@ -56,6 +56,12 @@ export interface CallActionResult<T = unknown> {
 // MATCHMAKING
 // ---------------------------------------------------------------------------
 
+/** Pais, paises recordados y VPN de quien entra en la cola aleatoria. */
+async function queueGeo() {
+  const geo = await getViewerGeo();
+  return { selfCountry: geo.country, selfCountries: geo.countries, selfVpn: geo.vpn };
+}
+
 export async function joinQueueAction(input: {
   mode: 'RANDOM' | 'VIP';
   genderPreference?: Gender[];
@@ -98,7 +104,7 @@ export async function joinQueueAction(input: {
       countryPreference: input.countryPreference ?? null,
       // Se resuelve aqui (hay contexto de peticion) y viaja con la entrada de
       // cola para que el emparejamiento respete los bloqueos por pais.
-      selfCountry: await getViewerCountry(),
+      ...(await queueGeo()),
     });
 
     return { ok: true, data: result };

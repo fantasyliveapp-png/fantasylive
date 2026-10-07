@@ -3,7 +3,9 @@ import 'server-only';
 import { createEmailOtp, TOKEN_TTL_MS } from '@/lib/auth-tokens';
 import { appLink, formatEmailDate, sendNotice, sendTemplate } from '@/lib/email';
 import { prisma } from '@/lib/prisma';
+import { rememberViewerCountry } from '@/lib/geo';
 import { getRequestInfo } from '@/lib/request-info';
+import { isVpnIp } from '@/lib/vpn';
 
 /** Correos de la cuenta que se mandan desde varios sitios. */
 
@@ -50,6 +52,9 @@ export async function sendPasswordChanged(user: { email: string; username: strin
 export async function recordLoginDevice(user: { id: string; email: string; username: string | null; name: string | null }) {
   try {
     const info = await getRequestInfo();
+    // Bloqueo por paises con memoria: el pais de cada inicio de sesion sin VPN
+    // queda apuntado en la cuenta.
+    if (info.country && !(await isVpnIp(info.ip))) await rememberViewerCountry(user.id, info.country);
     const known = await prisma.userDevice.findUnique({
       where: { userId_deviceKey: { userId: user.id, deviceKey: info.deviceKey } },
       select: { id: true },

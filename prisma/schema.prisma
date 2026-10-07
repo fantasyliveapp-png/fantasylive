@@ -300,6 +300,11 @@ model User {
   passwordHash      String?
   /// Ultimo cambio de contraseña: las sesiones abiertas antes se cierran.
   passwordChangedAt DateTime?
+  /// Paises desde los que se ha conectado alguna vez (sin VPN). Un perfil que
+  /// bloquea uno de ellos sigue bloqueado aunque despues entre con VPN.
+  seenCountries     String[]   @default([])
+  /// Paises de los medios de pago que ha usado (tarjeta/cuenta).
+  paymentCountries  String[]   @default([])
   name              String?
   username          String?    @unique
   image             String?
@@ -1216,6 +1221,9 @@ model MatchQueueEntry {
   /// Pais ISO-3166 alpha-2 resuelto al entrar en cola. Se usa para no
   /// emparejar a un usuario con una modelo que bloquea su pais.
   selfCountry String?
+  /// Todos sus paises conocidos (actual, historico y de pago) y si entraba con VPN.
+  selfCountries String[] @default([])
+  selfVpn       Boolean  @default(false)
 
   /// Sala asignada al emparejar
   matchedSessionId String?

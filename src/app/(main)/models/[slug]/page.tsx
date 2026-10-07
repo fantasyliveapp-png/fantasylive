@@ -52,7 +52,7 @@ import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SubscribeButton } from '@/components/models/subscribe-button';
 import { getCurrentUser } from '@/lib/auth/guards';
-import { getViewerCountry, isCountryBlocked } from '@/lib/geo';
+import { getViewerCountry, isBlockedForViewer } from '@/lib/geo';
 import { maybeSendAutoGreeting } from '@/lib/greeting';
 import { getModelPosts } from '@/lib/posts';
 import { recordProfileVisit } from '@/lib/visits';
@@ -147,7 +147,7 @@ export default async function ModelProfilePage({
 
   const viewerCountry = await getViewerCountry();
   if (!isOwner && viewer?.role !== 'ADMIN') {
-    if (isCountryBlocked(model.blockedCountries, viewerCountry)) notFound();
+    if (await isBlockedForViewer(model.blockedCountries)) notFound();
   }
 
   // Analiticas de la creadora y saludo automatico. Se hace DESPUES del
