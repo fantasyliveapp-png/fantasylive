@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import type Stripe from 'stripe';
 
 import { config } from '@/lib/config';
-import { recordPaymentCountry } from '@/lib/geo';
 import { getStripe, fulfillPurchase } from '@/lib/payments';
 
 export const runtime = 'nodejs';
@@ -65,17 +64,6 @@ export async function POST(request: NextRequest) {
           provider: 'STRIPE',
           providerRef: session.id,
         });
-
-        // Bloqueo por paises: pais de la tarjeta (o, si no, el de facturacion).
-        let cardCountry: string | null | undefined;
-        if (typeof session.payment_intent === 'string') {
-          const intent = await stripe.paymentIntents
-            .retrieve(session.payment_intent, { expand: ['latest_charge'] })
-            .catch(() => null);
-          const charge = intent?.latest_charge;
-          cardCountry = typeof charge === 'object' && charge ? charge.payment_method_details?.card?.country : null;
-        }
-        await recordPaymentCountry(userId, cardCountry ?? session.customer_details?.address?.country);
         break;
       }
 

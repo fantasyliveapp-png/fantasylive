@@ -144,12 +144,11 @@ export function countryVisibilityFilter(
 // --- Bloqueo con memoria y VPN ------------------------------------------------
 //
 // Con una VPN cualquiera aparenta estar en otro pais. Para que el bloqueo por
-// paises no se salte tan facil, se tienen en cuenta tres cosas ademas del pais
+// paises no se salte tan facil, se tienen en cuenta dos cosas ademas del pais
 // de la conexion:
 //  - los paises desde los que esa cuenta se ha conectado ALGUNA VEZ sin VPN
 //    (User.seenCountries): quien vive en un pais casi siempre entra alguna vez
 //    sin VPN, y desde entonces queda bloqueado aunque despues la use;
-//  - los paises de sus medios de pago (User.paymentCountries);
 //  - si la conexion viene de una VPN conocida: entonces no se le muestra ningun
 //    perfil que bloquee algun pais (no se sabe de donde es de verdad).
 
@@ -157,7 +156,7 @@ export function countryVisibilityFilter(
 export type ViewerGeo = {
   /** Pais de la conexion actual (falso si viene por VPN). */
   country: string | null;
-  /** Paises que cuentan para bloquear: actual (sin VPN), historicos y de pago. */
+  /** Paises que cuentan para bloquear: actual (sin VPN) e historicos. */
   countries: string[];
   /** La conexion viene de un servicio VPN conocido. */
   vpn: boolean;
@@ -177,21 +176,6 @@ export async function rememberViewerCountry(userId: string, country: string | nu
         AND coalesce(array_length("seenCountries", 1), 0) < ${MAX_REMEMBERED}`;
   } catch (error) {
     console.error('[geo] no se pudo apuntar el pais visto', error);
-  }
-}
-
-/** Apunta el pais del medio de pago de una compra. Nunca lanza. */
-export async function recordPaymentCountry(userId: string, country: string | null | undefined) {
-  const code = normalizeCountryCode(country);
-  if (!code) return;
-  try {
-    await prisma.$executeRaw`
-      UPDATE "users" SET "paymentCountries" = array_append(coalesce("paymentCountries", ARRAY[]::text[]), ${code})
-      WHERE "id" = ${userId}
-        AND NOT (${code} = ANY(coalesce("paymentCountries", ARRAY[]::text[])))
-        AND coalesce(array_length("paymentCountries", 1), 0) < ${MAX_REMEMBERED}`;
-  } catch (error) {
-    console.error('[geo] no se pudo apuntar el pais del pago', error);
   }
 }
 
@@ -224,10 +208,9 @@ export const getViewerGeo = cache(async (): Promise<ViewerGeo> => {
   }
   if (userId) {
     const user = await prisma.user
-      .findUnique({ where: { id: userId }, select: { seenCountries: true, paymentCountries: true } })
+      .findUnique({ where: { id: userId }, select: { seenCountries: true } })
       .catch(() => null);
     for (const c of user?.seenCountries ?? []) countries.add(c);
-    for (const c of user?.paymentCountries ?? []) countries.add(c);
     if (country && !vpn && !(user?.seenCountries ?? []).includes(country)) {
       void rememberViewerCountry(userId, country);
     }

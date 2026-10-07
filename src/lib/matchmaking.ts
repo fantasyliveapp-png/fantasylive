@@ -16,7 +16,7 @@ export interface JoinQueueInput {
   countryPreference?: string | null;
   /** Pais ISO del usuario, resuelto por geolocalizacion al entrar en cola. */
   selfCountry?: string | null;
-  /** Todos sus paises conocidos (actual, historico y de pago). */
+  /** Todos sus paises conocidos (actual e historicos). */
   selfCountries?: string[];
   /** Entraba con VPN: ningun perfil que bloquee paises se le empareja. */
   selfVpn?: boolean;
