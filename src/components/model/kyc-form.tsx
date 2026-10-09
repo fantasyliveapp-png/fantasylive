@@ -14,7 +14,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { COUNTRIES, normalizeCountryCode } from '@/lib/countries';
+import { COUNTRIES, countryFlag, normalizeCountryCode } from '@/lib/countries';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -228,13 +228,13 @@ export function KycForm({
               <SelectContent className="max-h-72">
                 {FEATURED_COUNTRIES.map((c) => (
                   <SelectItem key={`top-${c.code}`} value={c.code}>
-                    {c.name}
+                    {countryFlag(c.code)} {c.name}
                   </SelectItem>
                 ))}
                 <SelectSeparator />
                 {OTHER_COUNTRIES.map((c) => (
                   <SelectItem key={c.code} value={c.code}>
-                    {c.name}
+                    {countryFlag(c.code)} {c.name}
                   </SelectItem>
                 ))}
               </SelectContent>

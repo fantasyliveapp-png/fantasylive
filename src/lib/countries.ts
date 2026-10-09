@@ -266,7 +266,9 @@ export function countryName(code: string | null | undefined): string {
  */
 export function displayCountry(value: string | null | undefined): string {
   if (!value) return '—';
-  return /^[A-Za-z]{2}$/.test(value.trim()) ? countryName(value) : value;
+  return /^[A-Za-z]{2}$/.test(value.trim())
+    ? `${countryFlag(value)} ${countryName(value)}`
+    : value;
 }
 
 /** Bandera emoji a partir del codigo ISO (A-Z -> indicadores regionales). */
