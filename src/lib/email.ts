@@ -124,6 +124,9 @@ function toText(html: string) {
     .join('\n');
 }
 
+const HEADER_CID = 'fl-header@fantasylive.app';
+const HEADER_PATH = path.join(process.cwd(), 'public/email-assets/header-fantasy-live.png');
+
 /** Envia una plantilla. Nunca lanza: devuelve false si no se pudo. */
 export async function sendTemplate(name: TemplateName, to: string, subject: string, vars: Vars): Promise<boolean> {
   let html: string;
@@ -140,7 +143,21 @@ export async function sendTemplate(name: TemplateName, to: string, subject: stri
     return false;
   }
   try {
-    await t.sendMail({ from: config.email.from, to, subject, html, text: toText(html) });
+    // La cabecera (logo) va DENTRO del correo (cid:) y no enlazada a la web:
+    // Gmail no carga imagenes externas en spam ni hasta que el usuario lo
+    // permite, y sin ella el correo se ve roto.
+    const headerUrl = appLink('/email-assets/header-fantasy-live.png');
+    const embedded = html.includes(headerUrl);
+    await t.sendMail({
+      from: config.email.from,
+      to,
+      subject,
+      html: embedded ? html.split(headerUrl).join(`cid:${HEADER_CID}`) : html,
+      text: toText(html),
+      attachments: embedded
+        ? [{ filename: 'fantasy-live.png', path: HEADER_PATH, cid: HEADER_CID, contentDisposition: 'inline' }]
+        : undefined,
+    });
     return true;
   } catch (error) {
     console.error('[email] no se pudo enviar', subject, 'a', to, error);

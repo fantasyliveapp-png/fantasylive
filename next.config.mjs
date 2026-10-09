@@ -87,6 +87,15 @@ const nextConfig = {
         source: '/api/:path*',
         headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }],
       },
+      {
+        // Recursos de los correos (logo, fuente): los programas de correo los
+        // piden desde fuera; sin esto la fuente de la marca no carga.
+        source: '/email-assets/:path*',
+        headers: [
+          { key: 'Access-Control-Allow-Origin', value: '*' },
+          { key: 'Cache-Control', value: 'public, max-age=604800' },
+        ],
+      },
     ];
   },
 };
