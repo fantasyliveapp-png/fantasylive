@@ -14,11 +14,13 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { COUNTRIES, normalizeCountryCode } from '@/lib/countries';
 import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
   SelectItem,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -28,6 +30,12 @@ import {
 } from '@/server/actions/model';
 
 type DocKind = 'front' | 'back' | 'selfie' | 'note';
+
+// Primero los paises de donde viene casi todo el talento; luego el resto, por nombre.
+const FEATURED_CODES = ['CO', 'MX', 'VE', 'AR', 'PE', 'CL', 'EC', 'DO', 'ES', 'US'];
+const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, 'es');
+const FEATURED_COUNTRIES = COUNTRIES.filter((c) => FEATURED_CODES.includes(c.code)).sort(byName);
+const OTHER_COUNTRIES = COUNTRIES.filter((c) => !FEATURED_CODES.includes(c.code)).sort(byName);
 
 const DOC_LABELS: Record<DocKind, { title: string; hint: string; required: boolean }> = {
   front: {
@@ -66,7 +74,7 @@ export function KycForm({
 
   const [fullLegalName, setFullLegalName] = useState(defaultName);
   const [birthDate, setBirthDate] = useState('');
-  const [country, setCountry] = useState(defaultCountry);
+  const [country, setCountry] = useState(normalizeCountryCode(defaultCountry) ?? '');
   const [documentType, setDocumentType] = useState<
     'PASSPORT' | 'NATIONAL_ID' | 'DRIVERS_LICENSE'
   >('NATIONAL_ID');
@@ -213,12 +221,24 @@ export function KycForm({
 
           <div className="space-y-2">
             <Label htmlFor="country">Pais de emision</Label>
-            <Input
-              id="country"
-              value={country}
-              onChange={(e) => setCountry(e.target.value)}
-              placeholder="Espana"
-            />
+            <Select value={country} onValueChange={setCountry}>
+              <SelectTrigger id="country">
+                <SelectValue placeholder="Selecciona tu pais" />
+              </SelectTrigger>
+              <SelectContent className="max-h-72">
+                {FEATURED_COUNTRIES.map((c) => (
+                  <SelectItem key={`top-${c.code}`} value={c.code}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+                <SelectSeparator />
+                {OTHER_COUNTRIES.map((c) => (
+                  <SelectItem key={c.code} value={c.code}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">

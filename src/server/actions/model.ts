@@ -309,7 +309,10 @@ export async function setOnlineStatusAction(input: {
 const kycSchema = z.object({
   fullLegalName: z.string().min(3).max(120),
   birthDate: z.string().min(1),
-  country: z.string().min(2).max(60),
+  country: z
+    .string()
+    .transform((v) => normalizeCountryCode(v) ?? '')
+    .refine((v) => v !== '', 'Selecciona el pais de emision del documento.'),
   documentType: z.enum(['PASSPORT', 'NATIONAL_ID', 'DRIVERS_LICENSE']),
   documentNumber: z.string().max(40).optional(),
   documentFrontKey: z.string().min(1, 'Sube el anverso del documento'),

@@ -32,6 +32,7 @@ import {
   getKycDocumentUrlsAction,
   reviewKycAction,
 } from '@/server/actions/admin';
+import { displayCountry } from '@/lib/countries';
 import { calculateAge, formatDate, formatDateTime } from '@/lib/utils';
 
 interface KycItem {
@@ -168,7 +169,7 @@ export function KycReviewList({ items }: { items: KycItem[] }) {
                       {item.documentNumber ? ` · ${item.documentNumber}` : ''}
                     </span>
                     <span>
-                      Pais: {item.country} · Enviado{' '}
+                      Pais: {displayCountry(item.country)} · Enviado{' '}
                       {formatDateTime(new Date(item.submittedAt))}
                     </span>
                   </div>

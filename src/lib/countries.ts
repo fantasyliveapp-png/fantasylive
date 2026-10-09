@@ -260,6 +260,15 @@ export function countryName(code: string | null | undefined): string {
   return BY_CODE.get(code.toUpperCase()) ?? code.toUpperCase();
 }
 
+/**
+ * Pais guardado para mostrar: los nuevos son codigos ISO ("CO" -> Colombia);
+ * los antiguos eran texto libre y se muestran tal cual.
+ */
+export function displayCountry(value: string | null | undefined): string {
+  if (!value) return '—';
+  return /^[A-Za-z]{2}$/.test(value.trim()) ? countryName(value) : value;
+}
+
 /** Bandera emoji a partir del codigo ISO (A-Z -> indicadores regionales). */
 export function countryFlag(code: string): string {
   const upper = code.trim().toUpperCase();

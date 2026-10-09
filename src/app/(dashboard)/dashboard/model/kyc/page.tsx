@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { BadgeCheck, Clock, ShieldAlert, XCircle } from 'lucide-react';
 
 import { KycForm } from '@/components/model/kyc-form';
+import { displayCountry } from '@/lib/countries';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { requireModel } from '@/lib/auth/guards';
@@ -112,7 +113,7 @@ export default async function KycPage() {
                   <div>
                     <p className="text-sm font-medium">{entry.fullLegalName}</p>
                     <p className="text-xs text-muted-foreground">
-                      {entry.documentType} · {entry.country} ·{' '}
+                      {entry.documentType} · {displayCountry(entry.country)} ·{' '}
                       {formatDateTime(entry.submittedAt)}
                     </p>
                     {entry.rejectionReason && (
