@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 
 import { RegisterForm } from '@/components/auth/register-form';
+import { getInviterName } from '@/lib/referral-inviter';
 import { safeNext } from '@/lib/safe-next';
 import { pageMeta } from '@/lib/seo';
 
@@ -13,6 +14,10 @@ export default async function RegisterPage({
 }) {
   const { role, next } = await searchParams;
   return (
-    <RegisterForm defaultRole={role === 'model' ? 'MODEL' : 'USER'} next={safeNext(next)} />
+    <RegisterForm
+      defaultRole={role === 'model' ? 'MODEL' : 'USER'}
+      next={safeNext(next)}
+      inviterName={await getInviterName()}
+    />
   );
 }

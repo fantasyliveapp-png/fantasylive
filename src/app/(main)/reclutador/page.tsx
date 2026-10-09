@@ -54,7 +54,7 @@ export default async function RecruiterPage() {
   const hasOpenRequest = requests.some((p) =>
     (OPEN_PAYOUT_STATUSES as readonly string[]).includes(p.status),
   );
-  const link = `${config.app.url.replace(/\/$/, '')}/reclutar/${r.code}`;
+  const link = `${config.app.url.replace(/\/$/, '')}/referidos/${r.code}`;
   const minPayoutCents = tokensToPayoutCents(config.economy.minPayoutTokens);
 
   return (

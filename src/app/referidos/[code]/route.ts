@@ -5,8 +5,7 @@ import { recruiterRedirect } from '@/lib/referral-redirect';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-/** Enlace antiguo de reclutador (/reclutar/<code>): sigue funcionando para
- * los que ya se compartieron. El nuevo es /referidos/<code>. */
+/** Enlace de referidos de un reclutador: /referidos/<code>. */
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ code: string }> },

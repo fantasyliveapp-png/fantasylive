@@ -112,7 +112,7 @@ export async function registerAction(
   const passwordHash = await bcrypt.hash(data.password, 10);
   const bonus = config.economy.signupBonusTokens;
 
-  // Referidos: quien le trajo (cookie de /r/<slug> o /reclutar/<code>).
+  // Referidos: quien le trajo (cookie de /r/<slug> o /referidos/<code>).
   // "r:<id>" = reclutador; si no, el id de la creadora que invito.
   const refValue = (await cookies()).get(REF_COOKIE)?.value ?? '';
   const recruiter = refValue.startsWith('r:')

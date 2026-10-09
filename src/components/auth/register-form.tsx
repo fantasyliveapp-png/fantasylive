@@ -9,6 +9,7 @@ import {
   Dices,
   Eye,
   EyeOff,
+  Gift,
   BadgeCheck,
   Loader2,
   Lock,
@@ -121,8 +122,11 @@ type UsernameStatus = 'idle' | 'checking' | 'free' | 'taken';
 export function RegisterForm({
   defaultRole,
   next = null,
+  inviterName = null,
 }: {
   defaultRole: 'USER' | 'MODEL';
+  /** Quien le invito (si entro por un enlace de referidos). */
+  inviterName?: string | null;
   /** A donde volver tras la bienvenida (la pagina donde quiso hacer algo). */
   next?: string | null;
 }) {
@@ -251,6 +255,16 @@ export function RegisterForm({
         </div>
 
         <form action={formAction} className="flex flex-col gap-5 px-6 py-6">
+          {inviterName && (
+            <div className="flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm">
+              <Gift className="h-4 w-4 shrink-0 text-emerald-500" />
+              <span>
+                Te registras con la invitacion de{' '}
+                <strong className="font-semibold">{inviterName}</strong>.
+              </span>
+            </div>
+          )}
+
           {wantsCreator && (
             <div className="flex gap-2 rounded-xl border border-primary/30 bg-primary/5 p-3 text-xs text-muted-foreground">
               <Sparkles className="h-4 w-4 shrink-0 text-primary" />

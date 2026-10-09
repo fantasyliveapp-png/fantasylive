@@ -217,7 +217,7 @@ export function RecruiterRow({
         <div className="space-y-4 border-t border-border/60 p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="break-all font-mono text-xs text-muted-foreground">
-              {baseUrl}/reclutar/{r.code}
+              {baseUrl}/referidos/{r.code}
             </p>
             {!detail && (
               <Link

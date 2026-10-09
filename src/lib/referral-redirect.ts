@@ -41,7 +41,7 @@ export async function refRedirect(
 }
 
 /**
- * Enlace de un reclutador: /reclutar/<code>. Guarda 30 dias "r:<id>" y
+ * Enlace de un reclutador: /referidos/<code> (o el antiguo /reclutar/<code>). Guarda 30 dias "r:<id>" y
  * lleva al registro como creadora. Reclutador pausado o codigo roto: portada.
  */
 export async function recruiterRedirect(req: NextRequest, code: string) {

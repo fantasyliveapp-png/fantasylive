@@ -111,7 +111,7 @@ export async function createRecruiterAction(input: {
     });
 
     revalidatePath('/admin/reclutadores');
-    return { ok: true, message: `Reclutador creado. Su enlace: /reclutar/${code}` };
+    return { ok: true, message: `Reclutador creado. Su enlace: /referidos/${code}` };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
   }
