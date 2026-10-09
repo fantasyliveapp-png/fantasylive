@@ -164,9 +164,15 @@ export async function getRecruiterOverview(recruiterId: string): Promise<Recruit
 
   const wallet = recruiter.user.wallet;
   const pendingTokens = wallet ? withdrawableTokens(wallet) : 0;
-  // Lo que de verdad se le pago (ya sin la comision de retiro).
+  // Lo que de verdad se le pago (ya sin la comision de retiro): los pagos
+  // anotados a mano y las solicitudes de retiro ya PAGADAS. Las que estan en
+  // curso o rechazadas no cuentan como cobradas.
   const payouts = await prisma.transaction.findMany({
-    where: { userId: recruiter.userId, type: 'PAYOUT' },
+    where: {
+      userId: recruiter.userId,
+      type: 'PAYOUT',
+      OR: [{ payoutRequestId: null }, { payoutRequest: { status: 'PAID' } }],
+    },
     orderBy: { createdAt: 'desc' },
     select: { id: true, createdAt: true, amountCents: true, platformFeeTokens: true, description: true },
   });

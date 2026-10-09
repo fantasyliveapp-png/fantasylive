@@ -37,6 +37,7 @@ import {
   type ActivePayoutMethod,
 } from '@/lib/payout-methods';
 import { requestPayoutAction } from '@/server/actions/model';
+import { requestRecruiterPayoutAction } from '@/server/actions/recruiters';
 import { formatMoney, formatTokens } from '@/lib/utils';
 
 const METHOD_ICONS = {
@@ -61,6 +62,7 @@ export function PayoutRequestForm({
   feePercent,
   kycApproved,
   hasOpenRequest,
+  recruiter = false,
 }: {
   /** Tokens que se pueden retirar: solo los ganados (no los comprados). */
   balance: number;
@@ -70,6 +72,8 @@ export function PayoutRequestForm({
   feePercent: number;
   kycApproved: boolean;
   hasOpenRequest: boolean;
+  /** En el panel de reclutador: su solicitud va por su propia accion. */
+  recruiter?: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -118,7 +122,7 @@ export function PayoutRequestForm({
 
   function submit() {
     startTransition(async () => {
-      const result = await requestPayoutAction({
+      const result = await (recruiter ? requestRecruiterPayoutAction : requestPayoutAction)({
         tokens,
         destination: buildDestination(),
       });

@@ -317,7 +317,7 @@ export function RecruiterRow({
               }
               onClick={() => {
                 const note = window.prompt(
-                  `Pagale ${formatMoney(r.totals.payNowCents)} a @${r.account.username} (su saldo de ${formatMoney(r.totals.pendingCents)} menos el 10% de retiro). Como se le pago (referencia):`,
+                  `Pagale ${formatMoney(r.totals.payNowCents)} a @${r.account.username}. Lo normal es que lo pida el desde su panel (llega a Retiros); usa esto solo si se le paga sin solicitud. Como se le pago (referencia):`,
                 );
                 if (note === null) return;
                 run(() => payRecruiterAction({ id: r.id, note }));

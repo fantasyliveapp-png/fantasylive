@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { BadgeCheck, Handshake, ShieldCheck, TrendingUp, Users, Wallet } from 'lucide-react';
 
+import { PayoutRequestForm } from '@/components/model/payout-request-form';
 import { ReferralLink } from '@/components/model/referral-link';
 import {
   MonthlyEarnings,
@@ -10,10 +11,13 @@ import {
 } from '@/components/recruiter/recruiter-stats';
 import { requireUser } from '@/lib/auth/guards';
 import { config } from '@/lib/config';
+import { PAYOUT_STATUS_LABELS } from '@/lib/constants';
+import { OPEN_PAYOUT_STATUSES } from '@/lib/payout-requests';
+import { PAYOUT_METHOD_LABELS } from '@/lib/payout-methods';
 import { prisma } from '@/lib/prisma';
 import { getRecruiterOverview, termsLabel } from '@/lib/recruiters';
-import { tokensToPayoutCents } from '@/lib/tokens';
-import { cn, formatMoney } from '@/lib/utils';
+import { getWalletSummary, tokensToPayoutCents, withdrawableTokens } from '@/lib/tokens';
+import { cn, formatDateTime, formatMoney } from '@/lib/utils';
 
 export const metadata: Metadata = { title: 'Panel de reclutador' };
 export const dynamic = 'force-dynamic';
@@ -29,7 +33,27 @@ export default async function RecruiterPage() {
     select: { id: true },
   });
   if (!recruiter) notFound();
-  const r = (await getRecruiterOverview(recruiter.id))!;
+  const [r, wallet, requests] = await Promise.all([
+    getRecruiterOverview(recruiter.id).then((o) => o!),
+    getWalletSummary(user.id),
+    prisma.payoutRequest.findMany({
+      where: { recruiterId: recruiter.id },
+      orderBy: { requestedAt: 'desc' },
+      take: 20,
+      select: {
+        id: true,
+        requestedAt: true,
+        method: true,
+        destinationMasked: true,
+        amountCents: true,
+        status: true,
+        rejectionReason: true,
+      },
+    }),
+  ]);
+  const hasOpenRequest = requests.some((p) =>
+    (OPEN_PAYOUT_STATUSES as readonly string[]).includes(p.status),
+  );
   const link = `${config.app.url.replace(/\/$/, '')}/reclutar/${r.code}`;
   const minPayoutCents = tokensToPayoutCents(config.economy.minPayoutTokens);
 
@@ -98,6 +122,55 @@ export default async function RecruiterPage() {
         <Stat icon={BadgeCheck} label="Verificadas" value={String(r.totals.verified)} />
       </section>
 
+      <PayoutRequestForm
+        recruiter
+        balance={withdrawableTokens(wallet)}
+        minTokens={config.economy.minPayoutTokens}
+        centsPerToken={config.economy.modelPayoutCentsPerToken}
+        feePercent={config.economy.payoutFeePercent}
+        kycApproved
+        hasOpenRequest={hasOpenRequest}
+      />
+
+      {requests.length > 0 && (
+        <section>
+          <h2 className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            Tus solicitudes de retiro
+          </h2>
+          <ul className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/60 bg-card">
+            {requests.map((p) => (
+              <li key={p.id} className="flex items-start gap-3 px-4 py-3 text-sm">
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium">{formatDateTime(p.requestedAt)}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {PAYOUT_METHOD_LABELS[p.method] ?? p.method}
+                    {p.destinationMasked ? ` · ${p.destinationMasked}` : ''}
+                  </p>
+                  {p.rejectionReason && (
+                    <p className="mt-0.5 text-xs text-destructive">{p.rejectionReason}</p>
+                  )}
+                </div>
+                <div className="text-right">
+                  <p className="font-semibold tabular-nums">{formatMoney(p.amountCents)}</p>
+                  <p
+                    className={cn(
+                      'text-[11px]',
+                      p.status === 'PAID'
+                        ? 'text-state-connected'
+                        : p.status === 'REJECTED'
+                          ? 'text-destructive'
+                          : 'text-muted-foreground',
+                    )}
+                  >
+                    {PAYOUT_STATUS_LABELS[p.status]}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <section>
         <h2 className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           Tus ganancias por creador
@@ -124,10 +197,11 @@ export default async function RecruiterPage() {
         </p>
         <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
           <li>
-            Te pagamos lo acumulado cada semana, a partir de {formatMoney(minPayoutCents)}.
+            Pide tu retiro desde esta pagina cuando tengas {formatMoney(minPayoutCents)} o mas,
+            por transferencia o en USDT.
             {config.economy.payoutFeePercent > 0
               ? ` Al cobrar se descuenta un ${config.economy.payoutFeePercent}%, igual que a los creadores.`
-              : ' Sin descuentos al cobrar.'}
+              : ' Lo recibes integro, sin descuentos.'}
           </li>
           <li>
             Ganas tu % de todo lo que gane cada creador: llamadas, regalos, directos, packs,

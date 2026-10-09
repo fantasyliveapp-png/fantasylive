@@ -39,7 +39,8 @@ interface PayoutRow {
   requestedAt: string;
   model: {
     stageName: string;
-    slug: string;
+    /** Su perfil publico (creadora) o su ficha en el admin (reclutador). */
+    href: string;
     email: string;
     kycStatus: string;
     totalEarned: number;
@@ -114,20 +115,24 @@ export function PayoutReviewList({ payouts }: { payouts: PayoutRow[] }) {
               <div className="min-w-[200px] flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <Link
-                    href={`/models/${payout.model.slug}`}
+                    href={payout.model.href}
                     target="_blank"
                     className="font-semibold hover:underline"
                   >
                     {payout.model.stageName}
                   </Link>
-                  {payout.model.kycStatus === 'APPROVED' ? (
+                  {payout.model.kycStatus === 'RECRUITER' ? (
+                    <Badge variant="secondary" className="text-[10px]">
+                      Reclutador
+                    </Badge>
+                  ) : payout.model.kycStatus === 'APPROVED' ? (
                     <BadgeCheck className="h-4 w-4 text-emerald-500" />
                   ) : (
                     <Badge variant="destructive" className="text-[10px]">
                       KYC {payout.model.kycStatus}
                     </Badge>
                   )}
-                  <Link href={`/models/${payout.model.slug}`} target="_blank">
+                  <Link href={payout.model.href} target="_blank">
                     <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
                   </Link>
                 </div>
@@ -299,7 +304,7 @@ export function PayoutReviewList({ payouts }: { payouts: PayoutRow[] }) {
             <DialogTitle>Rechazar retiro</DialogTitle>
             <DialogDescription>
               Los {formatTokens(rejecting?.tokens ?? 0)} tokens se devolveran
-              automaticamente al monedero de la modelo.
+              automaticamente a su monedero.
             </DialogDescription>
           </DialogHeader>
 

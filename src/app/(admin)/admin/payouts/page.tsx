@@ -34,13 +34,25 @@ export default async function AdminPayoutsPage({
           user: { select: { email: true, wallet: { select: { balance: true } } } },
         },
       },
+      recruiter: {
+        select: {
+          id: true,
+          user: {
+            select: {
+              email: true,
+              username: true,
+              wallet: { select: { balance: true, lifetimeEarned: true } },
+            },
+          },
+        },
+      },
     },
   });
 
   return (
     <div className="space-y-8">
       <AdminPageHeader
-        title="Retiros de creadores"
+        title="Retiros"
         description={
           <>
             Aprueba, marca como pagado o rechaza. Rechazar devuelve los tokens al monedero de la
@@ -79,14 +91,24 @@ export default async function AdminPayoutsPage({
             // Nunca se manda el blob cifrado al cliente: solo la mascara.
             destinationMasked: p.destinationMasked,
             requestedAt: p.requestedAt.toISOString(),
-            model: {
-              stageName: p.model.stageName,
-              slug: p.model.slug,
-              email: p.model.user.email,
-              kycStatus: p.model.kycStatus,
-              totalEarned: p.model.totalTokensEarned,
-              currentBalance: p.model.user.wallet?.balance ?? 0,
-            },
+            model: p.model
+              ? {
+                  stageName: p.model.stageName,
+                  href: `/models/${p.model.slug}`,
+                  email: p.model.user.email,
+                  kycStatus: p.model.kycStatus,
+                  totalEarned: p.model.totalTokensEarned,
+                  currentBalance: p.model.user.wallet?.balance ?? 0,
+                }
+              : {
+                  // Reclutador: no tiene KYC (lo da de alta el equipo).
+                  stageName: `@${p.recruiter?.user.username ?? 'reclutador'}`,
+                  href: `/admin/reclutadores/${p.recruiter?.id ?? ''}`,
+                  email: p.recruiter?.user.email ?? '',
+                  kycStatus: 'RECRUITER',
+                  totalEarned: p.recruiter?.user.wallet?.lifetimeEarned ?? 0,
+                  currentBalance: p.recruiter?.user.wallet?.balance ?? 0,
+                },
           }))}
         />
       )}

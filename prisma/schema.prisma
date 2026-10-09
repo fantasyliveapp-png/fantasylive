@@ -1370,7 +1370,9 @@ model KycVerification {
 
 model PayoutRequest {
   id      String       @id @default(cuid())
-  modelId String
+  /// Quien cobra: una creadora (modelId) o un reclutador (recruiterId).
+  modelId     String?
+  recruiterId String?
   status  PayoutStatus @default(REQUESTED)
 
   /// Tokens brutos que la creadora pidio retirar (lo que se le debita)
@@ -1400,12 +1402,14 @@ model PayoutRequest {
   processedAt DateTime?
   paidAt      DateTime?
 
-  model        ModelProfile  @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  model        ModelProfile? @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  recruiter    Recruiter?    @relation(fields: [recruiterId], references: [id], onDelete: Cascade)
   processor    User?         @relation("PayoutProcessor", fields: [processorId], references: [id], onDelete: SetNull)
   transactions Transaction[]
 
   @@index([status, requestedAt])
   @@index([modelId])
+  @@index([recruiterId])
   @@map("payout_requests")
 }
 
@@ -1952,6 +1956,7 @@ model Recruiter {
 
   user     User   @relation("RecruiterAccount", fields: [userId], references: [id], onDelete: Cascade)
   creators User[] @relation("RecruitedBy")
+  payoutRequests PayoutRequest[]
 
   @@map("recruiters")
 }

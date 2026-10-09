@@ -4,7 +4,10 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 import { getAuthedUserOrThrow } from '@/lib/auth/guards';
+import { emailVerificationBlock } from '@/lib/auth-tokens';
 import { config } from '@/lib/config';
+import { createPayoutRequest } from '@/lib/payout-requests';
+import { payoutDestinationSchema, type PayoutDestination } from '@/lib/payouts';
 import { prisma } from '@/lib/prisma';
 import { applyLedgerEntry, splitPayoutFee, tokensToPayoutCents, withdrawableTokens } from '@/lib/tokens';
 import { formatMoney } from '@/lib/utils';
@@ -218,6 +221,48 @@ export async function payRecruiterAction(input: {
       ok: true,
       message: `Paga ${formatMoney(cents)} (su saldo menos el ${config.economy.payoutFeePercent}% de retiro). Anotado.`,
     };
+  } catch (error) {
+    return { ok: false, error: toMessage(error) };
+  }
+}
+
+const recruiterPayoutSchema = z.object({
+  tokens: z.number().int().min(1).max(10_000_000),
+  destination: payoutDestinationSchema,
+});
+
+/**
+ * El RECLUTADOR pide el retiro de lo que ha ganado (desde su panel), igual
+ * que una creadora: deja sus datos de cobro y la solicitud entra en la cola
+ * de Retiros del admin. No necesita KYC: lo da de alta el equipo a mano.
+ */
+export async function requestRecruiterPayoutAction(input: {
+  tokens: number;
+  destination: PayoutDestination;
+}): Promise<RecruiterActionResult> {
+  try {
+    const user = await getAuthedUserOrThrow();
+    const recruiter = await prisma.recruiter.findUnique({
+      where: { userId: user.id },
+      select: { id: true },
+    });
+    if (!recruiter) return { ok: false, error: 'Tu cuenta no es de reclutador.' };
+    const unverified = await emailVerificationBlock(user.id);
+    if (unverified) return { ok: false, error: unverified };
+
+    const parsed = recruiterPayoutSchema.safeParse(input);
+    if (!parsed.success) {
+      return { ok: false, error: parsed.error.issues[0]?.message ?? 'Datos de retiro invalidos.' };
+    }
+
+    const message = await createPayoutRequest({
+      userId: user.id,
+      owner: { recruiterId: recruiter.id },
+      ...parsed.data,
+    });
+    revalidatePath('/reclutador');
+    revalidatePath('/admin/payouts');
+    return { ok: true, message };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
   }

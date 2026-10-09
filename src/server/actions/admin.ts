@@ -298,9 +298,19 @@ export async function processPayoutAction(input: {
 
     const payout = await prisma.payoutRequest.findUnique({
       where: { id: input.payoutId },
-      include: { model: { select: { userId: true, stageName: true, createdAt: true, ...DEAL_SELECT, user: { select: { email: true } } } } },
+      include: {
+        model: { select: { userId: true, stageName: true, createdAt: true, ...DEAL_SELECT, user: { select: { email: true } } } },
+        recruiter: { select: { userId: true, createdAt: true, user: { select: { email: true, username: true } } } },
+      },
     });
     if (!payout) return { ok: false, error: 'Retiro no encontrado.' };
+    // Quien cobra: una creadora o un reclutador.
+    const owner = payout.model
+      ? { userId: payout.model.userId, name: payout.model.stageName, email: payout.model.user.email, since: payout.model.createdAt, panel: '/dashboard/model/payouts' }
+      : payout.recruiter
+        ? { userId: payout.recruiter.userId, name: payout.recruiter.user.username ?? 'reclutador', email: payout.recruiter.user.email, since: payout.recruiter.createdAt, panel: '/reclutador' }
+        : null;
+    if (!owner) return { ok: false, error: 'El retiro no tiene titular.' };
     if (payout.status === 'PAID' || payout.status === 'REJECTED') {
       return { ok: false, error: 'Este retiro ya esta cerrado.' };
     }
@@ -339,7 +349,7 @@ export async function processPayoutAction(input: {
       // Rechazo => se devuelven los tokens debitados al solicitar
       if (input.decision === 'REJECTED') {
         await applyLedgerEntry(tx, {
-          userId: payout.model.userId,
+          userId: owner.userId,
           type: 'REFUND',
           tokens: payout.tokens,
           description: `Retiro rechazado: ${input.notes ?? 'sin motivo'}`,
@@ -350,7 +360,7 @@ export async function processPayoutAction(input: {
         // pendingEarnings: hay que reponerlo a mano para que el saldo
         // "pendiente de retirar" vuelva a cuadrar con el real.
         await tx.wallet.update({
-          where: { userId: payout.model.userId },
+          where: { userId: owner.userId },
           data: { pendingEarnings: { increment: payout.tokens } },
         });
 
@@ -358,7 +368,7 @@ export async function processPayoutAction(input: {
         // ocurrir, asi que se revierte.
         await tx.wallet.updateMany({
           where: {
-            userId: payout.model.userId,
+            userId: owner.userId,
             lifetimeWithdrawn: { gte: payout.tokens },
           },
           data: { lifetimeWithdrawn: { decrement: payout.tokens } },
@@ -370,13 +380,18 @@ export async function processPayoutAction(input: {
       tokens: payout.tokens,
       amountCents: payout.amountCents,
       method: payout.method,
-      model: payout.model.stageName,
+      model: payout.model ? owner.name : undefined,
+      recruiter: payout.recruiter ? owner.name : undefined,
     });
 
     if (input.decision === 'PAID') {
       // Periodo: desde el retiro pagado anterior (o el alta) hasta que pidio este.
       const prev = await prisma.payoutRequest.findFirst({
-        where: { modelId: payout.modelId, status: 'PAID', id: { not: payout.id } },
+        where: {
+          ...(payout.modelId ? { modelId: payout.modelId } : { recruiterId: payout.recruiterId }),
+          status: 'PAID',
+          id: { not: payout.id },
+        },
         orderBy: { paidAt: 'desc' },
         select: { paidAt: true },
       });
@@ -387,33 +402,33 @@ export async function processPayoutAction(input: {
         ({ WIRE_TRANSFER: 'Transferencia bancaria', BANK_TRANSFER: 'Transferencia bancaria', USDT_TRC20: 'USDT (TRC20)', CRYPTO: 'Cripto', PAYPAL: 'PayPal' } as Record<string, string>)[
           payout.method
         ] ?? payout.method;
-      await sendTemplate('13-creador-pago-enviado', payout.model.user.email, `Pago enviado: ${formatUsd(payout.amountCents)}`, {
-        creatorName: payout.model.stageName,
+      await sendTemplate('13-creador-pago-enviado', owner.email, `Pago enviado: ${formatUsd(payout.amountCents)}`, {
+        creatorName: owner.name,
         amount: formatUsd(payout.amountCents),
-        periodStart: formatEmailDate(prev?.paidAt ?? payout.model.createdAt),
+        periodStart: formatEmailDate(prev?.paidAt ?? owner.since),
         periodEnd: formatEmailDate(payout.requestedAt),
         payoutDestination: destination,
         payoutId: input.externalRef?.trim() || payout.externalRef || payout.id.slice(-8).toUpperCase(),
         payoutDate: formatEmailDate(new Date()),
         arrivalDays: arrival,
-        feePercent: effectiveTerms(payout.model).platformPercent,
-        actionUrl: appLink('/dashboard/model/payouts'),
+        feePercent: payout.model ? effectiveTerms(payout.model).platformPercent : 0,
+        actionUrl: appLink(owner.panel),
       });
     } else if (input.decision === 'REJECTED') {
-      await sendNotice(payout.model.user.email, {
+      await sendNotice(owner.email, {
         subject: 'Tu retiro no se pudo pagar',
         heading: 'Retiro rechazado',
         paragraphs: [
-          `Hola, ${payout.model.stageName}. No pudimos pagar tu retiro de ${formatUsd(payout.amountCents)}.`,
+          `Hola, ${owner.name}. No pudimos pagar tu retiro de ${formatUsd(payout.amountCents)}.`,
           `Motivo: ${input.notes?.trim() ?? '—'}`,
           'Los tokens han vuelto a tu saldo para que lo pidas de nuevo.',
         ],
-        action: { label: 'Ver mis retiros', url: appLink('/dashboard/model/payouts') },
+        action: { label: 'Ver mis retiros', url: appLink(owner.panel) },
       });
     }
 
     revalidatePath('/admin/payouts');
-    revalidatePath('/dashboard/model/payouts');
+    revalidatePath(owner.panel);
     return { ok: true, message: `Retiro marcado como ${status}.` };
   } catch (error) {
     return { ok: false, error: toMessage(error) };

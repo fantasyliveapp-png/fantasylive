@@ -12,13 +12,7 @@ import { checkNoContactInfo } from '@/lib/content-filter';
 import { changeHandle, isHandleFree } from '@/lib/creator-profile';
 import { isReservedUsername, USERNAME_PATTERN } from '@/lib/usernames';
 import { config } from '@/lib/config';
-import {
-  applyLedgerEntry,
-  splitPayoutFee,
-  tokensToPayoutCents,
-  withdrawableTokens,
-} from '@/lib/tokens';
-import { encryptSecret, maskDestination } from '@/lib/crypto';
+import { createPayoutRequest } from '@/lib/payout-requests';
 import { normalizeCountryCode } from '@/lib/countries';
 import {
   MAX_RATE_CENTITOKENS,
@@ -26,12 +20,7 @@ import {
   MIN_RATE_CENTITOKENS,
   formatRate,
 } from '@/lib/rates';
-import {
-  destinationIdentifier,
-  payoutDestinationSchema,
-  PAYOUT_METHOD_LABELS,
-  type PayoutDestination,
-} from '@/lib/payouts';
+import { payoutDestinationSchema, type PayoutDestination } from '@/lib/payouts';
 import {
   buildKycKey,
   buildProfileImageKey,
@@ -484,112 +473,17 @@ export async function requestPayoutAction(input: {
     if (profile.kycStatus !== 'APPROVED') {
       return { ok: false, error: 'Necesitas el KYC aprobado para retirar.' };
     }
-    if (tokens < config.economy.minPayoutTokens) {
-      return {
-        ok: false,
-        error: `El minimo de retiro es de ${config.economy.minPayoutTokens} tokens.`,
-      };
-    }
 
-    // Solo se retira lo GANADO: los tokens comprados son para gastar aqui.
-    const wallet = await prisma.wallet.findUnique({
-      where: { userId: user.id },
-      select: { balance: true, pendingEarnings: true },
-    });
-    const withdrawable = wallet ? withdrawableTokens(wallet) : 0;
-    if (tokens > withdrawable) {
-      return {
-        ok: false,
-        error:
-          withdrawable > 0
-            ? `Solo puedes retirar tokens ganados: tienes ${withdrawable} para retirar. Los tokens comprados solo sirven para gastar dentro de Fantasy Live.`
-            : 'Aun no tienes tokens ganados para retirar. Los tokens comprados solo sirven para gastar dentro de Fantasy Live.',
-      };
-    }
-
-    // Una solicitud abierta a la vez: evita que se encadenen retiros mientras
-    // finanzas todavia no ha procesado el anterior.
-    const openRequest = await prisma.payoutRequest.findFirst({
-      where: {
-        modelId: profile.id,
-        status: { in: ['REQUESTED', 'APPROVED', 'PROCESSING'] },
-      },
-      select: { id: true },
-    });
-    if (openRequest) {
-      return {
-        ok: false,
-        error: 'Ya tienes un retiro en curso. Espera a que se procese.',
-      };
-    }
-
-    const { feeTokens, netTokens } = splitPayoutFee(tokens);
-    if (netTokens <= 0) {
-      return { ok: false, error: 'El importe no cubre la comision de retiro.' };
-    }
-    const amountCents = tokensToPayoutCents(netTokens);
-
-    // El cifrado se hace ANTES de abrir la transaccion: si la clave no esta
-    // configurada preferimos fallar sin haber tocado el monedero.
-    const encryptedDestination = encryptSecret(JSON.stringify(destination));
-    const masked = maskDestination(destinationIdentifier(destination));
-
-    await prisma.$transaction(async (tx) => {
-      const payout = await tx.payoutRequest.create({
-        data: {
-          modelId: profile.id,
-          tokens,
-          feeTokens,
-          netTokens,
-          amountCents,
-          currency: 'USD',
-          method: destination.method,
-          destination: encryptedDestination,
-          destinationMasked: masked,
-          status: 'REQUESTED',
-        },
-        select: { id: true },
-      });
-
-      // Debito atomico (solo de lo ganado): lanza NotWithdrawableError y revierte la
-      // transaccion completa si el saldo no alcanza.
-      await applyLedgerEntry(tx, {
-        userId: user.id,
-        type: 'PAYOUT',
-        tokens,
-        amountCents,
-        currency: 'USD',
-        description: `Solicitud de retiro (${PAYOUT_METHOD_LABELS[destination.method]})`,
-        payoutRequestId: payout.id,
-        platformFeeTokens: feeTokens,
-      });
-
-      await tx.auditLog.create({
-        data: {
-          actorId: user.id,
-          action: 'PAYOUT_REQUESTED',
-          entityType: 'PayoutRequest',
-          entityId: payout.id,
-          metadata: {
-            tokens,
-            feeTokens,
-            netTokens,
-            amountCents,
-            method: destination.method,
-          },
-        },
-      });
+    const message = await createPayoutRequest({
+      userId: user.id,
+      owner: { modelId: profile.id },
+      tokens,
+      destination,
     });
 
     revalidatePath('/dashboard/model/payouts');
     revalidatePath('/admin/payouts');
-    return {
-      ok: true,
-      message:
-        feeTokens > 0
-          ? `Retiro solicitado: ${tokens} tokens menos ${feeTokens} de comision (${config.economy.payoutFeePercent}%) = ${netTokens} tokens, ${(amountCents / 100).toFixed(2)} USD.`
-          : `Retiro solicitado: ${tokens} tokens (${(amountCents / 100).toFixed(2)} USD).`,
-    };
+    return { ok: true, message };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
   }
