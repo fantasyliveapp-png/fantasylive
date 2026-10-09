@@ -198,7 +198,7 @@ export default async function RecruiterPage() {
         <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
           <li>
             Pide tu retiro desde esta pagina cuando tengas {formatMoney(minPayoutCents)} o mas,
-            por transferencia o en USDT.
+            por Binance Pay (USDT o USDC) o transferencia bancaria.
             {config.economy.payoutFeePercent > 0
               ? ` Al cobrar se descuenta un ${config.economy.payoutFeePercent}%, igual que a los creadores.`
               : ' Lo recibes integro, sin descuentos.'}

@@ -3,7 +3,7 @@ import 'server-only';
 import { config } from '@/lib/config';
 import { encryptSecret, maskDestination } from '@/lib/crypto';
 import { prisma } from '@/lib/prisma';
-import { destinationIdentifier, PAYOUT_METHOD_LABELS, type PayoutDestination } from '@/lib/payouts';
+import { destinationIdentifier, PAYOUT_METHOD_LABELS, type ActivePayoutDestination } from '@/lib/payouts';
 import { applyLedgerEntry, splitPayoutFee, tokensToPayoutCents, withdrawableTokens } from '@/lib/tokens';
 import { formatMoney } from '@/lib/utils';
 
@@ -29,7 +29,7 @@ export async function createPayoutRequest(input: {
   userId: string;
   owner: PayoutOwner;
   tokens: number;
-  destination: PayoutDestination;
+  destination: ActivePayoutDestination;
 }): Promise<string> {
   const { userId, owner, tokens, destination } = input;
 

@@ -10,29 +10,40 @@ import type { PayoutMethod } from '@prisma/client';
 
 /**
  * Metodos que la plataforma ofrece hoy. El enum de Prisma conserva ademas
- * valores heredados (BANK_TRANSFER, CRYPTO, PAXUM) para no romper el
+ * valores heredados (USDT_TRC20, PAYPAL, BANK_TRANSFER, CRYPTO, PAXUM) para no romper el
  * historico, pero NO se aceptan en solicitudes nuevas.
  */
-export const PAYOUT_METHODS = ['WIRE_TRANSFER', 'USDT_TRC20', 'PAYPAL'] as const;
+export const PAYOUT_METHODS = ['BINANCE_PAY', 'WIRE_TRANSFER'] as const;
 
 export type ActivePayoutMethod = (typeof PAYOUT_METHODS)[number];
 
 export const PAYOUT_METHOD_LABELS: Record<PayoutMethod, string> = {
-  WIRE_TRANSFER: 'Transferencia bancaria (wire)',
-  USDT_TRC20: 'USDT - red TRC20',
-  PAYPAL: 'PayPal',
+  BINANCE_PAY: 'Binance Pay (USDT o USDC)',
+  WIRE_TRANSFER: 'Transferencia bancaria',
+  USDT_TRC20: 'USDT - red TRC20 (heredado)',
+  PAYPAL: 'PayPal (heredado)',
   BANK_TRANSFER: 'Transferencia bancaria (heredado)',
   CRYPTO: 'Cripto (heredado)',
   PAXUM: 'Paxum (heredado)',
 };
 
 export const PAYOUT_METHOD_HINTS: Record<ActivePayoutMethod, string> = {
+  BINANCE_PAY:
+    'Llega al instante a tu cuenta de Binance cuando se procesa, sin comisiones de red.',
   WIRE_TRANSFER:
     'Llega en 3-5 dias habiles. El banco puede aplicar comisiones por transferencia internacional.',
-  USDT_TRC20:
-    'Se envia en 24-48 h. Comprueba la direccion: la red TRON es irreversible.',
-  PAYPAL: 'Llega en 1-2 dias habiles a la cuenta asociada a ese correo.',
 };
+
+export const BINANCE_ASSETS = ['USDT', 'USDC'] as const;
+export type BinanceAsset = (typeof BINANCE_ASSETS)[number];
+
+/** Binance Pay: en USDT o USDC, a su Pay ID o al correo de su cuenta Binance. */
+export interface BinancePayDestination {
+  method: 'BINANCE_PAY';
+  asset: BinanceAsset;
+  /** Binance Pay ID (numerico) o correo de la cuenta de Binance. */
+  payId: string;
+}
 
 /** Datos de cobro para transferencia bancaria internacional. */
 export interface WireTransferDestination {
@@ -57,7 +68,11 @@ export interface PaypalDestination {
   email: string;
 }
 
+/** Lo que se puede pedir hoy. */
+export type ActivePayoutDestination = BinancePayDestination | WireTransferDestination;
+
+/** Cualquier destino guardado (incluye metodos que ya no se ofrecen). */
 export type PayoutDestination =
-  | WireTransferDestination
+  | ActivePayoutDestination
   | UsdtTrc20Destination
   | PaypalDestination;

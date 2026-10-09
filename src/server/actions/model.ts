@@ -20,7 +20,7 @@ import {
   MIN_RATE_CENTITOKENS,
   formatRate,
 } from '@/lib/rates';
-import { payoutDestinationSchema, type PayoutDestination } from '@/lib/payouts';
+import { payoutDestinationSchema, type ActivePayoutDestination } from '@/lib/payouts';
 import {
   buildKycKey,
   buildProfileImageKey,
@@ -452,7 +452,7 @@ const payoutSchema = z.object({
  */
 export async function requestPayoutAction(input: {
   tokens: number;
-  destination: PayoutDestination;
+  destination: ActivePayoutDestination;
 }): Promise<ModelActionResult> {
   try {
     const { user, profile } = await requireModelProfile();

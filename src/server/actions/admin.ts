@@ -396,10 +396,10 @@ export async function processPayoutAction(input: {
         select: { paidAt: true },
       });
       const arrival =
-        payout.method === 'USDT_TRC20' || payout.method === 'CRYPTO' ? '1' : payout.method === 'PAYPAL' ? '1-2' : '3-5';
+        payout.method === 'BINANCE_PAY' || payout.method === 'USDT_TRC20' || payout.method === 'CRYPTO' ? '1' : payout.method === 'PAYPAL' ? '1-2' : '3-5';
       const destination =
         payout.destinationMasked ??
-        ({ WIRE_TRANSFER: 'Transferencia bancaria', BANK_TRANSFER: 'Transferencia bancaria', USDT_TRC20: 'USDT (TRC20)', CRYPTO: 'Cripto', PAYPAL: 'PayPal' } as Record<string, string>)[
+        ({ BINANCE_PAY: 'Binance Pay', WIRE_TRANSFER: 'Transferencia bancaria', BANK_TRANSFER: 'Transferencia bancaria', USDT_TRC20: 'USDT (TRC20)', CRYPTO: 'Cripto', PAYPAL: 'PayPal' } as Record<string, string>)[
           payout.method
         ] ?? payout.method;
       await sendTemplate('13-creador-pago-enviado', owner.email, `Pago enviado: ${formatUsd(payout.amountCents)}`, {

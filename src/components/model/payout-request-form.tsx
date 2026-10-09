@@ -7,7 +7,6 @@ import {
   Banknote,
   Coins,
   Loader2,
-  Mail,
   ShieldCheck,
   Wallet,
 } from 'lucide-react';
@@ -32,18 +31,20 @@ import {
 } from '@/components/ui/select';
 import { COUNTRIES } from '@/lib/countries';
 import {
+  BINANCE_ASSETS,
   PAYOUT_METHOD_HINTS,
   PAYOUT_METHOD_LABELS,
+  PAYOUT_METHODS,
   type ActivePayoutMethod,
+  type BinanceAsset,
 } from '@/lib/payout-methods';
 import { requestPayoutAction } from '@/server/actions/model';
 import { requestRecruiterPayoutAction } from '@/server/actions/recruiters';
 import { formatMoney, formatTokens } from '@/lib/utils';
 
 const METHOD_ICONS = {
+  BINANCE_PAY: Coins,
   WIRE_TRANSFER: Banknote,
-  USDT_TRC20: Coins,
-  PAYPAL: Mail,
 } as const;
 
 const EMPTY_WIRE = {
@@ -79,11 +80,11 @@ export function PayoutRequestForm({
   const [isPending, startTransition] = useTransition();
 
   const [tokens, setTokens] = useState(() => Math.min(balance, minTokens));
-  const [method, setMethod] = useState<ActivePayoutMethod>('WIRE_TRANSFER');
+  const [method, setMethod] = useState<ActivePayoutMethod>('BINANCE_PAY');
 
   const [wire, setWire] = useState(EMPTY_WIRE);
-  const [tronAddress, setTronAddress] = useState('');
-  const [paypalEmail, setPaypalEmail] = useState('');
+  const [binanceAsset, setBinanceAsset] = useState<BinanceAsset>('USDT');
+  const [binancePayId, setBinancePayId] = useState('');
 
   const canRequest = kycApproved && !hasOpenRequest && balance >= minTokens;
 
@@ -113,10 +114,8 @@ export function PayoutRequestForm({
           bankCountry: wire.bankCountry,
           bankAddress: wire.bankAddress,
         };
-      case 'USDT_TRC20':
-        return { method: 'USDT_TRC20' as const, address: tronAddress };
-      case 'PAYPAL':
-        return { method: 'PAYPAL' as const, email: paypalEmail };
+      case 'BINANCE_PAY':
+        return { method: 'BINANCE_PAY' as const, asset: binanceAsset, payId: binancePayId };
     }
   }
 
@@ -130,8 +129,7 @@ export function PayoutRequestForm({
       if (result.ok) {
         toast.success(result.message ?? 'Retiro solicitado');
         setWire(EMPTY_WIRE);
-        setTronAddress('');
-        setPaypalEmail('');
+        setBinancePayId('');
         router.refresh();
       } else {
         toast.error(result.error ?? 'No se pudo solicitar el retiro');
@@ -219,15 +217,11 @@ export function PayoutRequestForm({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="WIRE_TRANSFER">
-                  {PAYOUT_METHOD_LABELS.WIRE_TRANSFER}
-                </SelectItem>
-                <SelectItem value="USDT_TRC20">
-                  {PAYOUT_METHOD_LABELS.USDT_TRC20}
-                </SelectItem>
-                <SelectItem value="PAYPAL">
-                  {PAYOUT_METHOD_LABELS.PAYPAL}
-                </SelectItem>
+                {PAYOUT_METHODS.map((m) => (
+                  <SelectItem key={m} value={m}>
+                    {PAYOUT_METHOD_LABELS[m]}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
@@ -319,36 +313,37 @@ export function PayoutRequestForm({
             </div>
           )}
 
-          {method === 'USDT_TRC20' && (
+          {method === 'BINANCE_PAY' && (
             <>
+              <div className="space-y-2">
+                <Label>Moneda</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {BINANCE_ASSETS.map((asset) => (
+                    <Button
+                      key={asset}
+                      type="button"
+                      variant={binanceAsset === asset ? 'brand' : 'outline'}
+                      disabled={!canRequest}
+                      onClick={() => setBinanceAsset(asset)}
+                    >
+                      {asset}
+                    </Button>
+                  ))}
+                </div>
+              </div>
               <Field
-                id="tronAddress"
-                label="Direccion USDT (red TRC20)"
-                placeholder="T..."
-                value={tronAddress}
-                onChange={setTronAddress}
+                id="binancePayId"
+                label="Binance Pay ID o correo de Binance"
+                placeholder="123456789 o tucorreo@ejemplo.com"
+                value={binancePayId}
+                onChange={setBinancePayId}
                 disabled={!canRequest}
                 mono
               />
-              <Notice tone="warning">
-                Asegurate de que la direccion es de la red <strong>TRON
-                (TRC20)</strong>. Un envio a otra red (ERC20, BEP20) se pierde y
-                no se puede recuperar. Verificamos el digito de control antes de
-                aceptarla.
-              </Notice>
+              <p className="text-xs text-muted-foreground">
+                Tu Pay ID esta en la app de Binance: Pagar → tu perfil (el numero bajo tu nombre).
+              </p>
             </>
-          )}
-
-          {method === 'PAYPAL' && (
-            <Field
-              id="paypalEmail"
-              label="Correo de tu cuenta PayPal"
-              placeholder="tucuenta@ejemplo.com"
-              type="email"
-              value={paypalEmail}
-              onChange={setPaypalEmail}
-              disabled={!canRequest}
-            />
           )}
 
           <p className="flex items-start gap-1.5 text-xs text-muted-foreground">

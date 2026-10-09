@@ -7,7 +7,7 @@ import { getAuthedUserOrThrow } from '@/lib/auth/guards';
 import { emailVerificationBlock } from '@/lib/auth-tokens';
 import { config } from '@/lib/config';
 import { createPayoutRequest } from '@/lib/payout-requests';
-import { payoutDestinationSchema, type PayoutDestination } from '@/lib/payouts';
+import { payoutDestinationSchema, type ActivePayoutDestination } from '@/lib/payouts';
 import { prisma } from '@/lib/prisma';
 import { applyLedgerEntry, splitPayoutFee, tokensToPayoutCents, withdrawableTokens } from '@/lib/tokens';
 import { formatMoney } from '@/lib/utils';
@@ -238,7 +238,7 @@ const recruiterPayoutSchema = z.object({
  */
 export async function requestRecruiterPayoutAction(input: {
   tokens: number;
-  destination: PayoutDestination;
+  destination: ActivePayoutDestination;
 }): Promise<RecruiterActionResult> {
   try {
     const user = await getAuthedUserOrThrow();

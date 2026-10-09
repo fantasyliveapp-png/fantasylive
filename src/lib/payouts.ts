@@ -11,6 +11,7 @@ export {
   PAYOUT_METHOD_LABELS,
   PAYOUT_METHOD_HINTS,
   type ActivePayoutMethod,
+  type ActivePayoutDestination,
   type PayoutDestination,
 } from '@/lib/payout-methods';
 
@@ -147,6 +148,19 @@ export const usdtTrc20Schema = z.object({
     }),
 });
 
+export const binancePaySchema = z.object({
+  method: z.literal('BINANCE_PAY'),
+  asset: z.enum(['USDT', 'USDC'], { errorMap: () => ({ message: 'Elige USDT o USDC.' }) }),
+  payId: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .max(160)
+    .refine((v) => /^\d{6,12}$/.test(v) || z.string().email().safeParse(v).success, {
+      message: 'Pon tu Binance Pay ID (solo numeros) o el correo de tu cuenta de Binance.',
+    }),
+});
+
 export const paypalSchema = z.object({
   method: z.literal('PAYPAL'),
   email: z
@@ -157,7 +171,15 @@ export const paypalSchema = z.object({
     .max(160),
 });
 
+/** Solicitudes NUEVAS: solo Binance Pay o transferencia bancaria. */
 export const payoutDestinationSchema = z.discriminatedUnion('method', [
+  binancePaySchema,
+  wireTransferSchema,
+]);
+
+/** Para leer lo ya guardado (incluye metodos que ya no se ofrecen). */
+const storedDestinationSchema = z.discriminatedUnion('method', [
+  binancePaySchema,
   wireTransferSchema,
   usdtTrc20Schema,
   paypalSchema,
@@ -170,6 +192,8 @@ export const payoutDestinationSchema = z.discriminatedUnion('method', [
 /** Valor corto e identificable del destino, usado para generar la mascara. */
 export function destinationIdentifier(destination: PayoutDestination): string {
   switch (destination.method) {
+    case 'BINANCE_PAY':
+      return destination.payId;
     case 'WIRE_TRANSFER':
       return destination.accountNumber;
     case 'USDT_TRC20':
@@ -187,6 +211,12 @@ export function describeDestination(
   destination: PayoutDestination,
 ): Array<{ label: string; value: string }> {
   switch (destination.method) {
+    case 'BINANCE_PAY':
+      return [
+        { label: 'Metodo', value: 'Binance Pay' },
+        { label: 'Moneda', value: destination.asset },
+        { label: 'Pay ID / correo de Binance', value: destination.payId },
+      ];
     case 'WIRE_TRANSFER':
       return [
         { label: 'Titular', value: destination.accountHolder },
@@ -211,7 +241,7 @@ export function describeDestination(
 /** Parsea el JSON descifrado de vuelta a un destino tipado, o null. */
 export function parseDestination(raw: string): PayoutDestination | null {
   try {
-    const parsed = payoutDestinationSchema.safeParse(JSON.parse(raw));
+    const parsed = storedDestinationSchema.safeParse(JSON.parse(raw));
     return parsed.success ? parsed.data : null;
   } catch {
     return null;

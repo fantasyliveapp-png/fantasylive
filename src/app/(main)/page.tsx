@@ -357,8 +357,8 @@ export default async function HomePage() {
           </h2>
           <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
             Emite en directo desde OBS o desde el navegador, publica contenido
-            de pago, fija tu tarifa por minuto y cobra por PayPal, transferencia
-            o USDT.
+            de pago, fija tu tarifa por minuto y cobra por Binance Pay (USDT o
+            USDC) o transferencia bancaria.
           </p>
           <Link href="/register?role=model">
             <Button variant="brand" size="lg" className="mt-8">

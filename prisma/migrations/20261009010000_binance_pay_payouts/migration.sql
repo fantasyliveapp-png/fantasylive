@@ -1,0 +1,2 @@
+-- Retiros por Binance Pay (USDT o USDC).
+ALTER TYPE "PayoutMethod" ADD VALUE IF NOT EXISTS 'BINANCE_PAY' BEFORE 'WIRE_TRANSFER';
