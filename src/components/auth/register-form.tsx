@@ -50,34 +50,50 @@ const MONTHS = [
   'Diciembre',
 ];
 
-// Para el boton de alias al azar.
-const ALIAS_A = [
-  'lobo',
-  'luna',
-  'noche',
-  'fuego',
-  'gato',
-  'sombra',
-  'zorro',
-  'brisa',
-  'rayo',
-  'eco',
+// Para el boton de alias al azar. Sustantivo + adjetivo concordando en
+// genero ("luna.dorada", "lobo.dorado"), con formatos variados para que no
+// salgan siempre parecidos (miles de combinaciones).
+const ALIAS_NOUNS_M = [
+  'lobo', 'gato', 'zorro', 'rayo', 'eco', 'trueno', 'cuervo', 'tigre', 'dragon', 'cometa',
+  'fuego', 'misterio', 'deseo', 'suspiro', 'secreto', 'jaguar', 'halcon', 'volcan', 'oceano', 'cristal',
+  'diamante', 'eclipse', 'fantasma', 'angel', 'pirata', 'vampiro', 'mago', 'leon', 'buho', 'colibri',
 ];
-const ALIAS_B = [
-  'secreto',
-  'nocturno',
-  'salvaje',
-  'dorado',
-  'curioso',
-  'tranquilo',
-  'rebelde',
-  'oculto',
+const ALIAS_NOUNS_F = [
+  'luna', 'noche', 'sombra', 'brisa', 'estrella', 'llama', 'nube', 'pantera', 'aurora', 'tormenta',
+  'perla', 'rosa', 'chispa', 'niebla', 'gata', 'loba', 'sirena', 'musa', 'reina', 'galaxia',
+  'luz', 'ola', 'flor', 'joya', 'cereza', 'fresa', 'canela', 'lluvia', 'magia', 'leyenda',
+];
+/** [masculino, femenino] */
+const ALIAS_ADJS: Array<[string, string]> = [
+  ['secreto', 'secreta'], ['nocturno', 'nocturna'], ['salvaje', 'salvaje'], ['dorado', 'dorada'],
+  ['curioso', 'curiosa'], ['tranquilo', 'tranquila'], ['rebelde', 'rebelde'], ['oculto', 'oculta'],
+  ['fugaz', 'fugaz'], ['azul', 'azul'], ['lunar', 'lunar'], ['misterioso', 'misteriosa'],
+  ['travieso', 'traviesa'], ['dulce', 'dulce'], ['intenso', 'intensa'], ['plateado', 'plateada'],
+  ['eterno', 'eterna'], ['libre', 'libre'], ['veloz', 'veloz'], ['felino', 'felina'],
+  ['sereno', 'serena'], ['atrevido', 'atrevida'], ['electrico', 'electrica'], ['magico', 'magica'],
+  ['brillante', 'brillante'], ['carmesi', 'carmesi'], ['tropical', 'tropical'], ['astral', 'astral'],
+  ['furtivo', 'furtiva'], ['risueno', 'risuena'], ['sonador', 'sonadora'],
+  ['nomada', 'nomada'], ['valiente', 'valiente'], ['invisible', 'invisible'], ['infinito', 'infinita'],
 ];
 
-function randomAlias() {
-  const pick = <T,>(list: T[]) =>
-    list[Math.floor(Math.random() * list.length)]!;
-  return `${pick(ALIAS_A)}.${pick(ALIAS_B)}${Math.floor(Math.random() * 90 + 10)}`;
+function randomAlias(previous = '') {
+  const pick = <T,>(list: readonly T[]) => list[Math.floor(Math.random() * list.length)]!;
+  for (let i = 0; i < 10; i++) {
+    const feminine = Math.random() < 0.5;
+    const noun = pick(feminine ? ALIAS_NOUNS_F : ALIAS_NOUNS_M);
+    const adj = pick(ALIAS_ADJS)[feminine ? 1 : 0];
+    const num = String(Math.floor(Math.random() * 990) + 10);
+    const alias = pick([
+      `${noun}.${adj}${num.slice(-2)}`,
+      `${noun}_${adj}`,
+      `${noun}${adj}${num}`,
+      `${adj}.${noun}${num.slice(-2)}`,
+      `${noun}.${num}`,
+      `${noun}-${adj}`,
+    ]);
+    if (alias !== previous && alias.length <= 30) return alias;
+  }
+  return `${pick(ALIAS_NOUNS_F)}.${Date.now() % 1000}`;
 }
 
 function ageFrom(year: number, month: number, day: number) {
@@ -280,7 +296,7 @@ export function RegisterForm({
                 )}
                 <button
                   type="button"
-                  onClick={() => setUsername(randomAlias())}
+                  onClick={() => setUsername((prev) => randomAlias(prev))}
                   className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   aria-label="Inventar un alias"
                   title="Inventar un alias"
